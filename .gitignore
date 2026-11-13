@@ -80,3 +80,6 @@ credentials.json
 .claude/skills/code-index-*/
 .claude/settings.local.json
 opencode.json
+# === Local code intelligence index / design tooling (regenerable, not project artifacts) ===
+.codegraph/
+.archify/

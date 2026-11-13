@@ -1,9 +1,9 @@
 # Engram docker-compose — 一键启动深度研究 Agent
 #
 # 用法:
-#   docker compose run --rm engram              # TUI 交互（首次会启动配置向导）
-#   docker compose run --rm engram cli          # 传统 CLI 滚动模式
-#   docker compose run --rm engram run "问题"   # 单次研究
+#   docker compose run --rm agent              # TUI 交互（首次会启动配置向导）
+#   docker compose run --rm agent cli          # 传统 CLI 滚动模式
+#   docker compose run --rm agent run "问题"   # 单次研究
 #
 # 配置:
 #   1. 首次运行容器内会触发配置向导（生成 /app/.env）
@@ -20,10 +20,10 @@
 #     ENGRAM_SANDBOX_EXECUTOR=local
 
 services:
-  engram:
+  agent:
     build: .
     image: engram:latest
-    container_name: engram
+    container_name: engram-agent
     stdin_open: true      # 交互式输入
     tty: true             # 终端色彩 + TUI 全屏
     env_file:
@@ -41,5 +41,5 @@ services:
       # Docker sandbox 模式：挂载宿主机 docker.sock（Linux/Mac）
       # - /var/run/docker.sock:/var/run/docker.sock
     # 默认无 command，走 ENTRYPOINT 的 engram（TUI 模式）
-    # 覆盖示例: docker compose run --rm engram cli
-    #           docker compose run --rm engram run "研究问题"
+    # 覆盖示例: docker compose run --rm agent cli
+    #           docker compose run --rm agent run "研究问题"
