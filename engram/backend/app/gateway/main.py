@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 
 from engram.backend.app.bootstrap import AppRuntime, bootstrap_runtime
+from engram.backend.app.gateway.chat import mount_chat_routes
 from engram.backend.app.gateway.registry import SessionRegistry
 from engram.backend.app.schemas.sessions import SessionCreateRequest, SessionResponse
 
@@ -44,6 +45,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.session_registry = SessionRegistry()
+    mount_chat_routes(app)
     app.state.runtime = None  # lifespan 填充；会话 CRUD 不依赖它
 
     @app.post("/sessions", response_model=SessionResponse, status_code=201)
