@@ -8,6 +8,22 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    services:
+      # Live Postgres for the checkpointer recovery test
+      # (skipped locally unless ENGRAM_TEST_PG_DSN is set).
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: engram
+          POSTGRES_PASSWORD: engram
+          POSTGRES_DB: engram
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd 'pg_isready -U engram'
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      ENGRAM_TEST_PG_DSN: postgresql://engram:engram@localhost:5432/engram
     steps:
       - uses: actions/checkout@v5
 

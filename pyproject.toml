@@ -21,6 +21,10 @@ dependencies = [
     "uvicorn>=0.54.0",
     "SQLAlchemy>=2.1.8",
     "redis>=5.0.0",
+    # LangGraph session-state persistence (PG async checkpointer)
+    "langgraph-checkpoint-postgres>=3.2.0",
+    # psycopg[binary]: pure-python psycopg needs system libpq (absent on slim images)
+    "psycopg[binary]>=3.3",
 ]
 
 [project.scripts]

@@ -18,6 +18,15 @@ from engram.backend.app.bootstrap import AppRuntime, bootstrap_runtime
 from engram.backend.app.gateway.chat import mount_chat_routes
 from engram.backend.app.gateway.registry import SessionRegistry
 from engram.backend.app.schemas.sessions import SessionCreateRequest, SessionResponse
+from engram.backend.agents.runtime.checkpointer import (
+    reset_checkpointer,
+    set_checkpointer,
+)
+from engram.backend.agents.runtime.pg_checkpointer import (
+    close_pg_checkpointer,
+    create_pg_checkpointer,
+    pg_dsn_from_env,
+)
 
 
 def create_app(
@@ -34,9 +43,22 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # 一次性重引导：重活（模型路由、MCP、技能）只发生在这里。
-        app.state.runtime = factory()
-        yield
+        # PG 持久 checkpointer：DSN 配置时先异步建 saver（建表一次）并预装进
+        # 单例槽位——随后 factory() 里的 make_lead_agent 编译 graph 拿到的就是它。
+        # 进程重启读回同一会话状态；多 worker 各持独立池、共享同一 PG 会话表。
+        pg_saver = None
+        dsn = pg_dsn_from_env()
+        if dsn:
+            pg_saver = await create_pg_checkpointer(dsn)
+            set_checkpointer(pg_saver)
+        try:
+            # 一次性重引导：重活（模型路由、MCP、技能）只发生在这里。
+            app.state.runtime = factory()
+            yield
+        finally:
+            if pg_saver is not None:
+                await close_pg_checkpointer(pg_saver)
+                reset_checkpointer()
 
     app = FastAPI(
         title="Engram Gateway",
