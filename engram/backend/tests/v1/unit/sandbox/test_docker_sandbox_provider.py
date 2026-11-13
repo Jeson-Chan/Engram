@@ -444,14 +444,36 @@ class TestAcquireAsyncCancelSafety:
         """cancel 在 acquire 等待期间（未持有锁）→ finally 不 release → 无 RuntimeError。"""
         import asyncio
 
-        p = _make_provider()
-        # 让 thread_lock.acquire 阻塞（被另一 holder 持有）
-        lock = p._get_thread_lock("t1", "default")
-        lock.acquire()  # 模拟另一线程持有
+        import threading
 
-        # 启动 acquire_async task（会阻塞在 acquire）
+        class _TrackedLock:
+            """duck-typed threading.Lock：成功 acquire 时置 event，让孤儿线程可观测。"""
+
+            def __init__(self) -> None:
+                self._lock = threading.Lock()
+                self.acquired_event = threading.Event()
+
+            def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+                ok = self._lock.acquire(blocking, timeout)
+                if ok:
+                    self.acquired_event.set()
+                return ok
+
+            def release(self) -> None:
+                self._lock.release()
+
+        p = _make_provider()
+        # 可观测锁插入注册表（key=(user_id, thread_id)），让 acquire_async 用它
+        tracked = _TrackedLock()
+        p._thread_locks[("default", "t1")] = tracked
+
+        # 测试线程先持有锁（模拟另一 holder）
+        assert tracked.acquire() is True
+        tracked.acquired_event.clear()  # 清掉自己 acquire 的置位，只等孤儿
+
+        # 启动 acquire_async task（孤儿 to_thread 工作线程会阻塞在 acquire）
         task = asyncio.create_task(p.acquire_async("t1"))
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)  # 确保 to_thread 已派发（await 点即派发）
 
         task.cancel()
         try:
@@ -459,12 +481,16 @@ class TestAcquireAsyncCancelSafety:
         except (asyncio.CancelledError, Exception):
             pass
 
-        # 释放锁，验证后续 acquire 正常
-        lock.release()
-        # 如果 cancel 路径误 release 了未持有的锁，这里 lock 状态会错乱
-        # 验证 lock 仍可正常 acquire/release
-        assert lock.acquire(blocking=False) is True
-        lock.release()
+        # asyncio.to_thread 的 cancel 不传播到工作线程：孤儿仍阻塞在 acquire。
+        # 释放锁后等孤儿拿到它（event 置位），消除孤儿与测试线程的调度竞争
+        tracked.release()
+        assert tracked.acquired_event.wait(timeout=5), "orphan worker never acquired"
+
+        # 孤儿拿到锁后无人替它 release（acquired flag 保证 finally 不误 release，
+        # 这正是被测语义）——测试侧手动放掉幽灵持有，验证锁状态未被破坏
+        tracked.release()
+        assert tracked.acquire(blocking=False) is True
+        tracked.release()
 
 
 class TestDiscoverOrCreate:

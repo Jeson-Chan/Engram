@@ -1,6 +1,0 @@
-mode: expert
-plan_enabled: true
-max_loop_steps: 8
-tool_search_default: true
-reflection_enabled: true
-save_artifact: true

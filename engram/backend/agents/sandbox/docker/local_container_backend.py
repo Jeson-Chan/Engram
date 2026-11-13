@@ -288,6 +288,11 @@ class LocalContainerBackend(SandboxBackend):
 
     def is_alive(self, info: SandboxInfo) -> bool | None:
         """轻量 docker inspect，不调 HTTP。返 None 表未知（不误杀）。"""
+        # 空 sandbox_id 的 info 一律按"未知"处理，不落到 docker inspect
+        # （container_name 缺失时 _container_name("") 会拼出 truthy 的 "prefix-"，
+        #  曾导致真实 daemon 被调用、结果随环境漂移）
+        if not info.sandbox_id:
+            return None
         name = info.container_name or self._container_name(info.sandbox_id)
         if not name:
             return None

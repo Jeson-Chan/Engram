@@ -6,11 +6,34 @@ skip if no docker or no agent_sandbox installed.
 from __future__ import annotations
 
 import shutil
+import subprocess as _sp
 
 import pytest
 
 agent_sandbox = pytest.importorskip("agent_sandbox")
 shutil.which("docker") or pytest.skip("docker CLI not available", allow_module_level=True)
+
+
+def _sandbox_image_available() -> bool:
+    """True only when the sandbox image is present locally AND the daemon answers.
+
+    (mock sys.modules injections from other collected test files defeat
+    importorskip above, so this guard is what actually decides whether these
+    end-to-end container tests can run; docker pull itself may be impossible
+    offline / via a dead registry mirror)
+    """
+    try:
+        r = _sp.run(["docker", "image", "inspect", "all-in-one-sandbox:latest"],
+                    capture_output=True, timeout=10)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+_sandbox_image_available() or pytest.skip(
+    "sandbox image 'all-in-one-sandbox:latest' not available (run: docker pull all-in-one-sandbox:latest)",
+    allow_module_level=True,
+)
 
 from engram.backend.agents.sandbox.docker.docker_sandbox_provider import (  # noqa: E402
     DockerSandboxProvider,

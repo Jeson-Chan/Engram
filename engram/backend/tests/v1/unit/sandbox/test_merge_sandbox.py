@@ -88,5 +88,7 @@ class TestThreadStateInitial:
             "messages", "user_input", "observations", "sources",
             "citations", "artifacts", "reflection_items", "errors",
             "metadata", "governance", "sandbox", "orchestration",
+            # 记忆子系统新增（recall/update 通道）
+            "recalled_memories", "memory_updates",
         }
         assert set(state.keys()) == expected_keys

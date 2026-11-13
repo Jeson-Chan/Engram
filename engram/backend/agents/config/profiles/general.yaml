@@ -1,5 +1,0 @@
-mode: general
-plan_enabled: true
-max_loop_steps: 4
-tool_search_default: true
-save_artifact: true

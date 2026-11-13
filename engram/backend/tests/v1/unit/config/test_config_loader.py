@@ -18,7 +18,9 @@ def test_expert_mode_true_activates_profile() -> None:
 
     assert config.runtime.expert_mode is True
     assert config.runtime.reflection_enabled is True
-    assert config.runtime.max_loop_steps == 8
+    # EXPERT_PROFILE 替代了旧 fast/general/expert yaml profile（mode 枚举废弃），
+    # 叠加层 max_loop_steps=100
+    assert config.runtime.max_loop_steps == 100
 
 
 def test_cli_override_can_change_expert_mode() -> None:

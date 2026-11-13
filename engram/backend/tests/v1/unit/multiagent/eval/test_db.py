@@ -97,11 +97,13 @@ class TestMultiAgentMetricsStoreDecisionLog:
 
     def test_archive_expired(self, temp_db):
         """archive_decision_logs 归档（移到 archive 表 + 删除主表）."""
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
         store = MultiAgentMetricsStore(db_path=temp_db)
         # 写一条 100 天前的记录
-        store.save_decision_log(_make_record("old", timestamp="2026-04-01T00:00:00Z"))
+        store.save_decision_log(_make_record("old", timestamp=(now - timedelta(days=100)).isoformat()))
         # 写一条今天的记录
-        store.save_decision_log(_make_record("new", timestamp="2026-07-28T12:00:00Z"))
+        store.save_decision_log(_make_record("new", timestamp=now.isoformat()))
         # 归档 90 天前的
         count = store.archive_decision_logs(retention_days=90)
         assert count == 1

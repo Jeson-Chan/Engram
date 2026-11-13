@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import sys
+import types
+from unittest.mock import MagicMock
 
 import pytest
 
+# Inject mock agent_sandbox module so this file runs standalone (without
+# the real package or another test file's import-time injection).
+if "agent_sandbox" not in sys.modules:
+    _mock_mod = types.ModuleType("agent_sandbox")
+    _mock_mod.Sandbox = MagicMock
+    sys.modules["agent_sandbox"] = _mock_mod
 from engram.backend.agents.multiagent.mcp.specialist_mcp_server import _create_sandbox
 
 

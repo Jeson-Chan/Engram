@@ -8,6 +8,18 @@ from pathlib import Path
 
 import pytest
 
+@pytest.fixture(autouse=True)
+def _isolate_credential_env(monkeypatch):
+    """隔离真实凭据：清掉宿主机的 CLAUDE_CODE_OAUTH_TOKEN /
+    ANTHROPIC_AUTH_TOKEN / CLAUDE_CODE_CREDENTIALS_PATH。
+    （本机曾因 ANTHROPIC_AUTH_TOKEN 泄漏导致 6 个测试读到真实 token。）"""
+    for var in (
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "ANTHROPIC_AUTH_TOKEN",
+        "CLAUDE_CODE_CREDENTIALS_PATH",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
 from engram.backend.agents.multiagent.credentials.claude_credential import (
     ClaudeCredential,
     ClaudeCredentialProvider,
