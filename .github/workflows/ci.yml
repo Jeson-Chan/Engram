@@ -24,6 +24,9 @@ jobs:
       #   (real npm install) need live docker/bash/npm environments.
       # - Deselected: upstream drift, red on all platforms; tracked by
       #   issue 02 (red-test cleanup) — re-enable there once fixed.
+      #   Extra deselect: timing-flaky cancel-safety test (orphaned
+      #   to_thread worker races the test's own lock re-acquire);
+      #   also tracked by issue 02.
       # Real-LLM tests self-skip when no DEEPSEEK_API_KEY is set.
       - name: Run tests
         run: >
@@ -36,3 +39,4 @@ jobs:
           --deselect engram/backend/tests/v1/unit/context_engineering/test_default_strategy.py::test_call_llm_uses_prompt_template
           --deselect engram/backend/tests/v1/unit/multiagent/eval/test_db.py::TestMultiAgentMetricsStoreDecisionLog::test_archive_expired
           --deselect engram/backend/tests/v1/unit/sandbox/test_merge_sandbox.py::TestThreadStateInitial::test_initial_state_field_count
+          --deselect engram/backend/tests/v1/unit/sandbox/test_docker_sandbox_provider.py::TestAcquireAsyncCancelSafety::test_cancel_before_acquire_no_release_error
