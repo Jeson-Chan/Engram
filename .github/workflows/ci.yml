@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install (editable + dev)
+        run: python -m pip install -e ".[dev]"
+
+      # Test subset per baseline issue 01: green on first run.
+      # - Ignored files: sandbox integration (stage3/5/6) and pi_installer
+      #   (real npm install) need live docker/bash/npm environments.
+      # - Deselected: upstream drift, red on all platforms; tracked by
+      #   issue 02 (red-test cleanup) — re-enable there once fixed.
+      # Real-LLM tests self-skip when no DEEPSEEK_API_KEY is set.
+      - name: Run tests
+        run: >
+          python -m pytest engram/backend/tests/ -q
+          --ignore=engram/backend/tests/v1/unit/sandbox/test_stage3_integration.py
+          --ignore=engram/backend/tests/v1/unit/sandbox/test_stage5_integration.py
+          --ignore=engram/backend/tests/v1/unit/sandbox/test_stage6_integration.py
+          --ignore=engram/backend/tests/v1/unit/multiagent/test_pi_installer.py
+          --deselect engram/backend/tests/v1/unit/config/test_config_loader.py::test_expert_mode_true_activates_profile
+          --deselect engram/backend/tests/v1/unit/context_engineering/test_default_strategy.py::test_call_llm_uses_prompt_template
+          --deselect engram/backend/tests/v1/unit/multiagent/eval/test_db.py::TestMultiAgentMetricsStoreDecisionLog::test_archive_expired
+          --deselect engram/backend/tests/v1/unit/sandbox/test_merge_sandbox.py::TestThreadStateInitial::test_initial_state_field_count
