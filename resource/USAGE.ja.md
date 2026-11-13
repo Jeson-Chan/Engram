@@ -1,6 +1,6 @@
-# Poirot 使用ガイド
+# Engram 使用ガイド
 
-> Poirotのインストール、設定、操作の完全ガイド。
+> Engramのインストール、設定、操作の完全ガイド。
 >
 > **言語：** [English](../USAGE.md) · [简体中文](USAGE.zh-CN.md) · [日本語](USAGE.ja.md)
 
@@ -46,7 +46,7 @@
 
 ```bash
 git clone <repo-url>
-cd Poirot
+cd Engram
 ```
 
 ### 2. 仮想環境
@@ -63,7 +63,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-> condaも可：`conda create -n poirot python=3.12 && conda activate poirot`
+> condaも可：`conda create -n engram python=3.12 && conda activate engram`
 
 ### 3. インストール
 
@@ -90,10 +90,10 @@ DEEPSEEK_API_KEY=sk-your-key-here
 ### 5. 確認
 
 ```bash
-poirot
+engram
 ```
 
-PoirotのASCIIロゴとウェルカム画面が表示されれば成功。
+EngramのASCIIロゴとウェルカム画面が表示されれば成功。
 
 ---
 
@@ -118,73 +118,73 @@ PoirotのASCIIロゴとウェルカム画面が表示されれば成功。
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
-| `POIROT_SANDBOX_USE` | Sandboxプロバイダーパス（空=無効） | 空 |
-| `POIROT_SANDBOX_IMAGE` | Dockerイメージ名 | `all-in-one-sandbox:latest` |
-| `POIROT_SANDBOX_PORT` | コンテナ開始ポート | `18000` |
-| `POIROT_SANDBOX_EXECUTOR` | Docker実行環境（`local` / `wsl`） | `local` |
-| `POIROT_SANDBOX_WSL_DISTRO` | WSLディストロ名 | `Ubuntu` |
-| `POIROT_SANDBOX_WSL_USER` | WSLユーザー | デフォルトユーザー |
-| `POIROT_SANDBOX_CONTAINER_PREFIX` | コンテナ名プレフィックス | `poirot-sandbox` |
-| `POIROT_SANDBOX_IDLE_TIMEOUT` | アイドル破棄タイムアウト秒（0=破棄しない） | `600` |
-| `POIROT_SANDBOX_REPLICAS` | ウォームプールサイズ（0=事前作成しない） | `3` |
+| `ENGRAM_SANDBOX_USE` | Sandboxプロバイダーパス（空=無効） | 空 |
+| `ENGRAM_SANDBOX_IMAGE` | Dockerイメージ名 | `all-in-one-sandbox:latest` |
+| `ENGRAM_SANDBOX_PORT` | コンテナ開始ポート | `18000` |
+| `ENGRAM_SANDBOX_EXECUTOR` | Docker実行環境（`local` / `wsl`） | `local` |
+| `ENGRAM_SANDBOX_WSL_DISTRO` | WSLディストロ名 | `Ubuntu` |
+| `ENGRAM_SANDBOX_WSL_USER` | WSLユーザー | デフォルトユーザー |
+| `ENGRAM_SANDBOX_CONTAINER_PREFIX` | コンテナ名プレフィックス | `engram-sandbox` |
+| `ENGRAM_SANDBOX_IDLE_TIMEOUT` | アイドル破棄タイムアウト秒（0=破棄しない） | `600` |
+| `ENGRAM_SANDBOX_REPLICAS` | ウォームプールサイズ（0=事前作成しない） | `3` |
 
 **Local Sandbox（ホストプロセス）:**
 ```env
-POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.local.local_sandbox_provider:LocalSandboxProvider
+ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.local.local_sandbox_provider:LocalSandboxProvider
 ```
 
 **Docker Sandbox（コンテナ分離）:**
 ```env
-POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
+ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
 ```
 
 > Dockerモード：最初にイメージをプル — `docker pull all-in-one-sandbox:latest`
 >
-> Windows + WSL2：`POIROT_SANDBOX_EXECUTOR=wsl`を設定
+> Windows + WSL2：`ENGRAM_SANDBOX_EXECUTOR=wsl`を設定
 
 ### MCP
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
-| `POIROT_MCP_ENABLED` | MCPマスタースイッチ | `false` |
-| `POIROT_MCP_CONFIG_PATH` | MCP設定ファイルパス | `.poirot/mcp_servers.yaml` |
-| `POIROT_MCP_CORE_TOOLS` | コアツール（カンマ区切り、起動時にロード） | `web_search,browse_page` |
+| `ENGRAM_MCP_ENABLED` | MCPマスタースイッチ | `false` |
+| `ENGRAM_MCP_CONFIG_PATH` | MCP設定ファイルパス | `.engram/mcp_servers.yaml` |
+| `ENGRAM_MCP_CORE_TOOLS` | コアツール（カンマ区切り、起動時にロード） | `web_search,browse_page` |
 
 ### Skill
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
-| `POIROT_SKILL_ENABLED` | Skillモジュールマスタースイッチ | `false` |
-| `POIROT_SKILL_DB_PATH` | Skill SQLiteパス | `.poirot/skills.db` |
-| `POIROT_SKILL_DIRS` | Skillスキャンディレクトリ | `skills/` |
-| `POIROT_SKILL_INCLUDE_BUILTIN` | builtinコアSkillをロード | `true` |
-| `POIROT_SKILL_MAX_INJECT` | 1ターンの最大注入Skill数 | `3` |
-| `POIROT_SKILL_QUALITY_THRESHOLD` | 品質フィルター閾値 | `0.3` |
-| `POIROT_SKILL_MIN_SELECTIONS` | 品質フィルター適用最小選択回数 | `5` |
+| `ENGRAM_SKILL_ENABLED` | Skillモジュールマスタースイッチ | `false` |
+| `ENGRAM_SKILL_DB_PATH` | Skill SQLiteパス | `.engram/skills.db` |
+| `ENGRAM_SKILL_DIRS` | Skillスキャンディレクトリ | `skills/` |
+| `ENGRAM_SKILL_INCLUDE_BUILTIN` | builtinコアSkillをロード | `true` |
+| `ENGRAM_SKILL_MAX_INJECT` | 1ターンの最大注入Skill数 | `3` |
+| `ENGRAM_SKILL_QUALITY_THRESHOLD` | 品質フィルター閾値 | `0.3` |
+| `ENGRAM_SKILL_MIN_SELECTIONS` | 品質フィルター適用最小選択回数 | `5` |
 
 **Skill進化（Layer 2）:**
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
-| `POIROT_SKILL_EVOLVE_ENABLED` | 進化スイッチ | `false` |
-| `POIROT_SKILL_EVOLVE_THRESHOLD` | 進化トリガー閾値 | `0.3` |
-| `POIROT_SKILL_EVOLVE_MIN_SELECTIONS` | 進化最小選択回数 | `5` |
-| `POIROT_SKILL_EVOLVE_COOLDOWN_TURNS` | 進化クールダウンターン数 | `10` |
-| `POIROT_SKILL_EVOLVE_MUTATE_BUDGET` | 変異トークン予算 | `20` |
-| `POIROT_SKILL_EVOLVE_MAX_STEPS` | 最大進化ステップ数 | `5` |
+| `ENGRAM_SKILL_EVOLVE_ENABLED` | 進化スイッチ | `false` |
+| `ENGRAM_SKILL_EVOLVE_THRESHOLD` | 進化トリガー閾値 | `0.3` |
+| `ENGRAM_SKILL_EVOLVE_MIN_SELECTIONS` | 進化最小選択回数 | `5` |
+| `ENGRAM_SKILL_EVOLVE_COOLDOWN_TURNS` | 進化クールダウンターン数 | `10` |
+| `ENGRAM_SKILL_EVOLVE_MUTATE_BUDGET` | 変異トークン予算 | `20` |
+| `ENGRAM_SKILL_EVOLVE_MAX_STEPS` | 最大進化ステップ数 | `5` |
 
 **Skill評価（Layer 3）:**
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
-| `POIROT_SKILL_EVAL_ENABLED` | 評価スイッチ | `false` |
-| `POIROT_SKILL_EVAL_JUDGMENT_ENABLED` | 実行判定 | `true` |
-| `POIROT_SKILL_EVAL_TASK_JUDGE_ENABLED` | タスク品質スコアリング | `true` |
-| `POIROT_SKILL_EVAL_CONTRACT_CHECK` | レスポンス契約チェック | `true` |
-| `POIROT_SKILL_EVAL_ASYNC` | 非同期eval | `true` |
-| `POIROT_SKILL_EVAL_SKIP_NO_SKILL` | Skill未注入時にevalスキップ | `true` |
-| `POIROT_SKILL_EVAL_RUNTIME_WINDOW` | RuntimeTrackerウィンドウ | `20` |
-| `POIROT_SKILL_EVAL_DEGRADATION_DELTA` | 劣化判定delta | `0.15` |
+| `ENGRAM_SKILL_EVAL_ENABLED` | 評価スイッチ | `false` |
+| `ENGRAM_SKILL_EVAL_JUDGMENT_ENABLED` | 実行判定 | `true` |
+| `ENGRAM_SKILL_EVAL_TASK_JUDGE_ENABLED` | タスク品質スコアリング | `true` |
+| `ENGRAM_SKILL_EVAL_CONTRACT_CHECK` | レスポンス契約チェック | `true` |
+| `ENGRAM_SKILL_EVAL_ASYNC` | 非同期eval | `true` |
+| `ENGRAM_SKILL_EVAL_SKIP_NO_SKILL` | Skill未注入時にevalスキップ | `true` |
+| `ENGRAM_SKILL_EVAL_RUNTIME_WINDOW` | RuntimeTrackerウィンドウ | `20` |
+| `ENGRAM_SKILL_EVAL_DEGRADATION_DELTA` | 劣化判定delta | `0.15` |
 
 ---
 
@@ -193,7 +193,7 @@ POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.docker.docker_sandbox_provider:
 ### 1. TUIフルスクリーン（デフォルト）
 
 ```bash
-poirot
+engram
 ```
 
 | キー | アクション |
@@ -208,16 +208,16 @@ poirot
 ### 2. CLIスクロール
 
 ```bash
-poirot cli
+engram cli
 ```
 
 ### 3. 単発リサーチ（非対話）
 
 ```bash
-poirot run "2026年のAIエージェントフレームワーク動向を分析"
-poirot run "質問" --thread-id my-thread --run-id my-run
-poirot run "簡単な質問" --no-expert
-poirot run "質問" --no-artifact
+engram run "2026年のAIエージェントフレームワーク動向を分析"
+engram run "質問" --thread-id my-thread --run-id my-run
+engram run "簡単な質問" --no-expert
+engram run "質問" --no-artifact
 ```
 
 ---
@@ -305,7 +305,7 @@ Skillは**リサーチプロセス知識バンドル**です — promptレベル
 ### Skill有効化
 
 ```env
-POIROT_SKILL_ENABLED=true
+ENGRAM_SKILL_ENABLED=true
 ```
 
 BuiltinコアSkillは起動時に自動ロード。ユーザーSkillは`skills/`ディレクトリに配置。
@@ -334,7 +334,7 @@ allowed_tools:
 
 ### Builtin Skills
 
-Poirotは5カテゴリ36個のbuiltin Skillを同梱：
+Engramは5カテゴリ36個のbuiltin Skillを同梱：
 
 | カテゴリ | 数 | 例 |
 |---------|-----|-----|
@@ -350,62 +350,62 @@ Poirotは5カテゴリ36個のbuiltin Skillを同梱：
 
 ## 長期記憶
 
-Poirotは5層の長期記憶システムを実装しています。記憶トレースはMarkdown（`traces.md`）に保存 — truth source — BM25検索とエビングハウス忘却曲線を組み合わせています。
+Engramは5層の長期記憶システムを実装しています。記憶トレースはMarkdown（`traces.md`）に保存 — truth source — BM25検索とエビングハウス忘却曲線を組み合わせています。
 
 ### 有効化
 
 ```env
-POIROT_MEMORY_USE=default
+ENGRAM_MEMORY_USE=default
 ```
 
 ### 設定
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
-| `POIROT_MEMORY_USE` | 記憶プロバイダー（空=無効、`default`=有効） | 空 |
-| `POIROT_MEMORY_STORAGE_PATH` | Markdown truth source ディレクトリ | `.poirot/memory` |
-| `POIROT_MEMORY_ENABLE_RECALL` | before_model リコール注入 | `true` |
-| `POIROT_MEMORY_TOKEN_BUDGET` | リコール注入トークン予算 | `2000` |
-| `POIROT_MEMORY_PHASE2_ENABLED` | L5 自動統合ワーカー | `false` |
-| `POIROT_MEMORY_PHASE2_TURNS` | Nターンごとに統合トリガー | `10` |
+| `ENGRAM_MEMORY_USE` | 記憶プロバイダー（空=無効、`default`=有効） | 空 |
+| `ENGRAM_MEMORY_STORAGE_PATH` | Markdown truth source ディレクトリ | `.engram/memory` |
+| `ENGRAM_MEMORY_ENABLE_RECALL` | before_model リコール注入 | `true` |
+| `ENGRAM_MEMORY_TOKEN_BUDGET` | リコール注入トークン予算 | `2000` |
+| `ENGRAM_MEMORY_PHASE2_ENABLED` | L5 自動統合ワーカー | `false` |
+| `ENGRAM_MEMORY_PHASE2_TURNS` | Nターンごとに統合トリガー | `10` |
 
 ### 仕組み
 
 1. **リコール（L4）** — 各 `before_model` で、MemoryMiddleware が BM25 で関連記憶を検索し、per-call HumanMessage として注入（プロンプトキャッシュを保護）。
 2. **統合（L5）** — Nターンごとに、MemoryConsolidationMiddleware が非ブロッキングでタスクを MemoryWorker（デーモンスレッド）に送信。ワーカーが LLM でエピソード記憶を抽出 → encode → 候補 ≥ N → LLM で統合 → consolidate。
-3. **永続化** — 全トレースは `.poirot/memory/traces.md` に保存。
+3. **永続化** — 全トレースは `.engram/memory/traces.md` に保存。
 4. **忘却** — エビングハウス式を取得時に遅延計算（バックグラウンドタスクなし）。忘却トレースは `metadata.forgotten=True` でマーク、retriever がフィルタ（削除なし）。
 
 ---
 
 ## マルチエージェント
 
-Poirotはサブタスクを外部コーディングエージェント（specialist）と内部自己コピー（subagent）に委譲できます。
+Engramはサブタスクを外部コーディングエージェント（specialist）と内部自己コピー（subagent）に委譲できます。
 
 ### 有効化
 
 ```env
-POIROT_MULTIAGENT_ENABLED=true
-POIROT_MULTIAGENT_SPECIALISTS=pi,codex,claude,subagent
+ENGRAM_MULTIAGENT_ENABLED=true
+ENGRAM_MULTIAGENT_SPECIALISTS=pi,codex,claude,subagent
 ```
 
 ### 設定
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
-| `POIROT_MULTIAGENT_ENABLED` | マルチエージェントマスタースイッチ | `true` |
-| `POIROT_MULTIAGENT_SPECIALISTS` | specialistリスト（カンマ区切り） | `pi,codex,claude,subagent` |
-| `POIROT_MULTIAGENT_AUTO_APPROVE` | specialist呼び出し自動承認 | `true` |
-| `POIROT_MULTIAGENT_L2_ENABLED` | L2 進化レイヤー | `false` |
-| `POIROT_MULTIAGENT_L3_ENABLED` | L3 評価レイヤー | `false` |
+| `ENGRAM_MULTIAGENT_ENABLED` | マルチエージェントマスタースイッチ | `true` |
+| `ENGRAM_MULTIAGENT_SPECIALISTS` | specialistリスト（カンマ区切り） | `pi,codex,claude,subagent` |
+| `ENGRAM_MULTIAGENT_AUTO_APPROVE` | specialist呼び出し自動承認 | `true` |
+| `ENGRAM_MULTIAGENT_L2_ENABLED` | L2 進化レイヤー | `false` |
+| `ENGRAM_MULTIAGENT_L3_ENABLED` | L3 評価レイヤー | `false` |
 
 ### Pi Specialist（独自APIキー、ログイン不要）
 
 Pi は複数プロバイダーをサポート — 既存の DeepSeek キーがそのまま使えます：
 
 ```env
-POIROT_MULTIAGENT_PI_PROVIDER=deepseek
-POIROT_MULTIAGENT_PI_API_KEY=sk-your-deepseek-key
+ENGRAM_MULTIAGENT_PI_PROVIDER=deepseek
+ENGRAM_MULTIAGENT_PI_API_KEY=sk-your-deepseek-key
 ```
 
 Pi CLI インストール: `npm install -g @earendil-works/pi-coding-agent --ignore-scripts`
@@ -422,14 +422,14 @@ Pi CLI インストール: `npm install -g @earendil-works/pi-coding-agent --ign
 ### Local Sandbox
 
 ```env
-POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.local.local_sandbox_provider:LocalSandboxProvider
+ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.local.local_sandbox_provider:LocalSandboxProvider
 ```
 
 ### Docker Sandbox
 
 ```env
-POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
-POIROT_SANDBOX_IMAGE=all-in-one-sandbox:latest
+ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
+ENGRAM_SANDBOX_IMAGE=all-in-one-sandbox:latest
 ```
 
 ```bash
@@ -439,8 +439,8 @@ docker pull all-in-one-sandbox:latest
 ### Windows + WSL2
 
 ```env
-POIROT_SANDBOX_EXECUTOR=wsl
-POIROT_SANDBOX_WSL_DISTRO=Ubuntu
+ENGRAM_SANDBOX_EXECUTOR=wsl
+ENGRAM_SANDBOX_WSL_DISTRO=Ubuntu
 ```
 
 ---
@@ -448,10 +448,10 @@ POIROT_SANDBOX_WSL_DISTRO=Ubuntu
 ## MCPツール
 
 ```env
-POIROT_MCP_ENABLED=true
+ENGRAM_MCP_ENABLED=true
 ```
 
-設定ファイル`.poirot/mcp_servers.yaml`：
+設定ファイル`.engram/mcp_servers.yaml`：
 
 ```yaml
 servers:
@@ -491,8 +491,8 @@ reporter:   [openai, qwen] → deepseek（フォールバック尾部）
 ### 起動時指定
 
 ```bash
-poirot --provider openai
-poirot --provider qwen --model qwen-max
+engram --provider openai
+engram --provider qwen --model qwen-max
 ```
 
 ### 実行時切替
@@ -515,7 +515,7 @@ poirot --provider qwen --model qwen-max
 
 ## Docker デプロイ
 
-Poirot は Dockerfile + docker-compose でワンコマンドデプロイに対応しています。
+Engram は Dockerfile + docker-compose でワンコマンドデプロイに対応しています。
 
 ### クイックスタート
 
@@ -525,22 +525,22 @@ cp .env.example .env
 # .env 編集 — DEEPSEEK_API_KEY=sk-xxx を入力
 
 # 2. ビルド + 実行（TUI 対話）
-docker compose run --rm poirot
+docker compose run --rm engram
 
 # 3. または単発リサーチ
-docker compose run --rm poirot run "AIエージェントトレンド 2026"
+docker compose run --rm engram run "AIエージェントトレンド 2026"
 ```
 
 ### イメージ内容
 
 - Python 3.12 + 全依存関係（pyyaml、langchain 等）
 - Node.js 20（MCP stdio server + pi coding agent）
-- デフォルト有効：`POIROT_MEMORY_USE=default`、`POIROT_MULTIAGENT_ENABLED=true`
+- デフォルト有効：`ENGRAM_MEMORY_USE=default`、`ENGRAM_MULTIAGENT_ENABLED=true`
 - デフォルト Local sandbox（DinD 不要）
 
 ### コンテナ内 Sandbox
 
-**デフォルト（Local sandbox）** — agent は Poirot コンテナ内でコマンド実行。DinD 不要。
+**デフォルト（Local sandbox）** — agent は Engram コンテナ内でコマンド実行。DinD 不要。
 
 **Docker 隔離 sandbox** — agent は独立 sandbox コンテナで実行。docker.sock マウントが必要：
 
@@ -552,15 +552,15 @@ volumes:
 
 ```env
 # .env：
-POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
-POIROT_SANDBOX_EXECUTOR=local
+ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
+ENGRAM_SANDBOX_EXECUTOR=local
 ```
 
 ### データ永続化
 
 | ホストパス | コンテナパス | 内容 |
 |-----------|-------------|------|
-| `./.poirot/` | `/app/.poirot/` | DB、ログ、artifact、memory、MCP 設定 |
+| `./.engram/` | `/app/.engram/` | DB、ログ、artifact、memory、MCP 設定 |
 | `./skills/` | `/app/skills/` | ユーザー skill |
 | `./.env` | `/app/.env` | 環境設定（Ctrl+B パネルで書き戻し可能） |
 
@@ -572,11 +572,11 @@ POIROT_SANDBOX_EXECUTOR=local
 
 ```env
 DEEPSEEK_API_KEY=sk-xxx
-POIROT_SKILL_ENABLED=false
-POIROT_MCP_ENABLED=false
-POIROT_SANDBOX_USE=
-POIROT_MEMORY_USE=
-POIROT_MULTIAGENT_ENABLED=false
+ENGRAM_SKILL_ENABLED=false
+ENGRAM_MCP_ENABLED=false
+ENGRAM_SANDBOX_USE=
+ENGRAM_MEMORY_USE=
+ENGRAM_MULTIAGENT_ENABLED=false
 ```
 
 `/default` でライトモードへ。sandbox / skill / memory なし — 純粋な LLM チャット。
@@ -587,41 +587,41 @@ POIROT_MULTIAGENT_ENABLED=false
 DEEPSEEK_API_KEY=sk-xxx
 
 # 記憶（L4 リコール + L5 自動統合）
-POIROT_MEMORY_USE=default
-POIROT_MEMORY_PHASE2_ENABLED=true
-POIROT_MEMORY_PHASE2_TURNS=10
+ENGRAM_MEMORY_USE=default
+ENGRAM_MEMORY_PHASE2_ENABLED=true
+ENGRAM_MEMORY_PHASE2_TURNS=10
 
 # Skill（L1 + L2 進化 + L3 評価）
-POIROT_SKILL_ENABLED=true
-POIROT_SKILL_EVOLVE_ENABLED=true
-POIROT_SKILL_EVAL_ENABLED=true
-POIROT_SKILL_MAX_INJECT=15
+ENGRAM_SKILL_ENABLED=true
+ENGRAM_SKILL_EVOLVE_ENABLED=true
+ENGRAM_SKILL_EVAL_ENABLED=true
+ENGRAM_SKILL_MAX_INJECT=15
 
 # マルチエージェント（specialist + L2/L3）
-POIROT_MULTIAGENT_ENABLED=true
-POIROT_MULTIAGENT_L2_ENABLED=true
-POIROT_MULTIAGENT_L3_ENABLED=true
+ENGRAM_MULTIAGENT_ENABLED=true
+ENGRAM_MULTIAGENT_L2_ENABLED=true
+ENGRAM_MULTIAGENT_L3_ENABLED=true
 
 # Pi specialist（DeepSeek キー使用、ログイン不要）
-POIROT_MULTIAGENT_PI_PROVIDER=deepseek
-POIROT_MULTIAGENT_PI_API_KEY=sk-xxx
+ENGRAM_MULTIAGENT_PI_PROVIDER=deepseek
+ENGRAM_MULTIAGENT_PI_API_KEY=sk-xxx
 
 # Docker sandbox
-POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
-POIROT_SANDBOX_EXECUTOR=wsl
+ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
+ENGRAM_SANDBOX_EXECUTOR=wsl
 
 # MCP ツール
-POIROT_MCP_ENABLED=true
+ENGRAM_MCP_ENABLED=true
 ```
 
 ### シナリオ 3：開発モード（Local sandbox、Docker なし）
 
 ```env
 DEEPSEEK_API_KEY=sk-xxx
-POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.local.local_sandbox_provider:LocalSandboxProvider
-POIROT_SKILL_ENABLED=true
-POIROT_MEMORY_USE=default
-POIROT_MULTIAGENT_ENABLED=true
+ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.local.local_sandbox_provider:LocalSandboxProvider
+ENGRAM_SKILL_ENABLED=true
+ENGRAM_MEMORY_USE=default
+ENGRAM_MULTIAGENT_ENABLED=true
 ```
 
 ### シナリオ 4：コーディング Agent（pi specialist 重視）
@@ -630,17 +630,17 @@ POIROT_MULTIAGENT_ENABLED=true
 DEEPSEEK_API_KEY=sk-xxx
 
 # Pi specialist + DeepSeek
-POIROT_MULTIAGENT_ENABLED=true
-POIROT_MULTIAGENT_SPECIALISTS=pi,subagent
-POIROT_MULTIAGENT_PI_PROVIDER=deepseek
-POIROT_MULTIAGENT_PI_API_KEY=sk-xxx
+ENGRAM_MULTIAGENT_ENABLED=true
+ENGRAM_MULTIAGENT_SPECIALISTS=pi,subagent
+ENGRAM_MULTIAGENT_PI_PROVIDER=deepseek
+ENGRAM_MULTIAGENT_PI_API_KEY=sk-xxx
 
 # コード実行 sandbox
-POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
+ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
 
 # コーディング skill
-POIROT_SKILL_ENABLED=true
-POIROT_SKILL_MAX_INJECT=15
+ENGRAM_SKILL_ENABLED=true
+ENGRAM_SKILL_MAX_INJECT=15
 ```
 
 ---
@@ -650,14 +650,14 @@ POIROT_SKILL_MAX_INJECT=15
 ### 記憶システム
 
 **記憶の動作確認：**
-- `.poirot/memory/traces.md` — 全記憶トレース（truth source、人間可読 Markdown）
-- Journal イベント：`.poirot/logs/threads/<thread_id>/runs/<run_id>/events.jsonl` — `memory.encode`、`memory.consolidate`
+- `.engram/memory/traces.md` — 全記憶トレース（truth source、人間可読 Markdown）
+- Journal イベント：`.engram/logs/threads/<thread_id>/runs/<run_id>/events.jsonl` — `memory.encode`、`memory.consolidate`
 - Worker actor：`worker:{thread_id}:{turn_count}`
 
 **統合頻度の調整：**
 ```env
-POIROT_MEMORY_PHASE2_TURNS=5   # より頻繁（LLM コスト増）
-POIROT_MEMORY_PHASE2_TURNS=20  # より省コスト
+ENGRAM_MEMORY_PHASE2_TURNS=5   # より頻繁（LLM コスト増）
+ENGRAM_MEMORY_PHASE2_TURNS=20  # より省コスト
 ```
 
 ### マルチエージェント
@@ -678,12 +678,12 @@ POIROT_MEMORY_PHASE2_TURNS=20  # より省コスト
 
 **Windows + WSL2 Docker：**
 ```env
-POIROT_SANDBOX_EXECUTOR=wsl
-POIROT_SANDBOX_WSL_DISTRO=Ubuntu
+ENGRAM_SANDBOX_EXECUTOR=wsl
+ENGRAM_SANDBOX_WSL_DISTRO=Ubuntu
 ```
 
 **Sandbox ディレクトリが空？**
-- Agent は `/mnt/poirot/user-data/` に書き込む必要あり（DockerPathGuard が強制）
+- Agent は `/mnt/engram/user-data/` に書き込む必要あり（DockerPathGuard が強制）
 - マウントエリア外のファイルは `--rm` で消失
 
 ---
@@ -705,13 +705,13 @@ POIROT_SANDBOX_WSL_DISTRO=Ubuntu
 
 ### Skillモジュールがロードされない
 
-1. `POIROT_SKILL_ENABLED=true`
+1. `ENGRAM_SKILL_ENABLED=true`
 2. `skills/`ディレクトリが存在
 3. プロジェクトルートから起動
 
 ### MCPツールが表示されない
 
-1. `POIROT_MCP_ENABLED=true`
+1. `ENGRAM_MCP_ENABLED=true`
 2. server `enabled: true`
 3. `command`が実行可能
 4. `/mcp list`で状態確認、`/mcp reload`で再試行
@@ -720,7 +720,7 @@ POIROT_SANDBOX_WSL_DISTRO=Ubuntu
 
 1. Dockerデーモンが実行中
 2. イメージがプル済み
-3. Windows + WSL2：`POIROT_SANDBOX_EXECUTOR=wsl`
+3. Windows + WSL2：`ENGRAM_SANDBOX_EXECUTOR=wsl`
 
 ---
 
@@ -742,9 +742,9 @@ A: はい。Layer 2有効時、`LLMMutator`がSkillテキストを変異し新�
 
 A:
 ```env
-POIROT_SKILL_ENABLED=false
-POIROT_MCP_ENABLED=false
-POIROT_SANDBOX_USE=
+ENGRAM_SKILL_ENABLED=false
+ENGRAM_MCP_ENABLED=false
+ENGRAM_SANDBOX_USE=
 ```
 その後`/default`でライトモードに。
 
@@ -756,8 +756,8 @@ A: `skills/`下にサブディレクトリを作成し、`SKILL.md`（frontmatte
 
 A:
 ```bash
-python -m pytest poirot/backend/tests/ -q
-python -m pytest poirot/backend/tests/v1/unit/skill/ -q
+python -m pytest engram/backend/tests/ -q
+python -m pytest engram/backend/tests/v1/unit/skill/ -q
 ```
 
 ---

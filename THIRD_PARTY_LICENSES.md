@@ -32,15 +32,15 @@ Original copyright notices are preserved per the MIT license terms.
 
 Adapted skills have been modified from their originals:
 
-- Frontmatter normalized to Poirot's schema (`name` / `description` /
+- Frontmatter normalized to Engram's schema (`name` / `description` /
   `allowed-tools` / `enabled` / `related-skills` / `license` / `author`).
-- Tool references remapped to Poirot's tool set
+- Tool references remapped to Engram's tool set
   (`terminal` → `bash`, `search_files` → `grep`, `patch` → `str_replace`,
   `web_extract`/`web_search` → `web_search`, `read_file` → `read_file`,
   `find`/`ls` → `list_dir`, `cat`/`head`/`tail` → `read_file`).
-- Project-specific paths rewritten (`.hermes/` → `.poirot/`).
+- Project-specific paths rewritten (`.hermes/` → `.engram/`).
 - Hermes-private frontmatter fields (`metadata.hermes.*`, `platforms`,
-  `version`) dropped or converted to Poirot equivalents.
+  `version`) dropped or converted to Engram equivalents.
 
 Original skill content is preserved under each skill directory's `SKILL.md`
 with the `author` field crediting the source project. See the upstream

@@ -5,7 +5,7 @@ __pycache__/
 *.so
 *.egg
 *.egg-info/
-poirot.egg-info/
+engram.egg-info/
 build/
 dist/
 .eggs/
@@ -30,7 +30,7 @@ ENV/
 .agents/
 
 # === User skill storage (uploaded/user skills, multi-user isolation) ===
-# 核心系统 skill 在 poirot/backend/agents/skill/builtin_skills/（随包提交）
+# 核心系统 skill 在 engram/backend/agents/skill/builtin_skills/（随包提交）
 # skills/ 是用户上传存储位，不追踪；多用户结构 skills/users/{user_id}/{name}/
 skills/
 # .skill_id sidecar 是 generated artifact（IMPORTED/EVOLVED），不追踪；
@@ -46,8 +46,8 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# === Poirot runtime (logs, artifacts, generated output) ===
-.poirot/
+# === Engram runtime (logs, artifacts, generated output) ===
+.engram/
 
 # === OS ===
 .DS_Store

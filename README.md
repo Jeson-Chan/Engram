@@ -1,6 +1,6 @@
 <div align="center">
 
-<img alt="Poirot README Hero" width="960" src="resource/assets/poirot-readme-hero.png">
+<img alt="Engram README Hero" width="960" src="resource/assets/engram-readme-hero.png">
 
 ### A Deep Research Agent Kernel with Long-Term Memory
 
@@ -18,13 +18,13 @@
 ---
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="resource/assets/poirot-logo.png">
-  <img alt="Poirot" width="720" src="resource/assets/poirot-logo.png">
+  <source media="(prefers-color-scheme: dark)" srcset="resource/assets/engram-logo.png">
+  <img alt="Engram" width="720" src="resource/assets/engram-logo.png">
 </picture>
 
 ## Overview
 
-Poirot is a deep research agent kernel built for those who care about **how** agents are architected. Rather than chasing a feature checklist, Poirot establishes a clean, decoupled, evaluable foundation — from the ReAct core loop to context engineering governance, from a five-layer long-term memory system to multi-agent orchestration with shared sandbox isolation, from sandbox path enforcement to a three-layer skill self-evolution system.
+Engram is a deep research agent kernel built for those who care about **how** agents are architected. Rather than chasing a feature checklist, Engram establishes a clean, decoupled, evaluable foundation — from the ReAct core loop to context engineering governance, from a five-layer long-term memory system to multi-agent orchestration with shared sandbox isolation, from sandbox path enforcement to a three-layer skill self-evolution system.
 
 Every module is independently designed, independently tested, and independently verifiable. **2400+ tests** guard every layer.
 
@@ -46,7 +46,7 @@ The `DefaultStrategy` dynamically externalizes historical messages based on a li
 
 ### 🧬 Five-Layer Long-Term Memory
 
-Poirot implements a cognitive-science-inspired memory system across five layers, each independently testable:
+Engram implements a cognitive-science-inspired memory system across five layers, each independently testable:
 
 | Layer | Role | Key Breakthrough |
 |-------|------|-----------------|
@@ -60,10 +60,10 @@ Poirot implements a cognitive-science-inspired memory system across five layers,
 
 ### 🤝 Multi-Agent Orchestration
 
-Poirot supports delegating sub-tasks to external coding agents and internal self-copies:
+Engram supports delegating sub-tasks to external coding agents and internal self-copies:
 
 - **Specialist Delegation** — `delegate_to_specialist(goal, success_criteria)` routes to external CLIs (pi / codex / claude) via MCP `SpecialistMcpServer` (8 sandbox tools exposed). Each specialist runs as a separate process with its own LLM, but shares the **same Docker sandbox** via `--sandbox-url` passthrough.
-- **Subagent (Self-Copy)** — `delegate_to_subagent(goal)` creates a Poirot self-copy with isolated context (no inherited message history) but shared thread sandbox. `SandboxMiddleware.abefore_model` restores `ContextVar` from `state["sandbox"]` — subagent reuses parent's `sandbox_id` without re-acquiring.
+- **Subagent (Self-Copy)** — `delegate_to_subagent(goal)` creates a Engram self-copy with isolated context (no inherited message history) but shared thread sandbox. `SandboxMiddleware.abefore_model` restores `ContextVar` from `state["sandbox"]` — subagent reuses parent's `sandbox_id` without re-acquiring.
 - **L2 Evolution Layer** — data-driven specialist self-evolution: `MetricMonitor` triggers when `effective_rate < threshold`, `IVEFocuser` diagnoses, `LLMMutator` varies, `ScoreDeltaGate` gates, `GitRatchet` rollbacks on degradation.
 - **L3 Eval Layer** — three-layer evaluation: execution judgment (per-skill per-task LLM), task quality scoring (4-dimension weighted), response contract checking. `RuntimeTracker` feeds degradation signals back to L2.
 
@@ -74,16 +74,16 @@ Poirot supports delegating sub-tasks to external coding agents and internal self
 Two providers: **Local** (host process, for development) and **Docker** (container isolation, for production).
 
 **Docker mode breakthroughs:**
-- **`DockerPathTranslator`** — `translate_path` passes through (container path = bind mount path), `reverse_translate` maps `/mnt/poirot/user-data/<x>` → `<sandbox_root>/<sandbox_id>/<x>` (Windows host path) — fixes the `present_files` artifact extraction chain (`shutil.copy2` now gets a real Windows path, not a container path)
-- **`DockerPathGuard`** — write path whitelist: `write_file`/`str_replace` paths must be under `/mnt/poirot/user-data/`, bash redirect targets (`>{1,2}\s*(/[^\s;|&]*)`) must be in mount area — **forces agent writes to persist**, not lost in container-internal `/tmp` on `--rm`
+- **`DockerPathTranslator`** — `translate_path` passes through (container path = bind mount path), `reverse_translate` maps `/mnt/engram/user-data/<x>` → `<sandbox_root>/<sandbox_id>/<x>` (Windows host path) — fixes the `present_files` artifact extraction chain (`shutil.copy2` now gets a real Windows path, not a container path)
+- **`DockerPathGuard`** — write path whitelist: `write_file`/`str_replace` paths must be under `/mnt/engram/user-data/`, bash redirect targets (`>{1,2}\s*(/[^\s;|&]*)`) must be in mount area — **forces agent writes to persist**, not lost in container-internal `/tmp` on `--rm`
 - **Warm pool** — pre-created containers reduce cold-start latency
-- **Idle auto-destroy** — `POIROT_SANDBOX_IDLE_TIMEOUT=600` (10min)
-- **Cross-process lock** — concurrent Poirot instances don't conflict (3-function lock: open/lock/unlock)
+- **Idle auto-destroy** — `ENGRAM_SANDBOX_IDLE_TIMEOUT=600` (10min)
+- **Cross-process lock** — concurrent Engram instances don't conflict (3-function lock: open/lock/unlock)
 - **WSL2 executor** — `WslDockerExecutor` translates `D:\foo\bar` → `/mnt/d/foo/bar` for Docker daemon in WSL2
 
 ### 🔌 MCP Tool Ecosystem
 
-Three transports: `stdio`, `sse`, `http`. Core tools load at startup; non-core tools defer-load on demand. Tool equivalence fallback chains (e.g., `web_search` → MCP server → builtin ddg) ensure resilience. Tool metadata drives externalization thresholds. Configured via `.poirot/mcp_servers.yaml`.
+Three transports: `stdio`, `sse`, `http`. Core tools load at startup; non-core tools defer-load on demand. Tool equivalence fallback chains (e.g., `web_search` → MCP server → builtin ddg) ensure resilience. Tool metadata drives externalization thresholds. Configured via `.engram/mcp_servers.yaml`.
 
 ### 🎯 Three-Layer Skill Architecture
 
@@ -98,7 +98,7 @@ Skills are **research process knowledge bundles** — prompt-level injections, n
 ### 🎨 Dual UI
 
 - **TUI** (default): Full-screen Textual app with welcome view + conversation view. Left scrollable log, bottom input box, status bar with live token usage. Wide screens show right-side session info panel.
-- **CLI** (`poirot cli`): Traditional scrolling mode with `prompt_toolkit` + `rich`. Slash-command completion + bottom toolbar.
+- **CLI** (`engram cli`): Traditional scrolling mode with `prompt_toolkit` + `rich`. Slash-command completion + bottom toolbar.
 
 ### 🔄 Multi-LLM Fallback
 
@@ -114,7 +114,7 @@ Skills are **research process knowledge bundles** — prompt-level injections, n
 
 <div align="center">
 
-<img src="resource/assets/poirot-architecture-diagram.png" alt="Poirot Architecture" width="880">
+<img src="resource/assets/engram-architecture-diagram.png" alt="Engram Architecture" width="880">
 
 </div>
 
@@ -126,7 +126,7 @@ Skills are **research process knowledge bundles** — prompt-level injections, n
 
 ```bash
 # 1. Clone
-git clone <repo-url> && cd Poirot
+git clone <repo-url> && cd Engram
 
 # 2. Create environment (Python 3.12+)
 python -m venv .venv
@@ -141,7 +141,7 @@ cp .env.example .env
 # Edit .env — fill in at least: DEEPSEEK_API_KEY=sk-xxx
 
 # 5. Launch (TUI by default)
-poirot
+engram
 ```
 
 <sub>Type a question to start researching. Type `/` for command completion, `/help` for all commands.</sub>
@@ -150,27 +150,27 @@ poirot
 
 ```env
 # Long-term memory (L4 recall + L5 auto-consolidation)
-POIROT_MEMORY_USE=default
-POIROT_MEMORY_PHASE2_ENABLED=true
-POIROT_MEMORY_PHASE2_TURNS=10
+ENGRAM_MEMORY_USE=default
+ENGRAM_MEMORY_PHASE2_ENABLED=true
+ENGRAM_MEMORY_PHASE2_TURNS=10
 
 # Skill system (L1 base + L2 evolution + L3 eval)
-POIROT_SKILL_ENABLED=true
-POIROT_SKILL_EVOLVE_ENABLED=true
-POIROT_SKILL_EVAL_ENABLED=true
-POIROT_SKILL_MAX_INJECT=15
+ENGRAM_SKILL_ENABLED=true
+ENGRAM_SKILL_EVOLVE_ENABLED=true
+ENGRAM_SKILL_EVAL_ENABLED=true
+ENGRAM_SKILL_MAX_INJECT=15
 
 # Multi-Agent (specialist delegation + L2/L3)
-POIROT_MULTIAGENT_ENABLED=true
-POIROT_MULTIAGENT_L2_ENABLED=true
-POIROT_MULTIAGENT_L3_ENABLED=true
+ENGRAM_MULTIAGENT_ENABLED=true
+ENGRAM_MULTIAGENT_L2_ENABLED=true
+ENGRAM_MULTIAGENT_L3_ENABLED=true
 
 # Docker sandbox (container isolation)
-POIROT_SANDBOX_USE=poirot.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
-POIROT_SANDBOX_EXECUTOR=wsl              # Windows + WSL2 Docker
+ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
+ENGRAM_SANDBOX_EXECUTOR=wsl              # Windows + WSL2 Docker
 
 # MCP tools
-POIROT_MCP_ENABLED=true
+ENGRAM_MCP_ENABLED=true
 ```
 
 > **👉 For full configuration, commands, and troubleshooting — see the [Usage Guide](USAGE.md).**
@@ -181,7 +181,7 @@ POIROT_MCP_ENABLED=true
 
 <div align="center">
 
-<img src="resource/assets/screenshot-tui-conversation.png" alt="Poirot TUI Conversation" width="880">
+<img src="resource/assets/screenshot-tui-conversation.png" alt="Engram TUI Conversation" width="880">
 
 <sub>TUI Conversation View — dual-panel layout with live context governance, sandbox status, and memory recall</sub>
 
@@ -209,25 +209,25 @@ POIROT_MCP_ENABLED=true
 
 ## Acknowledgments
 
-Poirot stands on the shoulders of giants. The architecture draws inspiration from several outstanding open-source projects and research frameworks:
+Engram stands on the shoulders of giants. The architecture draws inspiration from several outstanding open-source projects and research frameworks:
 
 **Agent Architecture** — The middleware-first design and ReAct loop orchestration patterns are inspired by modern-based agent frameworks. The separation of concerns — where memory, skills, sandbox, and tool routing are pluggable cross-cutting middleware rather than embedded agent logic — builds upon ideas from conversational agent platforms that prioritize decoupled, testable architectures.
 
 **Memory System** — The five-layer memory architecture (schema → strategies → store → middleware → auto-consolidation) is informed by cognitive science models of episodic, semantic, and procedural memory. The Ebbinghaus decay formula, lazy strength computation, and Markdown-as-truth-source patterns draw from long-term memory research in AI agent design. The "tools have no LLM" principle — where atomic operations are pure data transformations and LLM orchestration lives in the middleware layer — is inspired by memory framework designs that separate engine from orchestration.
 
-**Multi-Agent Orchestration** — The specialist delegation model (where Poirot delegates coding tasks to external CLI agents via MCP) and the shared-thread-sandbox concept build upon multi-agent collaboration patterns from coding agent ecosystems. The idea that a lead agent can orchestrate specialized sub-agents — each with their own LLM and toolset — while sharing a unified sandbox for artifact continuity, is informed by production multi-agent system designs.
+**Multi-Agent Orchestration** — The specialist delegation model (where Engram delegates coding tasks to external CLI agents via MCP) and the shared-thread-sandbox concept build upon multi-agent collaboration patterns from coding agent ecosystems. The idea that a lead agent can orchestrate specialized sub-agents — each with their own LLM and toolset — while sharing a unified sandbox for artifact continuity, is informed by production multi-agent system designs.
 
 **Sandbox Isolation** — The three-component sandbox model (Runtime + PathTranslator + SecurityGuard) and the warm-pool lifecycle management are inspired by sandbox isolation patterns from deep research agent platforms. The Docker path translation and mount-area enforcement address real-world challenges of cross-platform (Windows + WSL2 + Docker) file persistence.
 
 **Skill Self-Evolution** — The three-layer skill architecture (base storage → LLM-driven evolution → multi-dimensional evaluation) with ratchet rollback and quality gating builds upon self-improving agent research. The concept of skills as "process knowledge bundles" (prompt-level injections, not executable functions) draws from prompt engineering and skill management frameworks.
 
-We gratefully acknowledge the developers and researchers of these projects whose work — whether through direct code patterns, architectural ideas, or research papers — made Poirot possible.
+We gratefully acknowledge the developers and researchers of these projects whose work — whether through direct code patterns, architectural ideas, or research papers — made Engram possible.
 
 ---
 
 ## License
 
-[MIT](LICENSE) © Poirot Authors
+[MIT](LICENSE) © Engram Authors
 
 ---
 
