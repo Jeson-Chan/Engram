@@ -52,9 +52,9 @@ Engram implements a cognitive-science-inspired memory system across five layers,
 |-------|------|-----------------|
 | **L1** | Schema + Protocol | `MemoryTrace` frozen dataclass (15 fields) + `MemoryType` enum (episodic/semantic/procedural) + 5 atomic operations (Encode/Retrieve/Associate/Consolidate/Reconsolidate) — **tools have no LLM**, pure data operations |
 | **L2** | Default Strategies | Ebbinghaus decay formula (`strength = base×(1-decay)^hours + log(1+access)×0.1 + importance×0.05`) + composite forget (TTL + strength threshold) + 6 hard-wired decisions (A1-F2) — **lazy decay**, strength computed at retrieve time, no background tasks |
-| **L3** | Store + Retriever | `MarkdownFileStore` (single `traces.md` truth source + `<!-- trace: {id} -->` separators + YAML frontmatter) + `HybridRetriever` (pure BM25, no vector/graph dependency) — **retrieve reinforcement write-back** (1A:命中后 store.update 强化 strength) + **forgotten filtering** (3B: metadata.forgotten=True excluded) + **incremental index** (5B: store decorator triggers retriever.on_trace_*) |
+| **L3** | Store + Retriever | **Tiered storage: Redis hot tier (per user/thread partitioned keys, per-trace TTL, read-refresh) over a Postgres cold tier (full sediment)** — `TieredMemoryStore`: writes sediment to cold FIRST, reads fall through hot-miss → cold → back-fill hot; Markdown store remains the zero-dependency local fallback — **retrieve reinforcement write-back** (1A) + **forgotten filtering** (3B) + **incremental index** (5B) |
 | **L4** | Middleware + Bootstrap | `MemoryMiddleware.abefore_model` — per-call `HumanMessage` injection (protects prompt caching, `hide_from_ui=True`) + `set_turn_id` ContextVar (traceability C: actor = turn:N) + bootstrap lifecycle (lazy-load double-check lock + `set_memory_config` global singleton sync) |
-| **L5** | Auto-Consolidation | `MemoryConsolidationMiddleware.aafter_model` — **non-blocking** submit every N turns + `MemoryWorker` (daemon thread + `threading.Queue` + LLM construction injection) — LLM extracts episodic memories → `manager.encode` → candidate ≥ N → LLM generates merged content → `manager.consolidate` (max=10, E1) — **errors: log + skip**, never blocks main loop |
+| **L5** | Auto-Consolidation | `MemoryConsolidationMiddleware.aafter_model` — **non-blocking** submit → **Redis Stream producer/consumer group** (`XADD` → `XREADGROUP` → `XACK`): events persist in the stream (Web restart loses nothing), failures stay in the PEL for replay (`XAUTOCLAIM`, min-idle-time so in-flight messages aren't stolen), the group's `last-delivered-id` IS the resume offset — **at-least-once**, duplicate consolidations absorbed by encode idempotency; standalone worker process (`python -m ...memory.consolidation_worker`) scales consumers horizontally; in-process queue remains the no-Redis fallback — **errors: log + skip**, never blocks main loop |
 
 **Key Design:** Memory injection is per-call `HumanMessage` (not system prompt), protecting the LLM's prompt cache prefix. `recalled_memories` in state stores only indices (id+score+strength), not full content. The `MemoryConfig` has 4 STARTUP_ONLY fields (use/storage_path/vector_store/graph_store) — the rest are runtime-swappable via `set_memory_config()`.
 
@@ -110,6 +110,26 @@ Skills are **research process knowledge bundles** — prompt-level injections, n
 
 ---
 
+### 🌐 Service Gateway (FastAPI + SSE)
+
+The agent kernel is exposed as a long-running service — sessions, streaming chat, streaming research, and run history:
+
+```
+FastAPI gateway
+ ├─ POST /sessions                     ── per-session thread_id (state isolation key)
+ ├─ POST /sessions/{id}/chat           ── SSE stream (thinking/answer/tool events)
+ ├─ POST /sessions/{id}/research       ── SSE research stream + PG run record
+ ├─ GET  /sessions/{id}/runs           ── run history (PG persisted, survives restarts)
+ ├─ GET  /runs/{run_id}/report         ── final report artifact
+ └─ Swagger /docs                      ── live API playground
+```
+
+**Key decisions:**
+- **One-shot bootstrap in the lifespan** — model routing / MCP / skills load once at startup, never per request (factory injectable, so tests stub it and never touch real providers)
+- **The async path only** — `LeaderAgent.run` does `asyncio.run` internally and is never called from the gateway; SSE endpoints wrap the `graph.astream` service directly, and every blocking IO (journal JSONL, run records) rides `asyncio.to_thread` so the event stream never freezes
+- **PG checkpointer** — LangGraph session state persists to Postgres (`AsyncPostgresSaver` pool); restart the service and the same session continues, two uvicorn workers see the same state
+- **SSE resume via Last-Event-ID** — every frame carries an id; reconnects replay the buffered gap then continue live. Same mental model as the Redis Stream consumer group (offset + gap replay, at-least-once both sides)
+
 ## Architecture
 
 <div align="center">
@@ -123,6 +143,18 @@ Skills are **research process knowledge bundles** — prompt-level injections, n
 ---
 
 ## Quick Start
+
+**Option A — full stack in one command (agent + redis + postgres):**
+
+```bash
+git clone <repo-url> && cd Engram
+cp .env.example .env      # fill in DEEPSEEK_API_KEY
+docker compose up         # agent + redis + postgres, all wired
+```
+
+<sub>Redis = memory hot tier, Postgres = session-state checkpointer + memory cold tier + run history. The consolidation worker is optional: `docker compose up consolidation-worker`.</sub>
+
+**Option B — local Python install (CLI / TUI):**
 
 ```bash
 # 1. Clone
