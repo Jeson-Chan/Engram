@@ -76,7 +76,7 @@ GET  /docs                   →  live Swagger playground
 
 The same binary also runs locally as a TUI / CLI for interactive research — one kernel, two faces.
 
-**2761 tests** guard the kernel and the service; CI runs the recovery / replay / fallback suites against real Redis + Postgres service containers.
+**2763 tests** guard the kernel and the service; CI runs the recovery / replay / fallback suites against real Redis + Postgres service containers.
 
 ---
 
