@@ -2,135 +2,163 @@
 
 <img alt="Engram README Hero" width="960" src="resource/assets/engram-readme-hero.png">
 
-### A Deep Research Agent Kernel with Long-Term Memory
+### A Deep Research Agent Kernel with Long-Term Memory — served over HTTP
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-7c6ff0?style=for-the-badge)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-45c4b8?style=for-the-badge)](https://www.python.org/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-1.x-5aa9f5?style=for-the-badge)](https://github.com/langchain-ai/langgraph)
-[![DeepSeek](https://img.shields.io/badge/LLM-DeepSeek-00BFFF?style=for-the-badge)](https://www.deepseek.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-1.x-5aa9e5?style=for-the-badge)](https://github.com/langchain-ai/langgraph)
+[![FastAPI](https://img.shields.io/badge/FastAPI-SSE-009488?style=for-the-badge)](https://fastapi.tiangolo.com/)
+[![Redis](https://img.shields.io/badge/Redis-Streams-DC382D?style=for-the-badge)](https://redis.io/)
+[![Postgres](https://img.shields.io/badge/Postgres-checkpointer-4169E1?style=for-the-badge)](https://www.postgresql.org/)
 
-**📚 Documentation:** [English](USAGE.md) · [简体中文](resource/USAGE.zh-CN.md) · [日本語](resource/USAGE.ja.md)
+**📚 Docs:** [Usage (EN)](USAGE.md) · [使用指南 (中文)](resource/USAGE.zh-CN.md) · [Demo Script](docs/demo.md) · [Design Notes](docs/interview-notes.md)
 
-<sub>ReAct Loop · Context Governance · 5-Layer Memory · Multi-Agent Orchestration · Skill Self-Evolution · Sandbox Isolation</sub>
+<sub>Sessions · SSE Streaming · Tiered Memory (Redis hot / Postgres cold) · Stream Consolidation · Reconnect Resume</sub>
 
 </div>
 
 ---
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="resource/assets/engram-logo.png">
-  <img alt="Engram" width="720" src="resource/assets/engram-logo.png">
-</picture>
+## Demo
 
-## Overview
+**Act 1 — the agent remembers across sessions.** Wipe the entire hot tier ("forget everything recent") and the agent still recalls the thread of the research — the Postgres cold tier answers, and the recalled memory goes warm again:
 
-Engram is a deep research agent kernel built for those who care about **how** agents are architected. Rather than chasing a feature checklist, Engram establishes a clean, decoupled, evaluable foundation — from the ReAct core loop to context engineering governance, from a five-layer long-term memory system to multi-agent orchestration with shared sandbox isolation, from sandbox path enforcement to a three-layer skill self-evolution system.
+```bash
+$ docker compose exec redis redis-cli FLUSHDB      # simulate: hot cache gone
+OK
+$ curl -N -X POST localhost:8000/sessions/$SID/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "继续上次的研究——缓冲设计定了吗？"}'
 
-Every module is independently designed, independently tested, and independently verifiable. **2400+ tests** guard every layer.
+event: answer
+data: {"type": "answer", "content": "上次已确认 Last-Event-ID 方案；缓冲采用 per-session 环形……"}
+# ^ recalled from the cold tier (back-filled into the hot tier on the way out)
+```
+
+**Act 2 — streaming research that survives a dropped connection.** Submit a question, watch tokens stream; if the connection drops, reconnect with the last frame id and the missed frames replay first:
+
+```bash
+$ curl -N -X POST localhost:8000/sessions/$SID/research -d '{"message": "..."}'
+event: thinking   data: {...}     # reasoning deltas
+event: answer     data: {...}     # token deltas
+event: tool_start data: {...}     # tool calls
+event: done       data: {...}     # termination
+
+# connection dropped at frame 5? reconnect and nothing is lost:
+$ curl -N -H "Last-Event-ID: 5" -X POST .../chat -d '{"message": "..."}'
+id: 6  ...  id: 7  ...           # the gap replays, then the live tail continues
+```
+
+<div align="center">
+
+<img src="resource/assets/screenshot-tui-conversation.png" alt="Engram TUI Conversation" width="880">
+
+<sub>TUI conversation view — same kernel, local interactive mode</sub>
+
+</div>
+
+Both acts as a walkable curl-level script (plus the kill-the-consumer Stream replay in `redis-cli`): **[docs/demo.md](docs/demo.md)**
 
 ---
 
-## Core Modules
+## What is Engram
 
-### 🧠 ReAct Research Kernel
+Engram is a deep research agent — a ReAct kernel with middleware-first architecture, five-layer long-term memory, sandbox isolation and skill evolution — **wrapped as a long-running service**: a FastAPI gateway that streams agent output over SSE, keeps sessions alive across restarts in Postgres, and remembers users over time in a two-tier store.
 
-A single `LeaderAgent` orchestrates the research loop. LangGraph handles outer flow orchestration (`prepare → leader_agent → finalize`), while **21 middleware** cross-cut every lifecycle hook: `before/after_agent`, `before/after_model`, `wrap_tool_call`.
+```text
+POST /sessions                →  per-session thread_id (the state-isolation key everything scopes on)
+POST /sessions/{id}/chat     →  SSE stream: thinking / answer / tool events, frame ids, resume
+POST /sessions/{id}/research →  SSE research stream + PG run record + report artifact
+GET  /sessions/{id}/runs     →  run history (survives restarts)
+GET  /runs/{run_id}/report   →  the final report markdown
+GET  /docs                   →  live Swagger playground
+```
 
-**Breakthrough:** Middleware are first-class citizens — memory recall, skill injection, sandbox lifecycle, consolidation, tool-call pairing, help requests, and context governance are all pluggable cross-cutting concerns, not embedded in the agent loop. The `app → agents` dependency is strictly one-directional.
+The same binary also runs locally as a TUI / CLI for interactive research — one kernel, two faces.
 
-### 📐 Context Engineering Governance
-
-The `DefaultStrategy` dynamically externalizes historical messages based on a live token budget. Window size is resolved by **penetrating through the `FallbackChatModel`** to the active provider's real context window — no hardcoded thresholds. Dual strategies — compaction (summarization) and externalization (offloading) — prevent context overflow in long research sessions without losing critical information.
-
-**Breakthrough:** The governance layer treats token budget as a first-class runtime concern. The fraction denominator is the *real* model window (resolved at call time), not a static config — making P5 circuit-breaker thresholds accurate across provider switches.
-
-### 🧬 Five-Layer Long-Term Memory
-
-Engram implements a cognitive-science-inspired memory system across five layers, each independently testable:
-
-| Layer | Role | Key Breakthrough |
-|-------|------|-----------------|
-| **L1** | Schema + Protocol | `MemoryTrace` frozen dataclass (15 fields) + `MemoryType` enum (episodic/semantic/procedural) + 5 atomic operations (Encode/Retrieve/Associate/Consolidate/Reconsolidate) — **tools have no LLM**, pure data operations |
-| **L2** | Default Strategies | Ebbinghaus decay formula (`strength = base×(1-decay)^hours + log(1+access)×0.1 + importance×0.05`) + composite forget (TTL + strength threshold) + 6 hard-wired decisions (A1-F2) — **lazy decay**, strength computed at retrieve time, no background tasks |
-| **L3** | Store + Retriever | **Tiered storage: Redis hot tier (per user/thread partitioned keys, per-trace TTL, read-refresh) over a Postgres cold tier (full sediment)** — `TieredMemoryStore`: writes sediment to cold FIRST, reads fall through hot-miss → cold → back-fill hot; Markdown store remains the zero-dependency local fallback — **retrieve reinforcement write-back** (1A) + **forgotten filtering** (3B) + **incremental index** (5B) |
-| **L4** | Middleware + Bootstrap | `MemoryMiddleware.abefore_model` — per-call `HumanMessage` injection (protects prompt caching, `hide_from_ui=True`) + `set_turn_id` ContextVar (traceability C: actor = turn:N) + bootstrap lifecycle (lazy-load double-check lock + `set_memory_config` global singleton sync) |
-| **L5** | Auto-Consolidation | `MemoryConsolidationMiddleware.aafter_model` — **non-blocking** submit → **Redis Stream producer/consumer group** (`XADD` → `XREADGROUP` → `XACK`): events persist in the stream (Web restart loses nothing), failures stay in the PEL for replay (`XAUTOCLAIM`, min-idle-time so in-flight messages aren't stolen), the group's `last-delivered-id` IS the resume offset — **at-least-once**, duplicate consolidations absorbed by encode idempotency; standalone worker process (`python -m ...memory.consolidation_worker`) scales consumers horizontally; in-process queue remains the no-Redis fallback — **errors: log + skip**, never blocks main loop |
-
-**Key Design:** Memory injection is per-call `HumanMessage` (not system prompt), protecting the LLM's prompt cache prefix. `recalled_memories` in state stores only indices (id+score+strength), not full content. The `MemoryConfig` has 4 STARTUP_ONLY fields (use/storage_path/vector_store/graph_store) — the rest are runtime-swappable via `set_memory_config()`.
-
-### 🤝 Multi-Agent Orchestration
-
-Engram supports delegating sub-tasks to external coding agents and internal self-copies:
-
-- **Specialist Delegation** — `delegate_to_specialist(goal, success_criteria)` routes to external CLIs (pi / codex / claude) via MCP `SpecialistMcpServer` (8 sandbox tools exposed). Each specialist runs as a separate process with its own LLM, but shares the **same Docker sandbox** via `--sandbox-url` passthrough.
-- **Subagent (Self-Copy)** — `delegate_to_subagent(goal)` creates a Engram self-copy with isolated context (no inherited message history) but shared thread sandbox. `SandboxMiddleware.abefore_model` restores `ContextVar` from `state["sandbox"]` — subagent reuses parent's `sandbox_id` without re-acquiring.
-- **L2 Evolution Layer** — data-driven specialist self-evolution: `MetricMonitor` triggers when `effective_rate < threshold`, `IVEFocuser` diagnoses, `LLMMutator` varies, `ScoreDeltaGate` gates, `GitRatchet` rollbacks on degradation.
-- **L3 Eval Layer** — three-layer evaluation: execution judgment (per-skill per-task LLM), task quality scoring (4-dimension weighted), response contract checking. `RuntimeTracker` feeds degradation signals back to L2.
-
-**Breakthrough:** The "shared thread sandbox" (INV#3) is now **actually implemented** — subagent restores ContextVar from state, specialist connects to write to the same mount area, not ephemeral container-internal paths.
-
-### 🛡️ Sandbox Isolation with Path Enforcement
-
-Two providers: **Local** (host process, for development) and **Docker** (container isolation, for production).
-
-**Docker mode breakthroughs:**
-- **`DockerPathTranslator`** — `translate_path` passes through (container path = bind mount path), `reverse_translate` maps `/mnt/engram/user-data/<x>` → `<sandbox_root>/<sandbox_id>/<x>` (Windows host path) — fixes the `present_files` artifact extraction chain (`shutil.copy2` now gets a real Windows path, not a container path)
-- **`DockerPathGuard`** — write path whitelist: `write_file`/`str_replace` paths must be under `/mnt/engram/user-data/`, bash redirect targets (`>{1,2}\s*(/[^\s;|&]*)`) must be in mount area — **forces agent writes to persist**, not lost in container-internal `/tmp` on `--rm`
-- **Warm pool** — pre-created containers reduce cold-start latency
-- **Idle auto-destroy** — `ENGRAM_SANDBOX_IDLE_TIMEOUT=600` (10min)
-- **Cross-process lock** — concurrent Engram instances don't conflict (3-function lock: open/lock/unlock)
-- **WSL2 executor** — `WslDockerExecutor` translates `D:\foo\bar` → `/mnt/d/foo/bar` for Docker daemon in WSL2
-
-### 🔌 MCP Tool Ecosystem
-
-Three transports: `stdio`, `sse`, `http`. Core tools load at startup; non-core tools defer-load on demand. Tool equivalence fallback chains (e.g., `web_search` → MCP server → builtin ddg) ensure resilience. Tool metadata drives externalization thresholds. Configured via `.engram/mcp_servers.yaml`.
-
-### 🎯 Three-Layer Skill Architecture
-
-Skills are **research process knowledge bundles** — prompt-level injections, not executable functions. "How to verify a source" is a skill. "Execute a web search" is a tool.
-
-- **Layer 1 (Base):** SQLite storage with version DAG, quality-filtered LLM hybrid selection, injection middleware, and four-counter metrics (selections / applied / completions / fallbacks).
-- **Layer 2 (Evolution):** `IVEFocuser` diagnosis, `LLMMutator` variation, `ScoreDeltaGate` gating, `GitRatchet` ratchet rollback. Skills auto-evolve when effective rate drops below threshold.
-- **Layer 3 (Eval):** Three-layer evaluation — execution judgment, task quality scoring (4-dimension weighted), response contract checking. `RuntimeTracker` monitors applied-rate trends and feeds degradation signals back to Layer 2.
-
-36 builtin skills across 5 categories (core / research / software-development / creative / productivity). Core skills auto-load; others discoverable via `/skill search`.
-
-### 🎨 Dual UI
-
-- **TUI** (default): Full-screen Textual app with welcome view + conversation view. Left scrollable log, bottom input box, status bar with live token usage. Wide screens show right-side session info panel.
-- **CLI** (`engram cli`): Traditional scrolling mode with `prompt_toolkit` + `rich`. Slash-command completion + bottom toolbar.
-
-### 🔄 Multi-LLM Fallback
-
-`FallbackChatModel` constructs a role-based routing chain (researcher / reporter). On transient API failures (rate limit, timeout, 5xx), it automatically degrades to the next provider. DeepSeek always sits at the chain tail as the ultimate fallback.
-
-### 📊 Observability
-
-`RunJournal` records structured events (`skill.select`, `skill.apply`, `memory.encode`, `memory.consolidate`, `compaction`, `budget`). Thread directories persist run artifacts. The `/expand` command unfolds the previous round's full Thought text and tool results.
+**2761 tests** guard the kernel and the service; CI runs the recovery / replay / fallback suites against real Redis + Postgres service containers.
 
 ---
 
-### 🌐 Service Gateway (FastAPI + SSE)
+## Why it is built this way
 
-The agent kernel is exposed as a long-running service — sessions, streaming chat, streaming research, and run history:
+The interesting part of this project is not the feature list — it is the decisions. Six of them:
 
+| Decision | Why |
+|---|---|
+| **The gateway never calls the sync entry (`LeaderAgent.run`)** | It runs `asyncio.run` internally — nested inside the ASGI event loop it raises immediately. The gateway wraps the `graph.astream` async generator instead; every blocking IO (journal JSONL, run records, report writes) rides `asyncio.to_thread`, so the event stream never freezes. |
+| **Memory is two tiers: Redis hot / Postgres cold** | Hot = fast and *evicting* (per-trace TTL, refreshed on read — frequently recalled memories stay warm); cold = durable sediment, written **first**. A hot-miss falls through to cold and back-fills the hot tier — `FLUSHDB` is an inconvenience, not data loss. |
+| **Consolidation runs on a Redis Stream consumer group** (not pub/sub, not a list) | Consolidation needs **at-least-once**. Streams give the full trio: group offset (resume), PEL (failed entries replay), `XAUTOCLAIM` (crashed consumers' orphans reclaimed, min-idle-time so in-flight work isn't stolen). Pub/sub drops on disconnect; a list has no consumer offset. |
+| **SSE frames carry ids** | The reconnect story becomes the *same mental model as the Stream*: client-held offset (`Last-Event-ID`) + server-side gap replay, at-least-once on both sides. Gaps older than the buffer degrade honestly (in-stream error + `X-Engram-Events-Dropped` header). |
+| **LangGraph state persists via a PG checkpointer** | Restart the service, the session continues; two uvicorn workers see the same session state. Multi-worker isn't configured into existence — it falls out of the storage model. |
+| **Tests assert external behavior through injected seams** | The runtime factory, stores and graphs are injectable, so tests never touch a real LLM provider; the suites that do need Redis/PG run live in CI and skip honestly when absent. |
+
+The full talking-points version (with the follow-up-question depth): **[docs/interview-notes.md](docs/interview-notes.md)**
+
+---
+
+## Installation
+
+**Prerequisites**
+
+- Python **3.12+**
+- An LLM API key — `DEEPSEEK_API_KEY` (default), or any OpenAI-compatible provider
+- Docker (only for the full-stack path; the local path needs nothing else)
+
+**A. Full stack (agent + redis + postgres, one command)**
+
+```bash
+git clone <repo-url> && cd Engram
+cp .env.example .env          # fill in DEEPSEEK_API_KEY
+docker compose up
 ```
-FastAPI gateway
- ├─ POST /sessions                     ── per-session thread_id (state isolation key)
- ├─ POST /sessions/{id}/chat           ── SSE stream (thinking/answer/tool events)
- ├─ POST /sessions/{id}/research       ── SSE research stream + PG run record
- ├─ GET  /sessions/{id}/runs           ── run history (PG persisted, survives restarts)
- ├─ GET  /runs/{run_id}/report         ── final report artifact
- └─ Swagger /docs                      ── live API playground
+
+**B. Local (CLI / TUI, zero infrastructure)**
+
+```bash
+git clone <repo-url> && cd Engram
+python -m venv .venv
+.venv\Scripts\activate            # Windows   (source .venv/bin/activate on Linux/macOS)
+pip install -e ".[dev]"
+cp .env.example .env           # fill in DEEPSEEK_API_KEY
 ```
 
-**Key decisions:**
-- **One-shot bootstrap in the lifespan** — model routing / MCP / skills load once at startup, never per request (factory injectable, so tests stub it and never touch real providers)
-- **The async path only** — `LeaderAgent.run` does `asyncio.run` internally and is never called from the gateway; SSE endpoints wrap the `graph.astream` service directly, and every blocking IO (journal JSONL, run records) rides `asyncio.to_thread` so the event stream never freezes
-- **PG checkpointer** — LangGraph session state persists to Postgres (`AsyncPostgresSaver` pool); restart the service and the same session continues, two uvicorn workers see the same state
-- **SSE resume via Last-Event-ID** — every frame carries an id; reconnects replay the buffered gap then continue live. Same mental model as the Redis Stream consumer group (offset + gap replay, at-least-once both sides)
+---
 
-## Architecture
+## Quick Start
+
+**Service mode — first stream in 30 seconds:**
+
+```bash
+export SID=$(curl -s -X POST localhost:8000/sessions | python -c "import sys,json;print(json.load(sys.stdin)['session_id'])")
+
+curl -N -X POST localhost:8000/sessions/$SID/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "研究：SSE 断线重连的主流方案"}'
+```
+
+```text
+event: thinking   data: {"type": "thinking", "content": "…"}   ← reasoning deltas
+event: answer     data: {"type": "answer",   "content": "…"}   ← token deltas
+event: tool_start data: {"type": "tool_start", "tool_name": "web_search", …}
+event: tool_end   data: {"type": "tool_end",   "tool_result": "…"}
+event: done       data: {"type": "done"}                        ← always terminates with done
+```
+
+Explore the rest at **http://localhost:8000/docs** (Swagger), or pull the research report afterwards:
+
+```bash
+curl -s localhost:8000/sessions/$SID/runs          # run history
+curl -s localhost:8000/runs/<run_id>/report        # final report (markdown)
+```
+
+**Local mode:** just run `engram` — full-screen TUI; type a question, `/` for commands.
+
+Advanced toggles (memory consolidation cadence, skill evolution, multi-agent, Docker sandbox, MCP) live in [.env.example](.env.example) — every switch is one env var, documented in the [Usage Guide](USAGE.md).
+
+---
+
+## How it works
 
 <div align="center">
 
@@ -138,86 +166,33 @@ FastAPI gateway
 
 </div>
 
-<sub>Outer flow: `prepare → before_agent → LeaderAgent (ReAct loop) → after_agent → finalize`. 21 middleware cross-cut every hook. Memory recall (L4) happens in `before_model`, consolidation (L5) in `after_model`. Skill injection (L1+L2+L3) in `before_model`. Tool calls route through Sandbox / MCP / Builtin via `wrap_tool_call`. Multi-agent delegation via `delegate_to_specialist` / `delegate_to_subagent`.</sub>
+<sub>Outer flow: `prepare → before_agent → LeaderAgent (ReAct loop) → after_agent → finalize`. 21 middleware cross-cut every hook — memory recall in `before_model`, consolidation submit in `after_model`, skill injection, sandbox lifecycle, tool pairing. The `app → agents` dependency is strictly one-directional.</sub>
 
----
+**One request, end to end** (service mode):
 
-## Quick Start
-
-**Option A — full stack in one command (agent + redis + postgres):**
-
-```bash
-git clone <repo-url> && cd Engram
-cp .env.example .env      # fill in DEEPSEEK_API_KEY
-docker compose up         # agent + redis + postgres, all wired
+```text
+startup (lifespan, once):  PG checkpointer → run store → model routing → MCP → skills → graph compiled
+POST /sessions:           SessionRegistry allocates an independent thread_id    ← every agent-side state scopes on it
+POST .../chat:             EngramStreamClient(graph.astream) → SSE frames (id: N) → per-session buffer
+                            journal / run-record IO → asyncio.to_thread          ← event loop never blocks
+after_model:               consolidation event XADD → Redis Stream (persistent)
+consumer group:            XREADGROUP → handle → XACK        (failure → PEL → XAUTOCLAIM replay)
+reconnect:                 Last-Event-ID → buffer gap replay → live tail
 ```
 
-<sub>Redis = memory hot tier, Postgres = session-state checkpointer + memory cold tier + run history. The consolidation worker is optional: `docker compose up consolidation-worker`.</sub>
+**The five-layer memory** (each layer independently tested):
 
-**Option B — local Python install (CLI / TUI):**
+| Layer | Role | The interesting part |
+|---|---|---|
+| **L1 Schema** | `MemoryTrace` frozen dataclass, 5 atomic ops | tools have no LLM — pure data operations |
+| **L2 Strategies** | Ebbinghaus decay + composite forget | *lazy* decay — strength computed at retrieve time, zero background jobs |
+| **L3 Tiered store** | Redis hot (partitioned keys, TTL) / PG cold (sediment) / Markdown fallback | cold-first writes; hot-miss → cold → back-fill; read-refresh keeps hot memories hot |
+| **L4 Middleware** | recall injection into the model call | injected as a per-call `HumanMessage` — the prompt-cache prefix stays intact |
+| **L5 Consolidation** | Redis Stream producer/consumer group | at-least-once via offset + PEL + XAUTOCLAIM; Web restarts lose nothing |
 
-```bash
-# 1. Clone
-git clone <repo-url> && cd Engram
+Also in the kernel (kept from the research core): multi-agent delegation with a **shared thread sandbox**, Docker sandbox with **path enforcement** (agent writes must land in the mounted area), MCP tool ecosystem with fallback chains, and a three-layer **skill evolution** loop (mutation gated by eval, ratchet rollback on degradation). See the [Usage Guide](USAGE.md) for the full tour.
 
-# 2. Create environment (Python 3.12+)
-python -m venv .venv
-.venv\Scripts\activate         # Windows
-# source .venv/bin/activate    # Linux / macOS
-
-# 3. Install
-pip install -e ".[dev]"
-
-# 4. Configure
-cp .env.example .env
-# Edit .env — fill in at least: DEEPSEEK_API_KEY=sk-xxx
-
-# 5. Launch (TUI by default)
-engram
-```
-
-<sub>Type a question to start researching. Type `/` for command completion, `/help` for all commands.</sub>
-
-### Enable Advanced Features
-
-```env
-# Long-term memory (L4 recall + L5 auto-consolidation)
-ENGRAM_MEMORY_USE=default
-ENGRAM_MEMORY_PHASE2_ENABLED=true
-ENGRAM_MEMORY_PHASE2_TURNS=10
-
-# Skill system (L1 base + L2 evolution + L3 eval)
-ENGRAM_SKILL_ENABLED=true
-ENGRAM_SKILL_EVOLVE_ENABLED=true
-ENGRAM_SKILL_EVAL_ENABLED=true
-ENGRAM_SKILL_MAX_INJECT=15
-
-# Multi-Agent (specialist delegation + L2/L3)
-ENGRAM_MULTIAGENT_ENABLED=true
-ENGRAM_MULTIAGENT_L2_ENABLED=true
-ENGRAM_MULTIAGENT_L3_ENABLED=true
-
-# Docker sandbox (container isolation)
-ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
-ENGRAM_SANDBOX_EXECUTOR=wsl              # Windows + WSL2 Docker
-
-# MCP tools
-ENGRAM_MCP_ENABLED=true
-```
-
-> **👉 For full configuration, commands, and troubleshooting — see the [Usage Guide](USAGE.md).**
-
----
-
-## Screenshots
-
-<div align="center">
-
-<img src="resource/assets/screenshot-tui-conversation.png" alt="Engram TUI Conversation" width="880">
-
-<sub>TUI Conversation View — dual-panel layout with live context governance, sandbox status, and memory recall</sub>
-
-</div>
+**More reading:** [Demo script](docs/demo.md) · [Design notes / talking points](docs/interview-notes.md) · [Usage (EN)](USAGE.md) · [使用指南 (中文)](resource/USAGE.zh-CN.md)
 
 ---
 
@@ -228,12 +203,11 @@ ENGRAM_MCP_ENABLED=true
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1.x-00BFFF?style=flat-square)
 ![LangChain](https://img.shields.io/badge/LangChain-1.x-1c3c3c?style=flat-square)
-![Rich](https://img.shields.io/badge/Rich-13+-red?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-SSE-009488?style=flat-square)
+![Redis](https://img.shields.io/badge/Redis-Streams-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Postgres](https://img.shields.io/badge/Postgres-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Textual](https://img.shields.io/badge/Textual-0.40+-7c6ff0?style=flat-square)
-![prompt_toolkit](https://img.shields.io/badge/prompt__toolkit-3+-45c4b8?style=flat-square)
-![SQLite](https://img.shields.io/badge/SQLite-skill_store-003B57?style=flat-square&logo=sqlite&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Sandbox-2496ED?style=flat-square&logo=docker&logoColor=white)
-![PyYAML](https://img.shields.io/badge/PyYAML-config-6c4097?style=flat-square)
 
 </div>
 
@@ -241,19 +215,7 @@ ENGRAM_MCP_ENABLED=true
 
 ## Acknowledgments
 
-Engram stands on the shoulders of giants. The architecture draws inspiration from several outstanding open-source projects and research frameworks:
-
-**Agent Architecture** — The middleware-first design and ReAct loop orchestration patterns are inspired by modern-based agent frameworks. The separation of concerns — where memory, skills, sandbox, and tool routing are pluggable cross-cutting middleware rather than embedded agent logic — builds upon ideas from conversational agent platforms that prioritize decoupled, testable architectures.
-
-**Memory System** — The five-layer memory architecture (schema → strategies → store → middleware → auto-consolidation) is informed by cognitive science models of episodic, semantic, and procedural memory. The Ebbinghaus decay formula, lazy strength computation, and Markdown-as-truth-source patterns draw from long-term memory research in AI agent design. The "tools have no LLM" principle — where atomic operations are pure data transformations and LLM orchestration lives in the middleware layer — is inspired by memory framework designs that separate engine from orchestration.
-
-**Multi-Agent Orchestration** — The specialist delegation model (where Engram delegates coding tasks to external CLI agents via MCP) and the shared-thread-sandbox concept build upon multi-agent collaboration patterns from coding agent ecosystems. The idea that a lead agent can orchestrate specialized sub-agents — each with their own LLM and toolset — while sharing a unified sandbox for artifact continuity, is informed by production multi-agent system designs.
-
-**Sandbox Isolation** — The three-component sandbox model (Runtime + PathTranslator + SecurityGuard) and the warm-pool lifecycle management are inspired by sandbox isolation patterns from deep research agent platforms. The Docker path translation and mount-area enforcement address real-world challenges of cross-platform (Windows + WSL2 + Docker) file persistence.
-
-**Skill Self-Evolution** — The three-layer skill architecture (base storage → LLM-driven evolution → multi-dimensional evaluation) with ratchet rollback and quality gating builds upon self-improving agent research. The concept of skills as "process knowledge bundles" (prompt-level injections, not executable functions) draws from prompt engineering and skill management frameworks.
-
-We gratefully acknowledge the developers and researchers of these projects whose work — whether through direct code patterns, architectural ideas, or research papers — made Engram possible.
+Engram stands on the shoulders of giants. The middleware-first agent architecture, the cognitive-science memory model (episodic / semantic / procedural with Ebbinghaus decay), multi-agent delegation patterns, sandbox isolation with path enforcement, and skill self-evolution with eval gating draw on ideas from the open-source agent ecosystem and cognitive-science research. The service layer (FastAPI/SSE, tiered storage, Stream-based consolidation) is designed and tested from first principles. We gratefully acknowledge the developers and researchers whose work made Engram possible.
 
 ---
 
