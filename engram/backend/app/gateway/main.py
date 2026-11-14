@@ -9,6 +9,8 @@ startup（lifespan）做一次性重引导：模型路由 / MCP / 技能等重�
 
 from __future__ import annotations
 
+import asyncio
+
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 
@@ -17,6 +19,7 @@ from fastapi import FastAPI, HTTPException
 from engram.backend.app.bootstrap import AppRuntime, bootstrap_runtime
 from engram.backend.app.gateway.chat import mount_chat_routes
 from engram.backend.app.gateway.registry import SessionRegistry
+from engram.backend.app.gateway.research import mount_research_routes
 from engram.backend.app.schemas.sessions import SessionCreateRequest, SessionResponse
 from engram.backend.agents.runtime.checkpointer import (
     reset_checkpointer,
@@ -51,11 +54,27 @@ def create_app(
         if dsn:
             pg_saver = await create_pg_checkpointer(dsn)
             set_checkpointer(pg_saver)
+        # 运行历史持久层（issue 09）：复用 checkpointer DSN 或独立
+        # ENGRAM_RUNS_PG_DSN；未配任何 PG 时历史端点 503（CRUD/chat 不受影响）
+        run_store = None
+        import os
+
+        runs_dsn = (
+            os.environ.get("ENGRAM_RUNS_PG_DSN", "").strip()
+            or dsn
+        )
+        if runs_dsn:
+            from engram.backend.agents.runtime.pg_run_store import PGRunStore
+
+            run_store = await asyncio.to_thread(PGRunStore, runs_dsn)
+        app.state.run_store = run_store
         try:
             # 一次性重引导：重活（模型路由、MCP、技能）只发生在这里。
             app.state.runtime = factory()
             yield
         finally:
+            if run_store is not None:
+                await asyncio.to_thread(run_store.close)
             if pg_saver is not None:
                 await close_pg_checkpointer(pg_saver)
                 reset_checkpointer()
@@ -68,7 +87,9 @@ def create_app(
     )
     app.state.session_registry = SessionRegistry()
     mount_chat_routes(app)
+    mount_research_routes(app)
     app.state.runtime = None  # lifespan 填充；会话 CRUD 不依赖它
+    app.state.run_store = None  # lifespan 填充（PG 配置时）
 
     @app.post("/sessions", response_model=SessionResponse, status_code=201)
     def create_session(request: SessionCreateRequest | None = None) -> SessionResponse:

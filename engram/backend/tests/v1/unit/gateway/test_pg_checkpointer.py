@@ -86,6 +86,21 @@ def test_lifespan_preloads_pg_saver_before_bootstrap(monkeypatch) -> None:
     monkeypatch.setattr(gw, "create_pg_checkpointer", fake_create)
     monkeypatch.setattr(gw, "close_pg_checkpointer", fake_close)
 
+    # run-store wiring (issue 09) must not open a real PG pool here either
+    class _FakeRunStore:
+        def __init__(self, dsn=None, **kw):
+            pass
+
+        def close(self):
+            pass
+
+    async def _mk_run_store(dsn=None, **kw):
+        return _FakeRunStore()
+
+    import engram.backend.agents.runtime.pg_run_store as runs_mod
+
+    monkeypatch.setattr(runs_mod, "PGRunStore", _FakeRunStore)
+
     seen = {}
 
     def factory():
@@ -150,5 +165,13 @@ def test_state_recovers_across_saver_instances() -> None:
             await close_pg_checkpointer(saver2)
         return snapshot
 
-    snap = asyncio.run(_run())
+    # Windows: psycopg async needs a Selector loop (Proactor unsupported).
+    # loop_factory keeps Linux/macOS on their default behavior unchanged.
+    try:
+        import asyncio as _a
+        from asyncio import SelectorEventLoop
+
+        snap = _a.run(_run(), loop_factory=SelectorEventLoop)
+    except TypeError:  # py<3.12 without loop_factory kw
+        snap = asyncio.run(_run())
     assert snap.values.get("value") == "aX"  # 写入的状态原样读回

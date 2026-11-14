@@ -42,6 +42,10 @@ async def create_pg_checkpointer(dsn: str | None = None) -> Checkpointer:
     if not effective:
         raise ValueError("no postgres DSN configured (set ENGRAM_CHECKPOINT_DSN)")
 
+    # Windows note: psycopg async rejects ProactorEventLoop. The gateway runs
+    # this inside uvicorn (which uses SelectorEventLoop when async psycopg is
+    # in play via its own loop policy); callers on Windows outside a server
+    # context must pass a Selector loop (see tests for the loop_factory idiom).
     pool = AsyncConnectionPool(
         conninfo=effective,
         min_size=1,
