@@ -90,6 +90,10 @@ def create_app(
     mount_research_routes(app)
     app.state.runtime = None  # lifespan 填充；会话 CRUD 不依赖它
     app.state.run_store = None  # lifespan 填充（PG 配置时）
+    # SSE 断线重连缓冲（issue 10）：per-session 事件环形缓冲
+    from engram.backend.app.gateway.sse_buffer import SessionEventBuffers
+
+    app.state.sse_buffers = SessionEventBuffers()
 
     @app.post("/sessions", response_model=SessionResponse, status_code=201)
     def create_session(request: SessionCreateRequest | None = None) -> SessionResponse:

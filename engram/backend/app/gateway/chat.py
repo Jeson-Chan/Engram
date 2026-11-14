@@ -14,9 +14,13 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from engram.backend.app.gateway.sse_buffer import (
+    frame_with_id,
+    last_event_id_from,
+)
 from engram.backend.app.schemas.chat import ChatRequest
 
 
@@ -35,7 +39,7 @@ def mount_chat_routes(app: FastAPI) -> None:
 
 
     @app.post("/sessions/{session_id}/chat")
-    def chat(session_id: str, request: ChatRequest) -> StreamingResponse:
+    def chat(session_id: str, request: ChatRequest, http_request: Request) -> StreamingResponse:
         runtime = app.state.runtime
         registry = app.state.session_registry
         record = registry.get(session_id)
@@ -44,9 +48,27 @@ def mount_chat_routes(app: FastAPI) -> None:
         if runtime is None:
             raise HTTPException(status_code=503, detail="agent runtime not ready")
 
+        # SSE 断线重连（issue 10）：per-session 事件缓冲 + Last-Event-ID 补齐。
+        # 与 Redis Stream 消费者组同构的续传语义（偏移量 + 缺口重放，at-least-once）。
+        buffers = getattr(app.state, "sse_buffers", None)
+        buffer = buffers.get_or_create(session_id) if buffers is not None else None
+        resume_from = last_event_id_from(http_request) if buffer is not None else None
+
         # 每请求闭包持有 run 上下文；错误在流内以 error 事件 + done 收尾
         async def _event_stream():
             run_id: str | None = None
+            # 断线重连：先补发缺口（缓冲仍存的事件），再接续新流。
+            # 超出缓冲容量的缺口无法补——X-Engram-Events-Dropped 头明示。
+            if buffer is not None and resume_from is not None:
+                replayed = buffer.replay_after(resume_from)
+                if not replayed and resume_from < (buffer.first_id() or 1) - 1:
+                    # 缺口已出缓冲范围
+                    yield _sse_frame({"type": "error",
+                                      "content": "resume gap exceeded buffer capacity",
+                                      "tool_name": None, "tool_args": None,
+                                      "tool_result": None, "msg_id": None})
+                for eid, frame in replayed:
+                    yield frame_with_id(eid, frame)
             try:
                 # 阻塞 IO（journal 目录创建 / JSONL 追加）→ 线程池
                 ctx = await asyncio.to_thread(
@@ -62,7 +84,11 @@ def mount_chat_routes(app: FastAPI) -> None:
                     graph=runtime.leader_agent.graph, config=config,
                 )
                 async for event in client.stream(request.message):
-                    yield _sse_frame(event)
+                    frame = _sse_frame(event)
+                    if buffer is not None:
+                        yield frame_with_id(buffer.append(frame), frame)
+                    else:
+                        yield frame
                 await asyncio.to_thread(
                     runtime.run_manager.mark_success, ctx.run_id,
                 )
@@ -75,9 +101,13 @@ def mount_chat_routes(app: FastAPI) -> None:
                         pass
                 raise
             except Exception as exc:
-                yield _sse_frame({"type": "error", "content": str(exc),
+                error_frame = _sse_frame({"type": "error", "content": str(exc),
                                   "tool_name": None, "tool_args": None,
                                   "tool_result": None, "msg_id": None})
+                if buffer is not None:
+                    yield frame_with_id(buffer.append(error_frame), error_frame)
+                else:
+                    yield error_frame
                 if run_id is not None:
                     try:
                         await asyncio.to_thread(
@@ -86,17 +116,24 @@ def mount_chat_routes(app: FastAPI) -> None:
                     except Exception:
                         pass
                 # 流内错误后仍以 done 收尾，客户端统一等 done 判终止
-                yield _sse_frame({"type": "done", "content": "",
+                done_frame = _sse_frame({"type": "done", "content": "",
                                   "tool_name": None, "tool_args": None,
                                   "tool_result": None, "msg_id": None})
+                if buffer is not None:
+                    yield frame_with_id(buffer.append(done_frame), done_frame)
+                else:
+                    yield done_frame
 
+        headers = {
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+        if buffer is not None and buffer.dropped:
+            headers["X-Engram-Events-Dropped"] = "true"
         return StreamingResponse(
             _event_stream(),
             media_type=SSE_MEDIA_TYPE,
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-            },
+            headers=headers,
         )
 
 
