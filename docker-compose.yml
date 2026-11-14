@@ -88,3 +88,20 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  # 巩固 worker 独立进程（issue 08）：消费 Redis Stream 巩固事件。
+  # 与 agent 内联消费者同组（负载分摊）；Web 重启不打断巩固。
+  # 按需启动：docker compose up consolidation-worker
+  consolidation-worker:
+    build: .
+    image: engram:latest
+    container_name: engram-consolidation-worker
+    command: ["python", "-m", "engram.backend.agents.memory.consolidation_worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - ENGRAM_REDIS_URL=redis://redis:6379/0
+      - ENGRAM_MEMORY_USE=default
+    depends_on:
+      redis:
+        condition: service_healthy

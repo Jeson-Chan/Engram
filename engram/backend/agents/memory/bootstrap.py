@@ -83,7 +83,14 @@ _memory_worker: Any = None
 
 
 def start_memory_worker(manager: Any, llm: Any) -> Any:
-    """启动 memory worker（daemon 线程）。返 worker 实例。
+    """启动 memory worker。返 worker 实例（submit 接口同构）。
+
+    两种模式（issue 08）：
+    - Redis 配置（config.redis_url）→ Stream 模式：本进程内起轻量
+      消费线程（Web 进程自含消费能力，同时 submit 走 XADD 持久化——
+      Web 重启事件不丢；独立 worker 进程见 consolidation_worker.py，
+      可水平加消费而不改代码）
+    - 无 Redis → 进程内 queue.Queue + 守护线程（原路径不变）
 
     幂等：已启动则返既有实例。
     LLM 注入：调用方传 llm（避免 worker 反向依赖 app）。
@@ -91,14 +98,84 @@ def start_memory_worker(manager: Any, llm: Any) -> Any:
     global _memory_worker
     if _memory_worker is not None:
         return _memory_worker
-    from engram.backend.agents.memory.worker import MemoryWorker
     with _worker_lock:
         if _memory_worker is not None:
             return _memory_worker
-        worker = MemoryWorker(manager=manager, llm=llm)
+        worker = _build_worker(manager, llm)
         worker.start()
         _memory_worker = worker
         return worker
+
+
+def _build_worker(manager: Any, llm: Any) -> Any:
+    """按配置选 worker 形态：Stream 队列（Redis）或进程内 Queue。
+
+    两者 submit/shutdown 同构（duck-type），调用方无感。
+    """
+    config = get_memory_config()
+    if config.redis_url:
+        try:
+            import redis
+
+            from engram.backend.agents.memory.stream_queue import (
+                StreamConsolidationQueue,
+                StreamConsolidationConsumer,
+            )
+
+            client = redis.Redis.from_url(
+                config.redis_url, decode_responses=True,
+                socket_connect_timeout=5,
+            )
+            return _StreamModeWorker(client, manager, llm)
+        except Exception as exc:
+            logger.warning(
+                "stream worker unavailable (%s); falling back to in-process queue",
+                exc,
+            )
+    from engram.backend.agents.memory.worker import MemoryWorker
+
+    return MemoryWorker(manager=manager, llm=llm)
+
+
+class _StreamModeWorker:
+    """Stream 模式的进程内 worker 包装：submit→XADD + 消费线程消费本组。
+
+    与 MemoryWorker 同构（start/shutdown/submit），bootstrap 调用方无感。
+    消费循环独立线程，run_forever 阻塞特性在线程里天然满足。
+    """
+
+    def __init__(self, client: Any, manager: Any, llm: Any) -> None:
+        from engram.backend.agents.memory.worker import MemoryWorker
+
+        self._queue = StreamConsolidationQueue(client)
+        self._processor = MemoryWorker(manager=manager, llm=llm)  # 只用 _process
+        import threading
+
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._consumer = StreamConsolidationConsumer(
+            client,
+            handler=self._processor._process,
+            consumer_name="web-inline",
+        )
+
+    def submit(self, task: Any) -> None:
+        self._queue.submit(task)
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._consumer.run_forever, name="memory-stream-worker", daemon=True,
+        )
+        self._thread.start()
+
+    def shutdown(self, timeout: float = 5.0) -> None:
+        self._consumer.stop()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=timeout)
+        self._thread = None
 
 
 def shutdown_memory_worker(timeout: float = 5.0) -> None:
