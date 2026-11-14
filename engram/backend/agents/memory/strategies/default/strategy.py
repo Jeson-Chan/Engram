@@ -93,17 +93,38 @@ def build_default_provider(
     # (per user/thread partitioned keys + per-trace TTL, expired keys vanish;
     # read hits refresh TTL - hot memories stay hot). Else Markdown truth source.
     if store is None:
-        if config.redis_url:
+    # 分层选配（issue 06/07）：
+    # - redis + memory_pg 都配 -> TieredMemoryStore（热 miss 查冷 + 回填，冷先沉淀）
+    # - 仅 redis -> RedisMemoryStore；仅 memory_pg -> PostgresMemoryStore
+    # - 都无 -> MarkdownFileStore（本地 CLI；冷热齐备时 Markdown 退出运行路径）
+        import os
+
+        redis_url = config.redis_url
+        pg_dsn = os.environ.get("ENGRAM_MEMORY_PG_DSN", "").strip()
+        if redis_url and pg_dsn:
+            import redis
+
+            from engram.backend.agents.memory.adapters.pg_store import PostgresMemoryStore
+            from engram.backend.agents.memory.adapters.redis_store import RedisMemoryStore
+            from engram.backend.agents.memory.adapters.tiered_store import TieredMemoryStore
+
+            hot = RedisMemoryStore(redis.Redis.from_url(
+                redis_url, decode_responses=True, socket_connect_timeout=5,
+            ))
+            cold = PostgresMemoryStore(pg_dsn)
+            store = TieredMemoryStore(hot, cold)
+        elif redis_url:
             import redis
 
             from engram.backend.agents.memory.adapters.redis_store import RedisMemoryStore
 
-            client = redis.Redis.from_url(
-                config.redis_url,
-                decode_responses=True,
-                socket_connect_timeout=5,
-            )
-            store = RedisMemoryStore(client)
+            store = RedisMemoryStore(redis.Redis.from_url(
+                redis_url, decode_responses=True, socket_connect_timeout=5,
+            ))
+        elif pg_dsn:
+            from engram.backend.agents.memory.adapters.pg_store import PostgresMemoryStore
+
+            store = PostgresMemoryStore(pg_dsn)
         else:
             store = MarkdownFileStore(config.storage_path)
     if retriever is None:

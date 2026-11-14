@@ -259,10 +259,11 @@ def _trace_to_dict(trace: MemoryTrace) -> dict:
 
 
 def _load(raw) -> MemoryTrace:
-    """JSON -> MemoryTrace (bytes tolerated via decode)."""
+    """JSON -> MemoryTrace (bytes decoded; dict passed through - psycopg
+    JSONB columns auto-deserialize, sharing this loader with the cold tier)."""
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8")
-    data = json.loads(raw)
+    data = raw if isinstance(raw, dict) else json.loads(raw)
     return MemoryTrace(
         id=data["id"],
         content=data["content"],

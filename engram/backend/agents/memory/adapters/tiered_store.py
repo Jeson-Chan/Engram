@@ -1,0 +1,119 @@
+"""TieredMemoryStore - hot(Redis TTL) + cold(Postgres sediment) composite (issue 07).
+
+Two-tier memory read path:
+- add/update/batch_update: dual write, COLD FIRST (sediment is the
+  durability guarantee), then hot (TTL keeps it only while warm)
+- get: hot hit returns immediately (low latency); miss falls to cold,
+  and a cold hit back-fills the hot tier (the trace goes warm again)
+- remove: dual delete
+- listing (list_all / list_by_type / list_by_filter): cold is the full
+  truth, hot versions win on id collisions (they are strictly newer or
+  at least as fresh - hot is a write-through cache)
+- read-refresh TTL of the hot tier is preserved via its own get()
+"""
+
+from __future__ import annotations
+
+import logging
+
+from engram.backend.agents.memory.exceptions import MemoryNotFoundError
+from engram.backend.agents.memory.schema import MemoryTrace, MemoryType
+from engram.backend.agents.memory.types import MemoryFilter
+
+logger = logging.getLogger(__name__)
+
+
+class TieredMemoryStore:
+    """Hot + cold composite implementing the MemoryStore Protocol."""
+
+    def __init__(self, hot, cold) -> None:
+        """hot: RedisMemoryStore-like with TTL; cold: PostgresMemoryStore-like."""
+        self._hot = hot
+        self._cold = cold
+
+    @property
+    def hot(self):
+        return self._hot
+
+    @property
+    def cold(self):
+        return self._cold
+
+    # ---- protocol methods ----
+
+    def add(self, trace: MemoryTrace) -> None:
+        self._cold.add(trace)       # sediment first (durability)
+        try:
+            self._hot.add(trace)    # warm copy; id may exist after eviction+backfill
+        except Exception:
+            # backfilled trace still warm -> hot conflict is fine, cold is truth
+            self._hot.update(trace)
+
+    def get(self, trace_id: str) -> MemoryTrace | None:
+        trace = self._hot.get(trace_id)
+        if trace is not None:
+            return trace            # hot hit (TTL refreshed by hot.get)
+        trace = self._cold.get(trace_id)
+        if trace is not None:
+            # cold hit -> back-fill the hot tier (trace goes warm again)
+            try:
+                self._hot.add(trace)
+            except Exception:
+                self._hot.update(trace)
+        return trace
+
+    def update(self, trace: MemoryTrace) -> None:
+        self._cold.update(trace)
+        try:
+            self._hot.update(trace)
+        except MemoryNotFoundError:
+            # not warm right now -> put it back (dual-write semantics)
+            self._hot.add(trace)
+
+    def batch_update(self, traces: list[MemoryTrace]) -> None:
+        self._cold.batch_update(traces)
+        for trace in traces:
+            try:
+                self._hot.update(trace)
+            except MemoryNotFoundError:
+                self._hot.add(trace)
+
+    def remove(self, trace_id: str) -> None:
+        self._cold.remove(trace_id)
+        self._hot.remove(trace_id)  # idempotent per protocol
+
+    def list_by_type(self, type: MemoryType) -> list[MemoryTrace]:
+        return [t for t in self.list_all() if t.type == type]
+
+    def list_by_filter(self, filter: MemoryFilter) -> list[MemoryTrace]:
+        return [
+            t for t in self.list_all()
+            if self._match(t, filter)
+        ]
+
+    def list_all(self) -> list[MemoryTrace]:
+        """Cold is the full truth; hot versions win on id collision (newer)."""
+        merged: dict[str, MemoryTrace] = {}
+        for trace in self._cold.list_all():
+            merged[trace.id] = trace
+        for trace in self._hot.list_all():
+            merged[trace.id] = trace
+        return list(merged.values())
+
+    # ---- internals ----
+
+    @staticmethod
+    def _match(trace: MemoryTrace, filter: MemoryFilter) -> bool:
+        import time as _t
+
+        if filter.type_filter is not None and trace.type != filter.type_filter:
+            return False
+        if trace.strength < filter.min_strength:
+            return False
+        if filter.max_age_hours is not None:
+            if (_t.time() - trace.created_at) / 3600.0 > filter.max_age_hours:
+                return False
+        for key, value in (filter.metadata_filter or {}).items():
+            if trace.metadata.get(key) != value:
+                return False
+        return True

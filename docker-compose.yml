@@ -38,6 +38,8 @@ services:
       - ENGRAM_CHECKPOINT_DSN=postgresql://engram:engram@postgres:5432/engram
       # 记忆热层（issue 06）——指向 compose 内 redis；不设则回退 Markdown 存储
       - ENGRAM_REDIS_URL=redis://redis:6379/0
+      # 记忆冷层（issue 07）——Postgres 全量沉淀；冷热齐备走 TieredMemoryStore
+      - ENGRAM_MEMORY_PG_DSN=postgresql://engram:engram@postgres:5432/engram
     depends_on:
       postgres:
         condition: service_healthy
