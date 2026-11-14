@@ -15,6 +15,8 @@
 
 <sub>Sessions · SSE Streaming · Tiered Memory (Redis hot / Postgres cold) · Stream Consolidation · Reconnect Resume</sub>
 
+<p>Animated wordmark: <a href="logo/standalone.html">letters as memory cells, a glint sweeping across — a memory being recalled</a> (zero-build HTML, see <a href="logo/README.md">logo/</a>)</p>
+
 </div>
 
 ---
