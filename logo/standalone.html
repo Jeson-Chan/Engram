@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ENGRAM - logo (plain HTML)</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 64px;
+      padding: 64px 16px;
+      background: #131518;
+      color: #e6e8ea;
+      font: 16px/1.6 system-ui, sans-serif;
+    }
+    h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.08em; color: #8b949e; text-transform: uppercase; margin: 0; }
+    ascii-banner { display: block; }
+  </style>
+</head>
+<body>
+  <!-- ascii.rest web components: one script tag, zero build -->
+  <script type="module" src="https://ascii.rest/ascii.js"></script>
+
+  <h1>memory - primary wordmark</h1>
+  <ascii-banner
+    text="ENGRAM"
+    font="tall"
+    shadow="none"
+    color="#7c6ff0,#45c4b8"
+    speed="0.8"
+  ></ascii-banner>
+
+  <h1>banner - classic</h1>
+  <ascii-banner
+    text="ENGRAM"
+    font="block"
+    shadow="rounded"
+    color="#7c6ff0"
+    shadow-color="#30363d"
+  ></ascii-banner>
+
+  <h1>typewriter - memory being written</h1>
+  <ascii-banner
+    text="ENGRAM"
+    font="slim"
+    shadow="none"
+    color="#45c4b8"
+    effect="type"
+    speed="1.6"
+  ></ascii-banner>
+</body>
+</html>

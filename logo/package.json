@@ -1,0 +1,19 @@
+{
+  "name": "engram-logo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ENGRAM wordmark logo - animated ASCII art via ascii.rest, in TypeScript and plain HTML",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "ascii.rest": "^0.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0"
+  }
+}
