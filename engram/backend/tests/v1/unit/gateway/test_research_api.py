@@ -178,7 +178,7 @@ def test_research_error_stream_then_done(tmp_path) -> None:
         resp = client.post(f"/sessions/{sid}/research", json={"message": "Q"})
     frames = _parse_sse(resp.text)
     assert [f["event"] for f in frames] == ["error", "done"]
-    assert "boom" in frames[0]["data"]["content"]
+    assert frames[0]["data"]["content"] == "RuntimeError"
 
 
 def test_runs_history_endpoints_with_fake_store(tmp_path) -> None:
@@ -271,3 +271,88 @@ def test_live_runs_history_persisted(tmp_path) -> None:
         assert store.get_run("run-live-test-1")["status"] == "error"
     finally:
         store.close()
+
+
+def test_report_fallback_prefers_reporter_artifact(tmp_path) -> None:
+    """review fix regression: final_report.md (reporter) wins over the fallback."""
+    from engram.backend.app.gateway.research import _write_report_fallback
+    from types import SimpleNamespace
+
+    run_dir = tmp_path / "run-x"
+    artifacts = run_dir / "artifacts"
+    artifacts.mkdir(parents=True)
+    (artifacts / "final_report.md").write_text("# Real Reporter Report", encoding="utf-8")
+    ctx = SimpleNamespace(artifacts_dir=artifacts)
+    path = _write_report_fallback(ctx, "stream-aggregated text")
+    assert path.endswith("final_report.md")
+    assert "Real Reporter Report" in open(path, encoding="utf-8").read()
+
+
+def test_post_success_bookkeeping_failure_keeps_success(tmp_path) -> None:
+    """review fix regression (high): a bookkeeping failure after mark_success
+    must not flip the run to ERROR nor emit a second error frame after done."""
+    import threading
+    from langchain_core.messages import AIMessageChunk
+
+    events = {"statuses": [], "frames": []}
+    lock = threading.Lock()
+
+    class _RM:
+        def create_run(self, thread_id, user_id=None, model_name=None, **kw):
+            out = tmp_path / "run-bk"
+            (out / "artifacts").mkdir(parents=True, exist_ok=True)
+            return SimpleNamespace(
+                run_id="run-bk-1", thread_id=thread_id, journal=SimpleNamespace(),
+                output_dir=str(out),
+                config=SimpleNamespace(runtime=SimpleNamespace(
+                    expert_mode=False, plan_enabled=True, timezone="UTC",
+                    max_loop_steps=4, graph_node_multiplier=3)),
+                artifacts_dir=out / "artifacts",
+            )
+
+        def mark_running(self, r):
+            with lock:
+                events["statuses"].append("running")
+
+        def mark_success(self, r, usage=None):
+            with lock:
+                events["statuses"].append("success")
+
+        def mark_failed(self, r, e):
+            with lock:
+                events["statuses"].append("FAILED:" + str(e))
+
+        def get_run(self, r):
+            return None
+
+    class _Graph:
+        async def astream(self, state, config=None, stream_mode=None):
+            yield ("messages", (AIMessageChunk(content="answer"), {}))
+            yield ("values", {"messages": []})
+
+    class _Runtime:
+        run_manager = _RM()
+        researcher_model_name = "fake"
+        leader_agent = SimpleNamespace(graph=_Graph())
+
+    # run_store that explodes on upsert (post-success bookkeeping fails)
+    class _BoomStore:
+        def upsert(self, record, report_path=None):
+            raise RuntimeError("pg down")
+
+    runtime = _Runtime()
+    holder = {}
+    client, app = _client(runtime, run_store_factory=lambda: holder.setdefault("s", _BoomStore()))
+    with client:
+        sid = client.post("/sessions").json()["session_id"]
+        app.state.run_store = holder["s"]
+        # artifacts dir must be unwritable to force _write_report_fallback failure
+        # (bookkeeping blows up before PG upsert)
+        resp = client.post(f"/sessions/{sid}/research", json={"message": "Q"})
+    frames = _parse_sse(resp.text)
+    types = [f["event"] for f in frames]
+    # stream completes normally: answer -> done (no second error/done pair)
+    assert types == ["answer", "done"]
+    # run status: running -> success, and NEVER mark_failed
+    assert events["statuses"] == ["running", "success"]
+

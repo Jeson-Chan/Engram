@@ -124,7 +124,8 @@ def test_chat_error_event_then_done() -> None:
     frames = _parse_sse(resp.text)
     types = [f["event"] for f in frames]
     assert types == ["error", "done"]
-    assert "boom" in frames[0]["data"]["content"]
+    # content is the sanitized exception type (no raw details leak)
+    assert frames[0]["data"]["content"] == "RuntimeError"
     assert calls[-1] == ("mark_failed", "run-test-1", "boom") or (
         calls[-1][0] == "mark_failed" and "boom" in calls[-1][2]
     )

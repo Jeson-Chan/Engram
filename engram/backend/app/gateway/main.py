@@ -66,7 +66,15 @@ def create_app(
         if runs_dsn:
             from engram.backend.agents.runtime.pg_run_store import PGRunStore
 
-            run_store = await asyncio.to_thread(PGRunStore, runs_dsn)
+            # 构造失败（坏 DSN / DB 不可达）也要清理已建的 saver 池并复位
+            # 单例，否则半启动状态泄漏（review）
+            try:
+                run_store = await asyncio.to_thread(PGRunStore, runs_dsn)
+            except Exception:
+                if pg_saver is not None:
+                    await close_pg_checkpointer(pg_saver)
+                    reset_checkpointer()
+                raise
         app.state.run_store = run_store
         try:
             # 一次性重引导：重活（模型路由、MCP、技能）只发生在这里。
@@ -126,6 +134,8 @@ def create_app(
         deleted = app.state.session_registry.delete(session_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="session not found")
+        # 同步释放该会话的 SSE 事件缓冲（review：此前 500 帧 deque 永驻进程）
+        app.state.sse_buffers.drop(session_id)
 
     return app
 

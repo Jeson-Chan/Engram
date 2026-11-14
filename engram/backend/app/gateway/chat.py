@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -25,6 +26,8 @@ from engram.backend.app.schemas.chat import ChatRequest
 
 
 SSE_MEDIA_TYPE = "text/event-stream"
+
+logger = logging.getLogger(__name__)
 
 
 def mount_chat_routes(app: FastAPI) -> None:
@@ -101,7 +104,9 @@ def mount_chat_routes(app: FastAPI) -> None:
                         pass
                 raise
             except Exception as exc:
-                error_frame = _sse_frame({"type": "error", "content": str(exc),
+                # 客户端只见异常类型（防泄漏），详情留服务端日志
+                logger.exception("chat stream failed (run %s)", run_id)
+                error_frame = _sse_frame({"type": "error", "content": type(exc).__name__,
                                   "tool_name": None, "tool_args": None,
                                   "tool_result": None, "msg_id": None})
                 if buffer is not None:
@@ -158,6 +163,7 @@ def _build_stream_config(runtime, ctx) -> dict:
             "output_dir": str(ctx.output_dir),
             "plan_enabled": rc.plan_enabled,
             "timezone": rc.timezone,
+            "model": runtime.researcher_model_name,
         },
         "recursion_limit": rc.max_loop_steps * rc.graph_node_multiplier,
     }

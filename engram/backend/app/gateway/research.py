@@ -15,12 +15,15 @@ GET /runs/{run_id}/report：单次运行的最终报告（读 report_path 产物
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 
 from engram.backend.app.schemas.chat import ChatRequest
+
+logger = logging.getLogger(__name__)
 
 
 def mount_research_routes(app: FastAPI) -> None:
@@ -37,12 +40,12 @@ def mount_research_routes(app: FastAPI) -> None:
         return getattr(app.state, "run_store", None)
 
     async def _track(ctx, status_record=None):
-        """把 RunRecord 投影到 PG（阻塞 IO 挪线程池）。"""
+        """Project the RunRecord into PG (blocking IO on the thread pool)."""
+        record = status_record or _record_of(app.state.runtime, ctx.run_id)
+        if record is None:
+            return
         store = _pg_runs()
         if store is None:
-            return
-        record = status_record or getattr(ctx, "_record_dict", None)
-        if record is None:
             return
         await asyncio.to_thread(store.upsert, record)
 
@@ -86,16 +89,22 @@ def mount_research_routes(app: FastAPI) -> None:
                 await asyncio.to_thread(
                     runtime.run_manager.mark_success, ctx.run_id,
                 )
-                # 成功后带报告引用投影（产物落盘由 reporter 在 run 内完成；
-                # 网关侧把流内聚合文本存作报告 fallback）
-                report_path = await asyncio.to_thread(
-                    _write_report_fallback, ctx, "".join(answer_text),
-                )
-                store = _pg_runs()
-                if store is not None:
-                    await asyncio.to_thread(
-                        store.upsert, _record_of(runtime, run_id),
-                        report_path=report_path,
+                # 成功后的簿记（报告产物 + PG 投影）独立 try：失败只 log，
+                # 绝不把已成功的 run 翻成 ERROR（review high）
+                try:
+                    report_path = await asyncio.to_thread(
+                        _write_report_fallback, ctx, "".join(answer_text),
+                    )
+                    store = _pg_runs()
+                    if store is not None:
+                        await asyncio.to_thread(
+                            store.upsert, _record_of(runtime, run_id),
+                            report_path=report_path,
+                        )
+                except Exception:
+                    logger.exception(
+                        "post-success bookkeeping failed (run %s kept SUCCESS)",
+                        run_id,
                     )
             except asyncio.CancelledError:
                 if run_id is not None:
@@ -105,7 +114,9 @@ def mount_research_routes(app: FastAPI) -> None:
                         pass
                 raise
             except Exception as exc:
-                yield _sse_frame({"type": "error", "content": str(exc),
+                # 客户端只见异常类型（防 DSN/路径/凭据泄漏），详情留服务端日志
+                logger.exception("research stream failed (run %s)", run_id)
+                yield _sse_frame({"type": "error", "content": type(exc).__name__,
                                   "tool_name": None, "tool_args": None,
                                   "tool_result": None, "msg_id": None})
                 if run_id is not None:
@@ -175,25 +186,32 @@ def _build_stream_config(runtime, ctx) -> dict:
             "output_dir": str(ctx.output_dir),
             "plan_enabled": rc.plan_enabled,
             "timezone": rc.timezone,
+            "model": runtime.researcher_model_name,
         },
         "recursion_limit": rc.max_loop_steps * rc.graph_node_multiplier,
     }
 
 
 def _write_report_fallback(ctx, text: str) -> str:
-    """流内 answer 聚合的报告 fallback 落盘（reporter 产物存在时不覆盖）。
+    """Return this run's report artifact path; write the stream fallback only
+    if no reporter artifact exists (review: prefer real artifacts).
 
-    reporter 在 run 内写的 artifact 优先；本函数保证无 artifact 场景
-    （测试 stub / reporter 未启用）下 report_path 也有产物可取。
+    LeaderAgent saves final_report.md; the thread-report path saves
+    report.md - check both. Only when neither exists (test stubs /
+    reporter disabled) do we write the aggregated fallback, so the
+    report_path reference always resolves.
     """
     import os
 
-    artifacts_dir = ctx.artifacts_dir
+    artifacts_dir = str(ctx.artifacts_dir)
     os.makedirs(artifacts_dir, exist_ok=True)
-    path = os.path.join(str(artifacts_dir), "report.md")
-    existing = ctx.artifacts_dir
-    # reporter 产物优先：已存在 report.md 时不覆盖
-    if not os.path.isfile(path):
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(text or "# (empty report)")
+    for existing in ("final_report.md", "report.md"):
+        candidate = os.path.join(artifacts_dir, existing)
+        if os.path.isfile(candidate):
+            return candidate
+    path = os.path.join(artifacts_dir, "report.md")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text or "# (empty report)")
     return path
+
+
