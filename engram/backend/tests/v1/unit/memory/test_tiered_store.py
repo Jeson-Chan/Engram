@@ -133,6 +133,45 @@ def test_hot_version_wins_in_listing() -> None:
     assert len(listed) == 1  # 不重复
 
 
+def test_hot_failure_falls_through_to_cold() -> None:
+    """review fix regression: hot tier raising must not mask the cold fallback."""
+    class _ExplodingHot(_FakeStore):
+        def get(self, trace_id):
+            raise ConnectionError("redis down")
+
+        def list_all(self):
+            raise ConnectionError("redis down")
+
+        def add(self, trace):
+            raise ConnectionError("redis down")
+
+    hot, cold = _ExplodingHot(), _FakeStore()
+    tiered = TieredMemoryStore(hot, cold)
+    t = _trace("durable")
+    cold.add(t)
+    # get: hot explodes -> cold fallback still succeeds (backfill swallowed)
+    got = tiered.get(t.id)
+    assert got is not None and got.content == "durable"
+    # list_all: hot explodes -> cold full listing still returns
+    assert len(tiered.list_all()) == 1
+
+def test_tiered_shutdown_delegates_to_tiers() -> None:
+    """review fix regression: shutdown delegates to both tiers (no resource leak)."""
+    closed = []
+
+    class _ClosingStore(_FakeStore):
+        def close(self):
+            closed.append("close")
+
+    class _ShuttingStore(_FakeStore):
+        def shutdown(self):
+            closed.append("shutdown")
+
+    tiered = TieredMemoryStore(_ClosingStore(), _ShuttingStore())
+    tiered.shutdown()
+    assert sorted(closed) == ["close", "shutdown"]
+
+
 def test_remove_dual_delete() -> None:
     hot, cold = _FakeStore(), _FakeStore()
     tiered = TieredMemoryStore(hot, cold)

@@ -158,7 +158,7 @@ class PiRuntime:
                 proc.kill()
 
     def _build_command(self, request: SpecialistRequest) -> list[str]:
-        """组装 pi CLI 命令（决策 1：--no-builtin-tools + -e engram-sandbox-bridge）。"""
+        """组装 pi CLI 命令（决策 1：--no-builtin-tools + -e extensions/pi-sandbox-bridge/index.ts）。"""
         cmd = [self._config.command, *self._config.mode_args]
         if self._config.provider:
             cmd.extend(["--provider", self._config.provider])

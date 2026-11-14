@@ -39,6 +39,17 @@ class TieredMemoryStore:
     def cold(self):
         return self._cold
 
+    def shutdown(self) -> None:
+        """Delegate closes to both tiers (DefaultMemoryProvider.shutdown
+        duck-types via hasattr, so the PG pool / redis client actually close)."""
+        for store in (self._hot, self._cold):
+            closer = getattr(store, "shutdown", None) or getattr(store, "close", None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception:
+                    pass
+
     # ---- protocol methods ----
 
     def add(self, trace: MemoryTrace) -> None:
@@ -50,16 +61,24 @@ class TieredMemoryStore:
             self._hot.update(trace)
 
     def get(self, trace_id: str) -> MemoryTrace | None:
-        trace = self._hot.get(trace_id)
+        # hot tier is best-effort: a Redis failure must fall through to
+        # cold (the durable truth) instead of masking it
+        try:
+            trace = self._hot.get(trace_id)
+        except Exception:
+            trace = None
         if trace is not None:
             return trace            # hot hit (TTL refreshed by hot.get)
         trace = self._cold.get(trace_id)
         if trace is not None:
-            # cold hit -> back-fill the hot tier (trace goes warm again)
+            # cold hit -> back-fill the hot tier (best-effort; cold is truth)
             try:
                 self._hot.add(trace)
             except Exception:
-                self._hot.update(trace)
+                try:
+                    self._hot.update(trace)
+                except Exception:
+                    pass
         return trace
 
     def update(self, trace: MemoryTrace) -> None:
@@ -92,12 +111,16 @@ class TieredMemoryStore:
         ]
 
     def list_all(self) -> list[MemoryTrace]:
-        """Cold is the full truth; hot versions win on id collision (newer)."""
+        """Cold is the full truth; hot versions win on id collision (newer).
+        Hot tier is best-effort (failure -> cold only)."""
         merged: dict[str, MemoryTrace] = {}
         for trace in self._cold.list_all():
             merged[trace.id] = trace
-        for trace in self._hot.list_all():
-            merged[trace.id] = trace
+        try:
+            for trace in self._hot.list_all():
+                merged[trace.id] = trace
+        except Exception:
+            pass  # hot unavailable: cold is the truth, list still complete
         return list(merged.values())
 
     # ---- internals ----

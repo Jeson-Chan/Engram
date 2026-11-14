@@ -39,11 +39,16 @@ CLAIM_MIN_IDLE_MS = 30_000  # pending 超过 30s 未 ack 视为孤儿（崩溃�
 
 
 def _messages_to_json(messages: list[BaseMessage]) -> list[dict]:
-    """BaseMessage 列表 → 可 JSON 化的结构（type + content）。"""
+    """BaseMessage 列表 → 可 JSON 化的结构（type + content + ToolMessage 专有字段）。"""
     out = []
     for m in messages:
         content = m.content if isinstance(m.content, str) else str(m.content)
-        out.append({"type": m.__class__.__name__, "content": content})
+        item = {"type": m.__class__.__name__, "content": content}
+        if m.__class__.__name__ == "ToolMessage":
+            item["tool_call_id"] = getattr(m, "tool_call_id", "")
+            if getattr(m, "name", None):
+                item["name"] = m.name
+        out.append(item)
     return out
 
 
@@ -59,7 +64,12 @@ def _messages_from_json(items: list[dict]) -> list[BaseMessage]:
     out = []
     for item in items:
         cls = mapping.get(item.get("type", ""), HumanMessage)
-        out.append(cls(content=item.get("content", "")))
+        kwargs: dict = {"content": item.get("content", "")}
+        if cls is ToolMessage:
+            kwargs["tool_call_id"] = item.get("tool_call_id", "")
+            if item.get("name"):
+                kwargs["name"] = item["name"]
+        out.append(cls(**kwargs))
     return out
 
 
