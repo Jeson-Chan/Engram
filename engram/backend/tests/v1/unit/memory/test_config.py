@@ -114,7 +114,7 @@ class TestStartupOnlyFields:
         assert "decay" not in STARTUP_ONLY_FIELDS
 
     def test_exactly_four_fields(self) -> None:
-        assert len(STARTUP_ONLY_FIELDS) == 4
+        assert len(STARTUP_ONLY_FIELDS) == 5  # +redis_url (issue 06 Redis hot tier)
 
 
 class TestGetMemoryConfig:

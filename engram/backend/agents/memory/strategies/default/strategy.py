@@ -89,9 +89,23 @@ def build_default_provider(
     decay = decay_policy or EbbinghausDecayPolicy()
     forget = forget_policy or CompositeForgetPolicy(decay)
 
-    # Layer 3 完整实例化（store/retriever 未注入时从 config 建）
+    # Redis hot tier (issue 06): config.redis_url non-empty -> RedisMemoryStore
+    # (per user/thread partitioned keys + per-trace TTL, expired keys vanish;
+    # read hits refresh TTL - hot memories stay hot). Else Markdown truth source.
     if store is None:
-        store = MarkdownFileStore(config.storage_path)
+        if config.redis_url:
+            import redis
+
+            from engram.backend.agents.memory.adapters.redis_store import RedisMemoryStore
+
+            client = redis.Redis.from_url(
+                config.redis_url,
+                decode_responses=True,
+                socket_connect_timeout=5,
+            )
+            store = RedisMemoryStore(client)
+        else:
+            store = MarkdownFileStore(config.storage_path)
     if retriever is None:
         retriever = HybridRetriever(store, decay)
 

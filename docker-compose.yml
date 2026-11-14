@@ -36,8 +36,12 @@ services:
       - ENGRAM_MULTIAGENT_ENABLED=true
       # LangGraph 会话状态持久层（issue 05）——指向 compose 内 postgres
       - ENGRAM_CHECKPOINT_DSN=postgresql://engram:engram@postgres:5432/engram
+      # 记忆热层（issue 06）——指向 compose 内 redis；不设则回退 Markdown 存储
+      - ENGRAM_REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - ./.engram:/app/.engram   # 运行时数据持久化（DB/logs/memory/artifacts）
@@ -64,6 +68,21 @@ services:
       - ./.engram/pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U engram -d engram"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  # Redis — 记忆热层（issue 06）：L3 存储分区键 + TTL 淘汰，redis-cli 可见键与倒计时。
+  # 持久化到卷可跨容器重建保留（appendonly）；热层本义是可淘汰，卷丢失≠数据事故。
+  redis:
+    image: redis:7-alpine
+    container_name: engram-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./.engram/redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10

@@ -60,6 +60,10 @@ class MemoryConfig:
     })
     vector_store: str = ""                     # 可选 Vector adapter（空=不启用，叠加模式）
     graph_store: str = ""                      # 可选 Graph adapter（空=不启用，叠加模式）
+    # Redis hot tier (issue 06): non-empty -> L3 store becomes RedisMemoryStore
+    # (partitioned keys + TTL eviction) replacing the Markdown single-file
+    # truth source; empty = keep MarkdownFileStore as-is
+    redis_url: str = ""
 
 
 # STARTUP_ONLY 字段（变更需重启，与 sandbox 同款）
@@ -70,6 +74,7 @@ STARTUP_ONLY_FIELDS = frozenset({
     "storage_path",  # 换 truth 根目录（需迁移文件）
     "vector_store",  # 开/关 Vector adapter（需重建 Vector index）
     "graph_store",   # 开/关 Graph adapter（需重建 Graph index）
+    "redis_url",     # swap Redis hot-tier backend (needs store rebuild)
 })
 
 

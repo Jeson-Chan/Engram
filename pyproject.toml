@@ -40,6 +40,8 @@ include = ["engram*"]
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.4",
+    # in-memory redis double for the hot-tier store tests
+    "fakeredis>=2.30",
 ]
 docker = [
     "agent-sandbox>=0.0.19",
@@ -62,4 +64,6 @@ providers = [
 [dependency-groups]
 dev = [
     "pytest>=7.4.4",
+    # in-memory redis double for the hot-tier store tests
+    "fakeredis>=2.30",
 ]

@@ -98,6 +98,9 @@ def _build_memory_config() -> MemoryConfig:
     return MemoryConfig(
         use=os.environ.get("ENGRAM_MEMORY_USE", ""),
         storage_path=os.environ.get("ENGRAM_MEMORY_STORAGE_PATH", ".engram/memory"),
+        # Redis hot tier (issue 06): ENGRAM_REDIS_URL non-empty ->
+        # L3 store built as RedisMemoryStore
+        redis_url=os.environ.get("ENGRAM_REDIS_URL", ""),
         enable_recall=os.environ.get("ENGRAM_MEMORY_ENABLE_RECALL", "true").lower() != "false",
         enable_extract=os.environ.get("ENGRAM_MEMORY_ENABLE_EXTRACT", "false").lower() == "true",
         token_budget=int(os.environ.get("ENGRAM_MEMORY_TOKEN_BUDGET", "2000") or "2000"),
