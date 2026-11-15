@@ -11,6 +11,14 @@ from __future__ import annotations
 
 import asyncio
 
+# 与 CLI 同款：从项目根加载 .env（uvicorn 不读它——README 的
+# pip 快速开始路线要求网关进程自己拿 DEEPSEEK_API_KEY 等配置）
+from pathlib import Path as _Path
+
+from dotenv import load_dotenv
+
+load_dotenv(_Path(__file__).resolve().parents[3] / ".env")
+
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 
