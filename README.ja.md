@@ -99,7 +99,7 @@ Engram はデフォルトで DeepSeek に対応し、OpenAI 互換プロバイ�
 三つのコマンドで、フルスタックが起動します：
 
 ```bash
-git clone <repo-url> && cd Engram
+git clone https://github.com/Jeson-Chan/Engram.git && cd Engram
 cp .env.example .env          # DEEPSEEK_API_KEY を記入
 docker compose up -d          # ゲートウェイ + Postgres + Redis + ワーカー
 ```
@@ -124,7 +124,7 @@ docker compose up -d          # ゲートウェイ + Postgres + Redis + ワー�
 Python **3.12+** と LLM の API キー（デフォルトは `DEEPSEEK_API_KEY`、OpenAI 互換プロバイダーなら何でも可）が必要です：
 
 ```bash
-git clone <repo-url> && cd Engram
+git clone https://github.com/Jeson-Chan/Engram.git && cd Engram
 python -m venv .venv
 .venv\Scripts\activate            # Windows。Linux/macOS は：source .venv/bin/activate
 pip install -e ".[dev]"

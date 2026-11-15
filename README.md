@@ -1,6 +1,8 @@
 <a name="readme-top"></a>
 
-<!-- IMAGE SLOT: centered logo / wordmark — insert here, width ~45% (e.g. docs/assets/logo.png) -->
+<p align="center">
+    <img src="docs/assets/og-image.png" alt="ENGRAM wordmark" width="540" />
+</p>
 
 <p align="center">
     <a href="LICENSE" target="_blank">
@@ -99,7 +101,7 @@ Everything runs in your own environment — no cloud round-trip, no third-party 
 Three commands and the whole stack is up:
 
 ```bash
-git clone <repo-url> && cd Engram
+git clone https://github.com/Jeson-Chan/Engram.git && cd Engram
 cp .env.example .env          # add your DEEPSEEK_API_KEY
 docker compose up -d          # gateway + Postgres + Redis + worker
 ```
@@ -124,7 +126,7 @@ Open **http://localhost:8000/docs** — every endpoint can be tried right there 
 Need Python **3.12+** and an LLM API key (`DEEPSEEK_API_KEY` by default; any OpenAI-compatible provider works):
 
 ```bash
-git clone <repo-url> && cd Engram
+git clone https://github.com/Jeson-Chan/Engram.git && cd Engram
 python -m venv .venv
 .venv\Scripts\activate            # Windows — or: source .venv/bin/activate
 pip install -e ".[dev]"

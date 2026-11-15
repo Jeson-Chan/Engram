@@ -99,7 +99,7 @@ Engram 默认支持 DeepSeek，也兼容任何 OpenAI 兼容的提供商。
 三条命令，整套服务就起来了：
 
 ```bash
-git clone <repo-url> && cd Engram
+git clone https://github.com/Jeson-Chan/Engram.git && cd Engram
 cp .env.example .env          # 填入 DEEPSEEK_API_KEY
 docker compose up -d          # 网关 + Postgres + Redis + worker
 ```
@@ -124,7 +124,7 @@ docker compose up -d          # 网关 + Postgres + Redis + worker
 需要 Python **3.12+** 和一个 LLM API key（默认 `DEEPSEEK_API_KEY`，任何 OpenAI 兼容服务都行）：
 
 ```bash
-git clone <repo-url> && cd Engram
+git clone https://github.com/Jeson-Chan/Engram.git && cd Engram
 python -m venv .venv
 .venv\Scripts\activate            # Windows；Linux/macOS 用：source .venv/bin/activate
 pip install -e ".[dev]"
