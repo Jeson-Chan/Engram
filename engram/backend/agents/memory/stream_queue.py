@@ -170,13 +170,21 @@ class StreamConsolidationConsumer:
 
     def _read_new(self) -> int:
         """XREADGROUP '>' 读新消息（组偏移量推进）→ 处理 → ack。"""
-        replies = self._client.xreadgroup(
-            self._group,
-            self._consumer,
-            {STREAM_KEY: ">"},
-            count=self._batch,
-            block=self._block_ms,
-        )
+        try:
+            replies = self._client.xreadgroup(
+                self._group,
+                self._consumer,
+                {STREAM_KEY: ">"},
+                count=self._batch,
+                block=self._block_ms,
+            )
+        except Exception as exc:
+            # 阻塞读的客户端超时 = 该窗口内没有消息（redis-py 的读超时不继承
+            # 服务端 BLOCK 的 nil 语义，socket 超时可能先于 BLOCK 到期触发）。
+            # 这不是错误：返回 0，主循环下一轮继续读。
+            if type(exc).__name__ == "TimeoutError" or "timeout" in str(exc).lower():
+                return 0
+            raise
         if not replies:
             return 0
         processed = 0

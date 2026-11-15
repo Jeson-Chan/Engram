@@ -91,6 +91,25 @@ def test_handler_failure_stays_pending() -> None:
     assert consumer.pending_count() == 1  # 留在 PEL
 
 
+def test_blocked_read_timeout_is_empty_not_error() -> None:
+    """review/smoke 回归：阻塞读客户端超时 = 没有消息，consume_once 不抛错。"""
+    import redis as _redis
+
+    class _TimeoutClient:
+        def xgroup_create(self, *a, **k):
+            pass
+
+        def xreadgroup(self, *a, **k):
+            raise _redis.exceptions.TimeoutError("Timeout reading from socket")
+
+        def xautoclaim(self, *a, **k):
+            raise _redis.exceptions.TimeoutError("Timeout reading from socket")
+
+    consumer = StreamConsolidationConsumer(
+        _TimeoutClient(), lambda t: None, consumer_name="c-timeout",
+    )
+    assert consumer.consume_once() == 0  # 无消息：干净返回，不是错误
+
 def test_poison_message_acked() -> None:
     """载荷损坏（毒丸）直接 ack，不永久重放。"""
     client = _client()

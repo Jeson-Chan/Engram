@@ -30,8 +30,12 @@ def _consumer_name() -> str:
 
 
 def main() -> int:
-    from engram.backend.agents.memory.config import get_memory_config
+    # 独立进程不经过 bootstrap_runtime——必须自行把 env 装载进
+    # MemoryConfig 单例，否则 redis_url / storage_path 全是默认空值
+    from engram.backend.agents.config.loader import load_config
+    from engram.backend.agents.memory.config import get_memory_config, set_memory_config
 
+    set_memory_config(load_config().memory)
     config = get_memory_config()
     if not config.redis_url:
         print(
