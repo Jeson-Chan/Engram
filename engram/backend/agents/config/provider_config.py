@@ -125,13 +125,17 @@ def route_chain_for(role: str, providers: list[ProviderConfig]) -> list[Provider
 
     - role 未配置 → 默认 ["deepseek"]
     - 链空或尾非 deepseek 且 deepseek 可用 → 追加 deepseek 兜底
-    - 无任何可用 → 抛 ProviderConfigError
+    - 链仍空 → 回退到任意可用 provider（单中转场景：只有 openai 兼容
+      端点时，reporter 的 qwen/deepseek 路线一个都不可用——整体不能死）
+    - 完全无可用 → 抛 ProviderConfigError
     """
     route = MODEL_ROUTES.get(role, ["deepseek"])
     by_name = {p.provider: p for p in providers}
     chain = [by_name[name] for name in route if name in by_name]
     if "deepseek" in by_name and (not chain or chain[-1].provider != "deepseek"):
         chain.append(by_name["deepseek"])
+    if not chain and providers:
+        chain = list(providers[:1])  # 单中转兜底：任意可用 provider
     if not chain:
         raise ProviderConfigError(f"no available provider for role: {role}")
     return chain
