@@ -1,200 +1,400 @@
 <div align="center">
 
-<img alt="Engram README Hero" width="960" src="resource/assets/engram-readme-hero.png">
+<!-- IMAGE SLOT: hero banner (insert here — e.g. docs/assets/hero.png) -->
 
-### A Deep Research Agent Kernel with Long-Term Memory — served over HTTP
+# Engram
+
+**A deep research agent with long-term memory — served over HTTP.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-7c6ff0?style=for-the-badge)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-45c4b8?style=for-the-badge)](https://www.python.org/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-1.x-5aa9e5?style=for-the-badge)](https://github.com/langchain-ai/langgraph)
 [![FastAPI](https://img.shields.io/badge/FastAPI-SSE-009488?style=for-the-badge)](https://fastapi.tiangolo.com/)
 [![Redis](https://img.shields.io/badge/Redis-Streams-DC382D?style=for-the-badge)](https://redis.io/)
 [![Postgres](https://img.shields.io/badge/Postgres-checkpointer-4169E1?style=for-the-badge)](https://www.postgresql.org/)
 
-**📚 Docs:** [Usage (EN)](USAGE.md) · [使用指南 (中文)](resource/USAGE.zh-CN.md) · [Demo Script](docs/demo.md) · [Design Notes](docs/interview-notes.md)
+Animated wordmark: [logo/standalone.html](logo/standalone.html) — letters as memory cells, a glint sweeping across: a memory being recalled.
 
-<sub>Sessions · SSE Streaming · Tiered Memory (Redis hot / Postgres cold) · Stream Consolidation · Reconnect Resume</sub>
-
-<p>Animated wordmark: <a href="logo/standalone.html">letters as memory cells, a glint sweeping across — a memory being recalled</a> (zero-build HTML, see <a href="logo/README.md">logo/</a>)</p>
+[English](#english) · [简体中文](#中文) · [日本語](#日本語)
 
 </div>
 
 ---
 
-## Demo
+## 中文
 
-**Act 1 — the agent remembers across sessions.** Wipe the entire hot tier ("forget everything recent") and the agent still recalls the thread of the research — the Postgres cold tier answers, and the recalled memory goes warm again:
+### 这是一个什么
+
+Engram 是一个**深度研究 agent**：ReAct 内核、middleware 优先架构、五层长期记忆、沙箱隔离、技能自进化——并把它**封装成一个长期运行的服务**：
+
+- **FastAPI 网关**：会话管理、SSE 流式对话/研究、运行历史查询、Swagger
+- **长期记忆分层存储**：Redis 热层（按 user/thread 分区、TTL 淘汰、读刷新）兜底 Postgres 冷层（全量沉淀）——热层清空也不会失忆
+- **会话状态持久化**：LangGraph checkpointer 落 Postgres，重启服务会话继续，多 worker 共享同一会话状态
+- **记忆巩固队列**：Redis Stream 消费者组，at-least-once（偏移量续传 + PEL 重放），独立 worker 进程可水平扩展
+
+同一个二进制也保留了本地交互形态：全屏 TUI / CLI。内核与服务共用一套代码。
+
+**2764 个测试**守护内核与服务；恢复/重放/兜底相关的套件在 CI 里对真实 Redis + Postgres 容器实跑。
+
+### 用来做什么
+
+- **长期研究服务**：用户提交问题，SSE 流式吐出推理、工具调用与最终报告；断线重连不丢帧
+- **跨会话记忆**：agent 记得此前的会话。把整个 Redis 热层清空（`FLUSHDB`），Postgres 冷层仍能召回——被淘汰的记忆在召回时重新变热
+- **agent 工程化的参考实现**：只为异步的网关（绝不触碰 `asyncio.run` 同步入口）、两层存储、Stream 消费组重放、与 Stream 同构的 SSE 续传语义
+
+### 演示 Demo
+
+**第一幕：跨会话记忆。** 清空整个热层（"把近期记忆全部忘掉"），agent 依然接得上此前的讨论——冷层作答，召回的记忆回填热层：
 
 ```bash
-$ docker compose exec redis redis-cli FLUSHDB      # simulate: hot cache gone
-OK
-$ curl -N -X POST localhost:8000/sessions/$SID/chat \
+# 清空热层（模拟缓存失效 / TTL 到期）
+docker compose exec redis redis-cli FLUSHDB
+
+# 同一会话继续聊 → 冷层兜底召回
+curl -N -X POST localhost:8000/sessions/$SID/chat \
     -H "Content-Type: application/json" \
     -d '{"message": "继续上次的研究——缓冲设计定了吗？"}'
-
-event: answer
-data: {"type": "answer", "content": "上次已确认 Last-Event-ID 方案；缓冲采用 per-session 环形……"}
-# ^ recalled from the cold tier (back-filled into the hot tier on the way out)
 ```
 
-**Act 2 — streaming research that survives a dropped connection.** Submit a question, watch tokens stream; if the connection drops, reconnect with the last frame id and the missed frames replay first:
+**第二幕：流式研究 + 断线重连。** 提交研究问题，事件流实时吐出；连接中断后带上最后一帧的 id 重连，缺口事件先补发、再接续实时流：
 
 ```bash
-$ curl -N -X POST localhost:8000/sessions/$SID/research -d '{"message": "..."}'
-event: thinking   data: {...}     # reasoning deltas
-event: answer     data: {...}     # token deltas
-event: tool_start data: {...}     # tool calls
-event: done       data: {...}     # termination
+curl -N -X POST localhost:8000/sessions/$SID/research \
+    -H "Content-Type: application/json" \
+    -d '{"message": "..."}'
+# event: thinking / answer / tool_start / tool_end / done
 
-# connection dropped at frame 5? reconnect and nothing is lost:
-$ curl -N -H "Last-Event-ID: 5" -X POST .../chat -d '{"message": "..."}'
-id: 6  ...  id: 7  ...           # the gap replays, then the live tail continues
+# 断线重连：带上一帧的 id 行
+curl -N -H "Last-Event-ID: 5" -X POST localhost:8000/sessions/$SID/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "..."}'
+# id: 6, 7, 8 ...（缓冲缺口补发）→ 接续实时流
 ```
 
-<div align="center">
+<!-- IMAGE SLOT: demo screenshot / asciinema GIF (insert here) -->
 
-<img src="resource/assets/screenshot-tui-conversation.png" alt="Engram TUI Conversation" width="880">
+完整可照走的演示脚本（两幕 + `redis-cli` 杀消费者看重放）：[docs/demo.md](docs/demo.md)
 
-<sub>TUI conversation view — same kernel, local interactive mode</sub>
+### 安装 Installation
 
-</div>
-
-Both acts as a walkable curl-level script (plus the kill-the-consumer Stream replay in `redis-cli`): **[docs/demo.md](docs/demo.md)**
-
----
-
-## What is Engram
-
-Engram is a deep research agent — a ReAct kernel with middleware-first architecture, five-layer long-term memory, sandbox isolation and skill evolution — **wrapped as a long-running service**: a FastAPI gateway that streams agent output over SSE, keeps sessions alive across restarts in Postgres, and remembers users over time in a two-tier store.
-
-```text
-POST /sessions                →  per-session thread_id (the state-isolation key everything scopes on)
-POST /sessions/{id}/chat     →  SSE stream: thinking / answer / tool events, frame ids, resume
-POST /sessions/{id}/research →  SSE research stream + PG run record + report artifact
-GET  /sessions/{id}/runs     →  run history (survives restarts)
-GET  /runs/{run_id}/report   →  the final report markdown
-GET  /docs                   →  live Swagger playground
-```
-
-The same binary also runs locally as a TUI / CLI for interactive research — one kernel, two faces.
-
-**2763 tests** guard the kernel and the service; CI runs the recovery / replay / fallback suites against real Redis + Postgres service containers.
-
----
-
-## Why it is built this way
-
-The interesting part of this project is not the feature list — it is the decisions. Six of them:
-
-| Decision | Why |
-|---|---|
-| **The gateway never calls the sync entry (`LeaderAgent.run`)** | It runs `asyncio.run` internally — nested inside the ASGI event loop it raises immediately. The gateway wraps the `graph.astream` async generator instead; every blocking IO (journal JSONL, run records, report writes) rides `asyncio.to_thread`, so the event stream never freezes. |
-| **Memory is two tiers: Redis hot / Postgres cold** | Hot = fast and *evicting* (per-trace TTL, refreshed on read — frequently recalled memories stay warm); cold = durable sediment, written **first**. A hot-miss falls through to cold and back-fills the hot tier — `FLUSHDB` is an inconvenience, not data loss. |
-| **Consolidation runs on a Redis Stream consumer group** (not pub/sub, not a list) | Consolidation needs **at-least-once**. Streams give the full trio: group offset (resume), PEL (failed entries replay), `XAUTOCLAIM` (crashed consumers' orphans reclaimed, min-idle-time so in-flight work isn't stolen). Pub/sub drops on disconnect; a list has no consumer offset. |
-| **SSE frames carry ids** | The reconnect story becomes the *same mental model as the Stream*: client-held offset (`Last-Event-ID`) + server-side gap replay, at-least-once on both sides. Gaps older than the buffer degrade honestly (in-stream error + `X-Engram-Events-Dropped` header). |
-| **LangGraph state persists via a PG checkpointer** | Restart the service, the session continues; two uvicorn workers see the same session state. Multi-worker isn't configured into existence — it falls out of the storage model. |
-| **Tests assert external behavior through injected seams** | The runtime factory, stores and graphs are injectable, so tests never touch a real LLM provider; the suites that do need Redis/PG run live in CI and skip honestly when absent. |
-
-The full talking-points version (with the follow-up-question depth): **[docs/interview-notes.md](docs/interview-notes.md)**
-
----
-
-## Installation
-
-**Prerequisites**
+**前置条件**
 
 - Python **3.12+**
-- An LLM API key — `DEEPSEEK_API_KEY` (default), or any OpenAI-compatible provider
-- Docker (only for the full-stack path; the local path needs nothing else)
-
-**A. Full stack (agent + redis + postgres, one command)**
-
-```bash
-git clone <repo-url> && cd Engram
-cp .env.example .env          # fill in DEEPSEEK_API_KEY
-docker compose up
-```
-
-**B. Local (CLI / TUI, zero infrastructure)**
+- 一个 LLM API key（默认 `DEEPSEEK_API_KEY`，也兼容任何 OpenAI 兼容 provider）
+- Docker（仅全栈路径需要；本地路径零依赖）
 
 ```bash
 git clone <repo-url> && cd Engram
 python -m venv .venv
-.venv\Scripts\activate            # Windows   (source .venv/bin/activate on Linux/macOS)
+.venv\Scripts\activate            # Windows（Linux/macOS：source .venv/bin/activate）
 pip install -e ".[dev]"
-cp .env.example .env           # fill in DEEPSEEK_API_KEY
+cp .env.example .env                 # 填入 DEEPSEEK_API_KEY=sk-xxx
 ```
 
----
+### 快速开始 Quick Start
 
-## Quick Start
-
-**Service mode — first stream in 30 seconds:**
+**服务模式（30 秒看到第一个流）：**
 
 ```bash
-export SID=$(curl -s -X POST localhost:8000/sessions | python -c "import sys,json;print(json.load(sys.stdin)['session_id'])")
+uvicorn engram.backend.app.gateway.main:app --port 8000
 
+# 新终端：
+SID=$(curl -s -X POST localhost:8000/sessions | python -c "import sys,json;print(json.load(sys.stdin)['session_id'])")
 curl -N -X POST localhost:8000/sessions/$SID/chat \
     -H "Content-Type: application/json" \
     -d '{"message": "研究：SSE 断线重连的主流方案"}'
 ```
 
+预期输出（SSE 帧）：
+
 ```text
-event: thinking   data: {"type": "thinking", "content": "…"}   ← reasoning deltas
-event: answer     data: {"type": "answer",   "content": "…"}   ← token deltas
-event: tool_start data: {"type": "tool_start", "tool_name": "web_search", …}
-event: tool_end   data: {"type": "tool_end",   "tool_result": "…"}
-event: done       data: {"type": "done"}                        ← always terminates with done
+event: thinking   data: {"type": "thinking", "content": "…"}    ← 推理 delta
+event: answer     data: {"type": "answer",   "content": "…"}    ← 回答 token
+event: tool_start data: {"type": "tool_start", "tool_name": "…"} ← 工具调用
+event: done       data: {"type": "done"}                         ← 总是以 done 终止
 ```
 
-Explore the rest at **http://localhost:8000/docs** (Swagger), or pull the research report afterwards:
+浏览器打开 **http://localhost:8000/docs**（Swagger 即兴试 API）；研究跑完后取历史与报告：
 
 ```bash
-curl -s localhost:8000/sessions/$SID/runs          # run history
-curl -s localhost:8000/runs/<run_id>/report        # final report (markdown)
+curl -s localhost:8000/sessions/$SID/runs       # 运行历史
+curl -s localhost:8000/runs/<run_id>/report     # 最终报告（markdown）
 ```
 
-**Local mode:** just run `engram` — full-screen TUI; type a question, `/` for commands.
+**本地交互模式：** 直接运行 `engram` 进入全屏 TUI；输入问题开始研究，`/` 触发命令补全。
 
-Advanced toggles (memory consolidation cadence, skill evolution, multi-agent, Docker sandbox, MCP) live in [.env.example](.env.example) — every switch is one env var, documented in the [Usage Guide](USAGE.md).
+### Docker 支持 Docker Support
+
+```bash
+cp .env.example .env     # 填入 DEEPSEEK_API_KEY
+docker compose up -d     # 网关 + Postgres + Redis + 巩固 worker
+```
+
+| 服务 | 作用 | 端口 |
+|---|---|---|
+| `gateway` | FastAPI + SSE 网关（会话/对话/研究/历史 + Swagger） | **8000** |
+| `postgres` | 会话状态 checkpointer + 记忆冷层 + 运行历史 | 5432 |
+| `redis` | 记忆热层 + 巩固队列 Stream | 6379 |
+| `consolidation-worker` | 独立巩固消费者（与网关内联消费者同组） | — |
+| `agent` | 本地 TUI（`tui` profile，按需） | — |
+
+- 依赖接线全自动：网关通过环境变量拿到 `ENGRAM_CHECKPOINT_DSN` / `ENGRAM_REDIS_URL` / `ENGRAM_MEMORY_PG_DSN`，无需手工配置
+- 数据卷：`.engram/pgdata`（Postgres）、`.engram/redisdata`（Redis）、`.engram/`（运行时 journal/artifacts）、`skills/`
+- TUI 交互：`docker compose run --rm agent`（首次会触发配置向导）
+- Docker 沙箱隔离：按 `docker-compose.yml` 注释取消 `docker.sock` 挂载并设置 `ENGRAM_SANDBOX_USE`
+
+更多配置、命令与排错：[Usage Guide](USAGE.md)
 
 ---
 
-## How it works
+## English
 
-<div align="center">
+### What is this
 
-<img src="resource/assets/engram-architecture-diagram.png" alt="Engram Architecture" width="880">
+Engram is a **deep research agent** — a ReAct kernel with middleware-first architecture, five-layer long-term memory, sandbox isolation and skill evolution — **packaged as a long-running service**:
 
-</div>
+- **FastAPI gateway**: session management, SSE-streaming chat / research, run history, Swagger
+- **Tiered long-term memory**: a Redis hot tier (per user/thread partitioned keys, TTL eviction, read-refresh) over a Postgres cold tier (full sediment) — wiping the hot tier does not cause amnesia
+- **Session-state persistence**: a LangGraph checkpointer on Postgres; restart the service and sessions continue, multiple workers share the same session state
+- **Consolidation queue**: a Redis Stream consumer group, at-least-once (offset resume + PEL replay), with a standalone worker process that scales horizontally
 
-<sub>Outer flow: `prepare → before_agent → LeaderAgent (ReAct loop) → after_agent → finalize`. 21 middleware cross-cut every hook — memory recall in `before_model`, consolidation submit in `after_model`, skill injection, sandbox lifecycle, tool pairing. The `app → agents` dependency is strictly one-directional.</sub>
+One binary, two faces: the same kernel also runs locally as a full-screen TUI / CLI.
 
-**One request, end to end** (service mode):
+**2764 tests** guard the kernel and the service; the recovery / replay / fallback suites run live against real Redis + Postgres service containers in CI.
 
-```text
-startup (lifespan, once):  PG checkpointer → run store → model routing → MCP → skills → graph compiled
-POST /sessions:           SessionRegistry allocates an independent thread_id    ← every agent-side state scopes on it
-POST .../chat:             EngramStreamClient(graph.astream) → SSE frames (id: N) → per-session buffer
-                            journal / run-record IO → asyncio.to_thread          ← event loop never blocks
-after_model:               consolidation event XADD → Redis Stream (persistent)
-consumer group:            XREADGROUP → handle → XACK        (failure → PEL → XAUTOCLAIM replay)
-reconnect:                 Last-Event-ID → buffer gap replay → live tail
+### What is this for
+
+- **A long-running research service**: submit a question and stream reasoning, tool calls and the final report over SSE; reconnect without losing frames
+- **Cross-session memory**: the agent remembers earlier sessions. Wipe the entire Redis hot tier (`FLUSHDB`) and the Postgres cold tier still answers — evicted memories are re-warmed on recall
+- **A reference implementation** of the engineering around an agent: an async-only gateway (never the `asyncio.run` path), tiered storage, Stream-based consolidation with at-least-once replay, and SSE resume that shares one offset/replay model with the Stream side
+
+### Demo
+
+**Act 1 — cross-session memory.** Wipe the entire hot tier ("forget everything recent") and the agent still picks up the earlier discussion — the cold tier answers and the recalled memory goes warm again:
+
+```bash
+# wipe the hot tier (simulate cache loss / TTL expiry)
+docker compose exec redis redis-cli FLUSHDB
+
+# continue the same session -> cold-tier fallback recall
+curl -N -X POST localhost:8000/sessions/$SID/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "继续上次的研究——缓冲设计定了吗？"}'
 ```
 
-**The five-layer memory** (each layer independently tested):
+**Act 2 — streaming research with reconnect.** Submit a research question, events stream in real time; if the connection drops, reconnect with the last frame id — the missed frames replay first, then the live tail continues:
 
-| Layer | Role | The interesting part |
+```bash
+curl -N -X POST localhost:8000/sessions/$SID/research \
+    -H "Content-Type: application/json" \
+    -d '{"message": "..."}'
+# event: thinking / answer / tool_start / tool_end / done
+
+# reconnect with the last frame id
+curl -N -H "Last-Event-ID: 5" -X POST localhost:8000/sessions/$SID/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "..."}'
+# id: 6, 7, 8 ... (buffered gap replays) -> live tail continues
+```
+
+<!-- IMAGE SLOT: demo screenshot / asciinema GIF (insert here) -->
+
+A fully walkable script (both acts + kill-the-consumer replay via `redis-cli`): [docs/demo.md](docs/demo.md)
+
+### Installation
+
+**Prerequisites**
+
+- Python **3.12+**
+- An LLM API key (`DEEPSEEK_API_KEY` by default; any OpenAI-compatible provider works)
+- Docker (only for the full-stack path; the local path needs nothing else)
+
+```bash
+git clone <repo-url> && cd Engram
+python -m venv .venv
+.venv\Scripts\activate            # Windows (Linux/macOS: source .venv/bin/activate)
+pip install -e ".[dev]"
+cp .env.example .env                 # fill in DEEPSEEK_API_KEY=sk-xxx
+```
+
+### Quick Start
+
+**Service mode — first stream in 30 seconds:**
+
+```bash
+uvicorn engram.backend.app.gateway.main:app --port 8000
+
+# in another terminal:
+SID=$(curl -s -X POST localhost:8000/sessions | python -c "import sys,json;print(json.load(sys.stdin)['session_id'])")
+curl -N -X POST localhost:8000/sessions/$SID/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "研究：SSE 断线重连的主流方案"}'
+```
+
+Expected output (SSE frames):
+
+```text
+event: thinking   data: {"type": "thinking", "content": "…"}    <- reasoning deltas
+event: answer     data: {"type": "answer",   "content": "…"}    <- answer tokens
+event: tool_start data: {"type": "tool_start", "tool_name": "…"} <- tool calls
+event: done       data: {"type": "done"}                         <- always terminates with done
+```
+
+Open **http://localhost:8000/docs** for the Swagger playground; after a research run, fetch history and the report:
+
+```bash
+curl -s localhost:8000/sessions/$SID/runs       # run history
+curl -s localhost:8000/runs/<run_id>/report     # final report (markdown)
+```
+
+**Local mode:** just run `engram` for the full-screen TUI; type a question, `/` for command completion.
+
+### Docker Support
+
+```bash
+cp .env.example .env     # fill in DEEPSEEK_API_KEY
+docker compose up -d     # gateway + Postgres + Redis + consolidation worker
+```
+
+| Service | Role | Port |
 |---|---|---|
-| **L1 Schema** | `MemoryTrace` frozen dataclass, 5 atomic ops | tools have no LLM — pure data operations |
-| **L2 Strategies** | Ebbinghaus decay + composite forget | *lazy* decay — strength computed at retrieve time, zero background jobs |
-| **L3 Tiered store** | Redis hot (partitioned keys, TTL) / PG cold (sediment) / Markdown fallback | cold-first writes; hot-miss → cold → back-fill; read-refresh keeps hot memories hot |
-| **L4 Middleware** | recall injection into the model call | injected as a per-call `HumanMessage` — the prompt-cache prefix stays intact |
-| **L5 Consolidation** | Redis Stream producer/consumer group | at-least-once via offset + PEL + XAUTOCLAIM; Web restarts lose nothing |
+| `gateway` | FastAPI + SSE gateway (sessions / chat / research / history + Swagger) | **8000** |
+| `postgres` | Session-state checkpointer + memory cold tier + run history | 5432 |
+| `redis` | Memory hot tier + consolidation Stream | 6379 |
+| `consolidation-worker` | Standalone consolidation consumer (same group as the gateway's inline consumer) | — |
+| `agent` | Local TUI (`tui` profile, on demand) | — |
 
-Also in the kernel (kept from the research core): multi-agent delegation with a **shared thread sandbox**, Docker sandbox with **path enforcement** (agent writes must land in the mounted area), MCP tool ecosystem with fallback chains, and a three-layer **skill evolution** loop (mutation gated by eval, ratchet rollback on degradation). See the [Usage Guide](USAGE.md) for the full tour.
+- Wiring is automatic: the gateway receives `ENGRAM_CHECKPOINT_DSN` / `ENGRAM_REDIS_URL` / `ENGRAM_MEMORY_PG_DSN` from the compose environment
+- Volumes: `.engram/pgdata` (Postgres), `.engram/redisdata` (Redis), `.engram/` (runtime journal/artifacts), `skills/`
+- TUI: `docker compose run --rm agent` (first run triggers the setup wizard)
+- Docker sandbox isolation: uncomment the `docker.sock` mount in `docker-compose.yml` and set `ENGRAM_SANDBOX_USE` as documented there
 
-**More reading:** [Demo script](docs/demo.md) · [Design notes / talking points](docs/interview-notes.md) · [Usage (EN)](USAGE.md) · [使用指南 (中文)](resource/USAGE.zh-CN.md)
+Full configuration, commands and troubleshooting: [Usage Guide](USAGE.md)
+
+---
+
+## 日本語
+
+### これは何か
+
+Engram は**ディープリサーチエージェント**です。ReAct カーネル、ミドルウェア優先アーキテクチャ、5 層の長期記憶、サンドボックス分離、スキル自己進化——それを**長期稼働サービスとしてパッケージ化**しました：
+
+- **FastAPI ゲートウェイ**：セッション管理、SSE ストリーミング（チャット / リサーチ）、実行履歴、Swagger
+- **階層型長期記憶**：Redis ホット層（user/thread ごとの分割キー、TTL 淘汰、読み取り時 TTL 更新）が Postgres コールド層（全量堆積）の上に乗る——ホット層を空にしても忘却しない
+- **セッション状態の永続化**：LangGraph チェックポインタを Postgres に保存。サービス再起動後もセッションが継続し、複数ワーカーが同じセッション状態を共有
+- **記憶統合キュー**：Redis Stream コンシューマーグループ、at-least-once（オフセット再開 + PEL リプレイ）、独立ワーカープロセスで水平スケール
+
+同じバイナリはローカル対話モード（フルスクリーン TUI / CLI）も提供します。カーネルとサービスは同じコードを共有します。
+
+**2764 個のテスト**がカーネルとサービスを守ります。復旧 / リプレイ / フォールバック系のスイートは CI で実物の Redis + Postgres サービスコンテナに対して実行されます。
+
+### 何のためのものか
+
+- **長期リサーチサービス**：質問を投げると、推論・ツール呼び出し・最終レポートを SSE でストリーミング。切断してもフレームを失わずに再接続できる
+- **セッションをまたぐ記憶**：エージェントは過去のセッションを覚えている。Redis ホット層を丸ごと消しても（`FLUSHDB`）、Postgres コールド層が回答する——淘汰された記憶は呼び出し時に再び温まる
+- **エージェント周辺工学のリファレンス実装**：非同期専用のゲートウェイ（`asyncio.run` の同期入口は絶対に通らない）、階層ストレージ、Stream コンシューマーグループによる at-least-once リプレイ、Stream 側と同じオフセット / リプレイモデルを共有する SSE レジューム
+
+### デモ
+
+**第一幕——セッションをまたぐ記憶。** ホット層を丸ごと消去（「直近の記憶をすべて忘れる」）しても、エージェントは以前の議論を継続できます——コールド層が応答し、呼び出した記憶はホット層へ再充填されます：
+
+```bash
+# ホット層を消去（キャッシュ喪失 / TTL 期限切れをシミュレート）
+docker compose exec redis redis-cli FLUSHDB
+
+# 同じセッションで会話を続ける → コールド層フォールバック
+curl -N -X POST localhost:8000/sessions/$SID/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "继续上次的研究——缓冲设计定了吗？"}'
+```
+
+**第二幕——ストリーミングリサーチと再接続。** リサーチ質問を投げるとイベントがリアルタイムで流れます。接続が切れたら最後のフレーム id を付けて再接続——欠けたフレームが先にリプレイされ、その後ライブストリームが続きます：
+
+```bash
+curl -N -X POST localhost:8000/sessions/$SID/research \
+    -H "Content-Type: application/json" \
+    -d '{"message": "..."}'
+# event: thinking / answer / tool_start / tool_end / done
+
+# 最後のフレーム id を付けて再接続
+curl -N -H "Last-Event-ID: 5" -X POST localhost:8000/sessions/$SID/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "..."}'
+# id: 6, 7, 8 ...（バッファされた欠落分がリプレイ）→ ライブストリームへ
+```
+
+<!-- IMAGE SLOT: demo screenshot / asciinema GIF (insert here) -->
+
+実際にたどれるデモスクリプト（2 幕 + `redis-cli` でコンシューマーを落としてリプレイ確認）：[docs/demo.md](docs/demo.md)
+
+### インストール
+
+**前提条件**
+
+- Python **3.12+**
+- LLM API キー（デフォルトは `DEEPSEEK_API_KEY`、OpenAI 互換プロバイダーも可）
+- Docker（フルスタック構成のみ。ローカル構成は他に何も不要）
+
+```bash
+git clone <repo-url> && cd Engram
+python -m venv .venv
+.venv\Scripts\activate            # Windows（Linux/macOS: source .venv/bin/activate）
+pip install -e ".[dev]"
+cp .env.example .env                 # DEEPSEEK_API_KEY=sk-xxx を記入
+```
+
+### クイックスタート
+
+**サービスモード——30 秒で最初のストリーム：**
+
+```bash
+uvicorn engram.backend.app.gateway.main:app --port 8000
+
+# 別ターミナルで:
+SID=$(curl -s -X POST localhost:8000/sessions | python -c "import sys,json;print(json.load(sys.stdin)['session_id'])")
+curl -N -X POST localhost:8000/sessions/$SID/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "研究：SSE 断线重连的主流方案"}'
+```
+
+期待される出力（SSE フレーム）：
+
+```text
+event: thinking   data: {"type": "thinking", "content": "…"}    <- 推論デルタ
+event: answer     data: {"type": "answer",   "content": "…"}    <- 回答トークン
+event: tool_start data: {"type": "tool_start", "tool_name": "…"} <- ツール呼び出し
+event: done       data: {"type": "done"}                         <- 常に done で終了
+```
+
+ブラウザで **http://localhost:8000/docs**（Swagger）を開けばその場で API を試せます。リサーチ実行後は履歴とレポートを取得：
+
+```bash
+curl -s localhost:8000/sessions/$SID/runs       # 実行履歴
+curl -s localhost:8000/runs/<run_id>/report     # 最終レポート（markdown）
+```
+
+**ローカルモード：** `engram` を実行するとフルスクリーン TUI が起動。質問を入力、`/` でコマンド補完。
+
+### Docker サポート
+
+```bash
+cp .env.example .env     # DEEPSEEK_API_KEY を記入
+docker compose up -d     # ゲートウェイ + Postgres + Redis + 統合ワーカー
+```
+
+| サービス | 役割 | ポート |
+|---|---|---|
+| `gateway` | FastAPI + SSE ゲートウェイ（セッション / チャット / リサーチ / 履歴 + Swagger） | **8000** |
+| `postgres` | セッション状態チェックポインタ + 記憶コールド層 + 実行履歴 | 5432 |
+| `redis` | 記憶ホット層 + 統合 Stream | 6379 |
+| `consolidation-worker` | 独立統合コンシューマー（ゲートウェイ内蔵コンシューマーと同一グループ） | — |
+| `agent` | ローカル TUI（`tui` プロファイル、オンデマンド） | — |
+
+- 配線は自動：ゲートウェイは compose 環境から `ENGRAM_CHECKPOINT_DSN` / `ENGRAM_REDIS_URL` / `ENGRAM_MEMORY_PG_DSN` を受け取る
+- データボリューム：`.engram/pgdata`（Postgres）、`.engram/redisdata`（Redis）、`.engram/`（実行時 journal / artifacts）、`skills/`
+- TUI：`docker compose run --rm agent`（初回はセットアップウィザードが起動）
+- Docker サンドボックス分離：`docker-compose.yml` のコメントに従い `docker.sock` マウントを解除し `ENGRAM_SANDBOX_USE` を設定
+
+詳細な設定・コマンド・トラブルシューティング：[Usage Guide](USAGE.md)
 
 ---
 
@@ -204,7 +404,6 @@ Also in the kernel (kept from the research core): multi-agent delegation with a 
 
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1.x-00BFFF?style=flat-square)
-![LangChain](https://img.shields.io/badge/LangChain-1.x-1c3c3c?style=flat-square)
 ![FastAPI](https://img.shields.io/badge/FastAPI-SSE-009488?style=flat-square)
 ![Redis](https://img.shields.io/badge/Redis-Streams-DC382D?style=flat-square&logo=redis&logoColor=white)
 ![Postgres](https://img.shields.io/badge/Postgres-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
@@ -212,12 +411,6 @@ Also in the kernel (kept from the research core): multi-agent delegation with a 
 ![Docker](https://img.shields.io/badge/Docker-Sandbox-2496ED?style=flat-square&logo=docker&logoColor=white)
 
 </div>
-
----
-
-## Acknowledgments
-
-Engram stands on the shoulders of giants. The middleware-first agent architecture, the cognitive-science memory model (episodic / semantic / procedural with Ebbinghaus decay), multi-agent delegation patterns, sandbox isolation with path enforcement, and skill self-evolution with eval gating draw on ideas from the open-source agent ecosystem and cognitive-science research. The service layer (FastAPI/SSE, tiered storage, Stream-based consolidation) is designed and tested from first principles. We gratefully acknowledge the developers and researchers whose work made Engram possible.
 
 ---
 
@@ -229,7 +422,6 @@ Engram stands on the shoulders of giants. The middleware-first agent architectur
 
 <div align="center">
 
-<sub>Built for those who care about how agents are built.</sub><br>
-<sub>If this project helps you, a ⭐ is appreciated.</sub>
+<sub>Built for those who care about how agents are built.</sub>
 
 </div>
