@@ -1,47 +1,97 @@
-<div align="center">
+<a name="readme-top"></a>
 
-<!-- IMAGE SLOT: hero banner（新しいメインビジュアルをここに挿入 — 例：docs/assets/hero.png） -->
+<!-- IMAGE SLOT: 中央ロゴ / ワードマーク —— ここに挿入、幅 約45%（例：docs/assets/logo.png） -->
 
-# Engram
+<p align="center">
+    <a href="resource/USAGE.ja.md" target="_blank">
+        <img src="https://img.shields.io/badge/docs-view-blue?logo=readthedocs&logoColor=white" alt="ドキュメント" />
+    </a>
+    <a href="docs/demo.md" target="_blank">
+        <img src="https://img.shields.io/badge/demo-walkthrough-blue" alt="デモ" />
+    </a>
+    <img src="https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white" alt="Python 3.12+" />
+    <img src="https://img.shields.io/badge/FastAPI-web%20service-blue?logo=fastapi&logoColor=white" alt="FastAPI" />
+    <img src="https://img.shields.io/badge/Redis-hot%20cache-blue?logo=redis&logoColor=white" alt="Redis" />
+    <img src="https://img.shields.io/badge/Postgres-memory-blue?logo=postgresql&logoColor=white" alt="Postgres" />
+    <a href="LICENSE" target="_blank">
+        <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=blue" alt="ライセンス" />
+    </a>
+</p>
 
-**あなたを覚えているリサーチアシスタント —— ネットワークが切れても進捗を失わない。**
+<p align="center">
+  <a href="./README.md">English</a> | <a href="./README.zh-CN.md">简体中文</a> | <b>日本語</b>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-7c6ff0?style=for-the-badge)](LICENSE)
-[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-45c4b8?style=for-the-badge)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-web%20service-009488?style=for-the-badge)](https://fastapi.tiangolo.com/)
-[![Redis](https://img.shields.io/badge/Redis-高速キャッシュ-DC382D?style=for-the-badge)](https://redis.io/)
-[![Postgres](https://img.shields.io/badge/Postgres-永続メモリ-4169E1?style=for-the-badge)](https://www.postgresql.org/)
+# Engram - あなたを覚えているリサーチアシスタント
 
-[简体中文](README.zh-CN.md) · [English](README.md) · **日本語**
+> 「チャットウィンドウはタブを閉じた瞬間にあなたを忘れます。欲しかったのは、何日経っても、再起動しても、回線が切れても、話の筋を覚えているリサーチパートナーです。」
 
-アニメーションロゴ：[logo/standalone.html](logo/standalone.html) —— 文字が記憶の細胞になり、数秒ごとに光が走る：記憶が呼び起こされる瞬間。
+**Engram** は、自分のマシン上で小さなセルフホスト型 Web サービスとして動かせる AI リサーチアシスタントです。
 
-</div>
+セッションを作って質問すると、答えがリアルタイムで流れ出てきます——どう考え、何を検索し、何を書いたのかが目に見えます。大きなテーマなら深いリサーチタスクとして取り組み、完成したレポートを手渡してくれます。いつでも読み返せます。
+
+普通のチャットウィンドウと違うのは二点：**覚えている**こと（セッションをまたぎ、再起動を越え、高速キャッシュを空にしても失わない）、そして**進捗を失わない**こと（回線が切れても、再接続すれば抜けていた部分を先に届けてくれます）。
+
+> [!TIP]
+> コマンド一つでフルスタック起動：
+> ```
+> docker compose up -d
+> ```
+
+<!-- IMAGE SLOT: メインスクリーンショット —— 回答をストリーミング中のチャット（ここに挿入） -->
 
 ---
 
-## これは何か
+## Engram の仕組み
 
-Engram は、自分のマシン上で小さな Web サービスとして動かせる AI リサーチアシスタントです。セッションを作って質問すると、答えがリアルタイムに流れ出てきます——どう考え、何を検索し、何を書いたのかが目に見えます。読み込み中のアイコンを眺める必要はありません。大きなテーマなら研究タスクとして取り組み、完成したレポートを手渡してくれます。あとからいつでも読み返せます。
+Engram はリサーチエージェントを小さな Web サービスで包んでいます。エージェントが考え、検索し、書く——サービスがそれをブラウザやターミナルで追えるライブストリームに変え、再起動や切断に耐えるようにします。
 
-普通のチャットウィンドウと違うのは二点です：
+特筆すべきは記憶です。記憶は二層に分かれます：古いものが意図的に失効する「高速キャッシュ」（Redis）と、何も失わない「永続ストア」（Postgres）。読み取りはまずキャッシュを見て、なければ永続ストアから探し、静かにキャッシュを温め直します。キャッシュを丸ごと空にしても——必要なものを引き直して、何事もなかったように続けます。
 
-- **覚えている。** 翌日でも、サービスを丸ごと再起動しても、前に何をしていたか覚えています。高速キャッシュを空にしても、永続ストアから静かに詳細を探し出して、何事もなかったように会話を続けます。
-- **進捗を失わない。** 回答の途中で接続が切れても、再接続すれば抜けていた部分を先にまとめて届け、そのままリアルタイム出力を続けます。
+長い会話はバックグラウンドジョブが記憶に蒸留します。そのジョブ自体が耐久性のあるキューで、クラッシュや再起動にも耐え、独立したワーカープロセスとしても動きます。
 
-ターミナル派の方へ：同じエンジンがフルスクリーンのターミナルアプリとしても動きます：`engram`。
+<!-- IMAGE SLOT: アーキテクチャ図（ここに挿入） -->
 
-<sub><b>仕組みをひとことで。</b> アシスタント本体は LangGraph で作られた ReAct エージェントで、それを FastAPI の Web サービスが包んでいます。記憶は二か所：古いものがある程度で自然に消える「高速キャッシュ」（Redis）と、何も失わない「永続ストア」（Postgres）。読み取りはまずキャッシュを見て、なければ永続ストアから探し、静かにキャッシュへ戻します。長い会話はバックグラウンドジョブが記憶に蒸留します——そのジョブ自体もクラッシュや再起動に耐えます。プロジェクト全体に 2,764 個の自動テストがあります。</sub>
+---
 
-## 何のためのものか
+## ⭐ 機能
 
-- **尋ねて、眺める** —— リアルタイムのストリーミングチャット：推論、ツール呼び出し、回答がその場で現れます
-- **オンデマンドの深いリサーチ** —— 一つの質問がストリーミングされるレポートになり、保存されていつでも見返せます
-- **文脈を持ち続ける相棒** —— セッション、記憶、レポートは再起動を越えて残ります
-- **読めるサンプル** —— 自分でもエージェントサービスを作るなら、ストリーミング・永続状態・二層メモリがどう噛み合うかを、隠れた魔法なしで示す小さくテストされたコードベースです
-- **ターミナルネイティブの選択肢** —— シェルで暮らす人向けの TUI / CLI
+- **🔍 ライブストリーミングチャット：** 推論、ツール呼び出し、回答がその場で現れます——スピナーで待つ必要も、全文生成を待つ必要もありません。
+- **🔬 ディープリサーチ：** 一つの質問がストリーミングされるリサーチレポートになり、保存されて履歴に並び、いつでも見返せます。
+- **🧠 再起動に耐える記憶：** セッション、記憶、履歴は再起動を越えて残ります。空にしたホットキャッシュも永続ストアから復元され、呼び出し時に温め直されます。
+- **🔌 切断に強いストリーム：** 接続が切れたら、最後のイベント id を付けて再接続——抜けていたイベントが先に届き、その後ライブ出力が続きます。
+- **💻 セキュアサンドボックス（オプション）：** ツール呼び出しを Docker コンテナ内でパス制約付きに実行。エージェントが書いたファイルが本当に残ります。
+- **🖥️ ターミナルネイティブ：** 同じエンジンがフルスクリーン TUI やスクロール型 CLI としても動きます。
+- **🧩 読めて、テストされた核：** 小さく分割され、差し替え可能な継ぎ目を持つコードベース——2,764 個の自動テスト。復旧・リプレイ系のスイートは CI で実物の Redis と Postgres に対して実行。
 
-## デモ
+Engram はデフォルトで DeepSeek に対応し、OpenAI 互換プロバイダーならどれでも使えます。
+
+詳しくは[ドキュメント](resource/USAGE.ja.md)へ。
+
+---
+
+## 🧠 記憶とあなたのデータ
+
+すべてはあなたの環境の中で動きます——クラウドへの往復も、第三者による会話の索引化もありません。
+
+- **高速キャッシュ**（Redis）は忘れるための設計：呼び出されなくなったホット記憶は失効します。
+- **永続ストア**（Postgres）が真実の源：冷えたからといって削除されることはありません。
+- データは `.engram/`（ジャーナル、アーティファクト、DB・キャッシュのボリューム）と `skills/` に——バックアップも移動も削除も自由。
+- モデルプロバイダーはあなたが選ぶ；ローカルプロバイダーなら推論まで手元のマシンで。
+
+---
+
+## 🧭 どこからでも Engram を使う
+
+- **Web API** —— FastAPI サービス：セッション、ストリーミングチャット、リサーチ、実行履歴、レポート。
+- **Swagger プレイグラウンド** —— `/docs` を開けば、すべてのエンドポイントをブラウザで試せます。
+- **ターミナル** —— 対話リサーチ用のフルスクリーン TUI、またはプレーンなスクロール型 CLI。
+- **CLI ワンショット** —— `engram run "質問"` でレポートを出力して終了。
+- **Docker** —— `docker compose up -d` 一つでゲートウェイ、データベース、バックグラウンドワーカーが起動。
+
+---
+
+## 🎬 デモ
 
 **覚えている。** 高速キャッシュを丸ごと空にしても、会話は続きます：
 
@@ -59,7 +109,7 @@ data: {"type": "answer", "content": "前回は Last-Event-ID 方式に決まり�
 # ↑ この回答は永続ストアから。答えたあと自動でキャッシュに戻されます
 ```
 
-**ストリーミング —— 切断しても大丈夫。** 研究の質問を投げ、接続が途中で切れたら、最後に受け取ったイベント番号を持って再接続。抜けた部分が先に届きます：
+**ストリーミング —— 切断しても大丈夫。**
 
 ```bash
 curl -N -X POST localhost:8000/sessions/$SID/research \
@@ -78,7 +128,9 @@ curl -N -H "Last-Event-ID: 5" -X POST localhost:8000/sessions/$SID/chat \
 
 手順を追って試したい方は、ウォークスルー：[docs/demo.md](docs/demo.md)
 
-## インストール
+---
+
+## 📦 インストール
 
 必要なもの：
 
@@ -94,7 +146,7 @@ pip install -e ".[dev]"
 cp .env.example .env                 # DEEPSEEK_API_KEY=sk-... を記入
 ```
 
-## クイックスタート
+## ⚡ クイックスタート
 
 サービスを起動：
 
@@ -130,7 +182,7 @@ curl -s localhost:8000/runs/<run_id>/report     # 書き上がったレポート
 
 ターミナルだけでいい？ `engram` を実行してください。
 
-## Docker サポート
+## 🐳 Docker サポート
 
 ```bash
 cp .env.example .env      # API キーを記入
@@ -150,18 +202,10 @@ docker compose up -d
 - Docker 内でターミナルアプリを使う：`docker compose run --rm agent`
 - ツール呼び出しを Docker コンテナで隔離したい場合は、`docker-compose.yml` のコメントに従って `docker.sock` マウントを解除し、`ENGRAM_SANDBOX_USE` を設定してください。
 
-詳しくは：[使用ガイド](resource/USAGE.ja.md) · [ウォークスルー](docs/demo.md) · [設計ノート](docs/interview-notes.md)
-
 ---
 
-## ライセンス
+## 📚 ライセンス
 
 [MIT](LICENSE) © Engram Authors
 
----
-
-<div align="center">
-
-<sub>エージェントがどう作られているかに関心のある人のために。</sub>
-
-</div>
+<sub>[トップへ戻る](#readme-top)</sub>

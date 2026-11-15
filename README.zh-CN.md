@@ -1,47 +1,97 @@
-<div align="center">
+<a name="readme-top"></a>
 
-<!-- IMAGE SLOT: hero banner（在此插入新主视觉图 —— 如 docs/assets/hero.png） -->
+<!-- IMAGE SLOT: 居中 Logo / 字标 —— 在此插入，宽度约 45%（如 docs/assets/logo.png） -->
 
-# Engram
+<p align="center">
+    <a href="resource/USAGE.zh-CN.md" target="_blank">
+        <img src="https://img.shields.io/badge/docs-view-blue?logo=readthedocs&logoColor=white" alt="文档" />
+    </a>
+    <a href="docs/demo.md" target="_blank">
+        <img src="https://img.shields.io/badge/demo-walkthrough-blue" alt="演示" />
+    </a>
+    <img src="https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white" alt="Python 3.12+" />
+    <img src="https://img.shields.io/badge/FastAPI-web%20service-blue?logo=fastapi&logoColor=white" alt="FastAPI" />
+    <img src="https://img.shields.io/badge/Redis-hot%20cache-blue?logo=redis&logoColor=white" alt="Redis" />
+    <img src="https://img.shields.io/badge/Postgres-memory-blue?logo=postgresql&logoColor=white" alt="Postgres" />
+    <a href="LICENSE" target="_blank">
+        <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=blue" alt="许可证" />
+    </a>
+</p>
 
-**一个会记住你的研究助手 —— 网络断了也不丢进度。**
+<p align="center">
+  <a href="./README.md">English</a> | <b>简体中文</b> | <a href="./README.ja.md">日本語</a>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-7c6ff0?style=for-the-badge)](LICENSE)
-[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-45c4b8?style=for-the-badge)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-web%20service-009488?style=for-the-badge)](https://fastapi.tiangolo.com/)
-[![Redis](https://img.shields.io/badge/Redis-快缓存-DC382D?style=for-the-badge)](https://redis.io/)
-[![Postgres](https://img.shields.io/badge/Postgres-永久记忆-4169E1?style=for-the-badge)](https://www.postgresql.org/)
+# Engram - 一个会记住你的研究助手
 
-**简体中文** · [English](README.md) · [日本語](README.ja.md)
+> “聊天窗口在你关掉标签页的那一刻就把你忘了。我想要的是一个记得住来龙去脉的研究伙伴——跨天、跨重启、跨网络中断。”
 
-动态字标：[logo/standalone.html](logo/standalone.html) —— 字母化作记忆细胞，一道光每隔几秒扫过：一次记忆被唤起。
+**Engram** 是一个跑在你自己机器上的 AI 研究助手，以一个小型、自托管的 Web 服务形式提供。
 
-</div>
+创建一个会话、问一个问题，答案会边生成边实时显示——它怎么思考、查了什么、写了什么，你都看得见。问题大一点，它就把这当成一项深度研究任务来做，最后交给你一份写好的报告，随时可以回来翻看。
+
+它和普通聊天窗口不一样的地方有两点：它**记得住**——跨会话、跨重启，就算快缓存被清空也不丢；它**不会丢进度**——网络断了，重连之后先把你错过的部分补给你。
+
+> [!TIP]
+> 一条命令启动完整服务：
+> ```
+> docker compose up -d
+> ```
+
+<!-- IMAGE SLOT: 主截图 —— 对话正在流式输出回答（在此插入） -->
 
 ---
 
-## 这是一个什么
+## Engram 的工作原理
 
-Engram 是一个跑在你自己电脑上的 AI 研究助手，以一个小型 Web 服务的形式提供。创建一个会话、问一个问题，答案会边生成边显示出来——它怎么思考、查了什么、写了什么，你都看得见，而不是对着转圈的加载图标干等。问题大一点，它就把这当成一项研究任务来做，最后交给你一份写好的报告，随时可以回来翻看。
+Engram 把一个研究 agent 包进了一个小型 Web 服务。agent 负责思考、搜索、写作；服务把这一切变成浏览器或终端能实时跟上的数据流，并确保这些工作经得起重启和断线。
 
-它和普通聊天窗口不一样的地方有两点：
+最值得说的是记忆。它分两层：一个"快缓存"（Redis），旧内容会按设定自然过期；一个"永久存储"（Postgres），什么都不会丢。读取时先看快缓存，没有就去永久存储里找，顺便悄悄把结果放回缓存。把缓存整个清空——助手只是重新查一下需要的东西，然后若无其事地继续。
 
-- **它记得住。** 明天再来、甚至把整个服务重启，它依然知道你们之前在做什么。就算你把它的快缓存整个清空，它也会悄悄去永久存储里把细节找回来，接着往下聊，像什么都没发生过。
-- **它不会丢进度。** 网络中途断了，重连之后它先把错过的内容一股脑补给你，再继续实时输出。
+长对话会由后台任务提炼成记忆。这个任务本身是一条持久队列，同样经得起崩溃和重启，也可以单独跑成 worker 进程。
 
-习惯用终端？同一个引擎也能当全屏终端应用跑：`engram`。
+<!-- IMAGE SLOT: 架构图（在此插入） -->
 
-<sub><b>一句话说清原理。</b> 助手是一个用 LangGraph 构建的 ReAct agent，外面套了一层 FastAPI Web 服务。记忆存在两个地方：一个"快缓存"（Redis），旧内容会按设定自然过期；一个"永久存储"（Postgres），什么都不会丢。读取时先看快缓存，没有就去永久存储里找，顺便把结果悄悄放回缓存。长对话会触发后台任务，把对话提炼成记忆——这个后台任务本身也经得起崩溃重启。整个项目带 2,764 个自动化测试。</sub>
+---
 
-## 用来做什么
+## ⭐ 功能特性
 
-- **边问边看** —— 实时流式对话：推理过程、工具调用、答案文本都即时出现
-- **深度研究出报告** —— 提一个问题，得到流式输出的报告，并自动保存、随时回看
-- **跨会话、跨重启的陪伴** —— 会话、记忆、报告都经得起重启
-- **一个可以读懂的例子** —— 如果你也在搭 agent 服务，这是一个小而完整、测试充分的项目：流式输出、可靠状态、双层记忆是怎么捏到一起的，没有藏着掖着的魔法
-- **终端党的选项** —— 完整的 TUI 和 CLI
+- **🔍 实时流式对话：** 推理过程、工具调用、答案文本都即时出现——没有转圈等待，也不用等整段回复生成完。
+- **🔬 深度研究：** 一个问题变成一份流式输出的研究报告，自动保存并列进历史，随时回看。
+- **🧠 经得起重启的记忆：** 会话、记忆、历史跨重启保留；热缓存被清空也能从永久存储找回，并在召回时重新加热。
+- **🔌 断线安全的流：** 连接断开后，带上最后的事件编号重连，错过的事件先补发，然后继续实时输出。
+- **💻 安全沙箱（可选）：** 工具调用跑在 Docker 容器里，带路径约束，agent 写下的文件真正落盘。
+- **🖥️ 终端原生：** 同一个引擎也能当全屏 TUI 或滚动式 CLI 跑。
+- **🧩 可读、有测试的核：** 小而聚焦、可注入替换的代码库——2,764 个自动化测试；恢复与重放相关的套件在 CI 里对真实 Redis 和 Postgres 实跑。
 
-## 演示
+Engram 默认支持 DeepSeek，也兼容任何 OpenAI 兼容的提供商。
+
+更多内容请参阅[文档](resource/USAGE.zh-CN.md)。
+
+---
+
+## 🧠 记忆与你的数据
+
+一切都在你自己的环境里运行——没有云端往返，没有第三方替你索引对话。
+
+- **快缓存**（Redis）的设计目标就是遗忘：热记忆不再被想起就会过期。
+- **永久存储**（Postgres）是事实来源：不会因为变冷而被删除。
+- 数据在 `.engram/`（日志、产物、数据库与缓存卷）和 `skills/` 里——备份、迁移、删除都随你。
+- 模型提供商由你选择；用本地模型的话，连推理也在你自己的机器上。
+
+---
+
+## 🧭 随时随地使用 Engram
+
+- **Web API** —— FastAPI 服务：会话、流式对话、研究、运行历史与报告。
+- **在线接口调试** —— 打开 `/docs`，所有接口都能在浏览器里当场试。
+- **终端** —— 全屏 TUI 交互研究，或朴素滚动式 CLI。
+- **CLI 单次运行** —— `engram run "问题"`，打印报告后退出。
+- **Docker** —— 一条 `docker compose up -d` 起网关、数据库和后台 worker。
+
+---
+
+## 🎬 演示
 
 **它记得住。** 把整个快缓存清空来验证：对话依然接得上。
 
@@ -59,7 +109,7 @@ data: {"type": "answer", "content": "上次已确认用 Last-Event-ID 方案；�
 # ↑ 这条回答来自永久存储，答完又自动放回了快缓存
 ```
 
-**它会流式输出——而且断了也不怕。** 提交研究问题；连接中途断开时，用最后收到的事件编号重连，错过的部分先补发给你：
+**它会流式输出——而且断了也不怕。**
 
 ```bash
 curl -N -X POST localhost:8000/sessions/$SID/research \
@@ -78,7 +128,9 @@ curl -N -H "Last-Event-ID: 5" -X POST localhost:8000/sessions/$SID/chat \
 
 想一步一步照着走？完整走查脚本：[docs/demo.md](docs/demo.md)
 
-## 安装
+---
+
+## 📦 安装
 
 你需要：
 
@@ -94,7 +146,7 @@ pip install -e ".[dev]"
 cp .env.example .env                 # 填入 DEEPSEEK_API_KEY=sk-...
 ```
 
-## 快速开始
+## ⚡ 快速开始
 
 启动服务：
 
@@ -130,7 +182,7 @@ curl -s localhost:8000/runs/<run_id>/report     # 写好的报告
 
 只想用终端？直接运行 `engram`。
 
-## Docker 支持
+## 🐳 Docker 支持
 
 ```bash
 cp .env.example .env      # 填入你的 API key
@@ -150,18 +202,10 @@ docker compose up -d
 - 在 Docker 里用终端应用：`docker compose run --rm agent`
 - 想让工具调用跑在 Docker 容器里隔离？按 `docker-compose.yml` 里的注释取消 `docker.sock` 挂载并设置 `ENGRAM_SANDBOX_USE`。
 
-更多：[使用指南](resource/USAGE.zh-CN.md) · [完整走查](docs/demo.md) · [设计笔记](docs/interview-notes.md)
-
 ---
 
-## 许可证
+## 📚 许可证
 
 [MIT](LICENSE) © Engram Authors
 
----
-
-<div align="center">
-
-<sub>为关心 agent 是怎么造出来的人而建。</sub>
-
-</div>
+<sub>[回到顶部](#readme-top)</sub>

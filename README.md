@@ -1,47 +1,97 @@
-<div align="center">
+<a name="readme-top"></a>
 
-<!-- IMAGE SLOT: hero banner (insert new art here — e.g. docs/assets/hero.png) -->
+<!-- IMAGE SLOT: centered logo / wordmark — insert here, width ~45% (e.g. docs/assets/logo.png) -->
 
-# Engram
+<p align="center">
+    <a href="USAGE.md" target="_blank">
+        <img src="https://img.shields.io/badge/docs-view-blue?logo=readthedocs&logoColor=white" alt="Documentation" />
+    </a>
+    <a href="docs/demo.md" target="_blank">
+        <img src="https://img.shields.io/badge/demo-walkthrough-blue" alt="Demo" />
+    </a>
+    <img src="https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white" alt="Python 3.12+" />
+    <img src="https://img.shields.io/badge/FastAPI-web%20service-blue?logo=fastapi&logoColor=white" alt="FastAPI" />
+    <img src="https://img.shields.io/badge/Redis-hot%20cache-blue?logo=redis&logoColor=white" alt="Redis" />
+    <img src="https://img.shields.io/badge/Postgres-memory-blue?logo=postgresql&logoColor=white" alt="Postgres" />
+    <a href="LICENSE" target="_blank">
+        <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=blue" alt="License" />
+    </a>
+</p>
 
-**A research assistant that remembers you — even when the network drops.**
+<p align="center">
+  <b>English</b> | <a href="./README.zh-CN.md">简体中文</a> | <a href="./README.ja.md">日本語</a>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-7c6ff0?style=for-the-badge)](LICENSE)
-[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-45c4b8?style=for-the-badge)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-web%20service-009488?style=for-the-badge)](https://fastapi.tiangolo.com/)
-[![Redis](https://img.shields.io/badge/Redis-fast%20cache-DC382D?style=for-the-badge)](https://redis.io/)
-[![Postgres](https://img.shields.io/badge/Postgres-memory-4169E1?style=for-the-badge)](https://www.postgresql.org/)
+# Engram - A research assistant that remembers you
 
-[简体中文](README.zh-CN.md) · **English** · [日本語](README.ja.md)
+> "A chat window forgets you the moment you close the tab. I wanted a research companion that remembers the thread — across days, across restarts, across network drops."
 
-Animated wordmark: [logo/standalone.html](logo/standalone.html) — letters as memory cells, a glint sweeping across: a memory being recalled.
+**Engram** is an AI research assistant you run on your own machine as a small self-hosted web service.
 
-</div>
+Create a session, ask a question, and watch the answer arrive in real time — its reasoning, the searches it runs, the text it writes. Give it something bigger and it works through it as a deep research task, then hands you a finished report you can revisit anytime.
+
+Two things make it different from a chat window: it **remembers** you across sessions and restarts (even if its fast cache is wiped), and it **never loses the thread** when the network drops — you reconnect and it fills in what you missed.
+
+> [!TIP]
+> Get the full stack running with a single command:
+> ```
+> docker compose up -d
+> ```
+
+<!-- IMAGE SLOT: main screenshot — chat streaming an answer (insert here) -->
 
 ---
 
-## What is this
+## How does Engram work
 
-Engram is an AI research assistant you run on your own machine as a small web service. Create a session, ask a question, and the answer streams in as it happens — you watch it think, search, and write instead of staring at a spinner. Give it something bigger and it works through it as a research task, then hands you a finished report you can come back to.
+Engram wraps a research agent in a small web service. The agent thinks, searches and writes — the service turns that into a live stream your browser or terminal can follow, and makes sure the work survives restarts and lost connections.
 
-Two things make it different from a chat window:
+Memory is the part worth talking about. It lives in two tiers: a **fast cache** (Redis) that lets old items expire on purpose, and a **permanent store** (Postgres) that keeps everything. Reads check the cache first, fall back to the permanent store, and quietly warm the cache again. Wipe the cache entirely — the assistant simply looks up what it needs and carries on.
 
-- **It remembers.** Come back tomorrow — or restart the whole service — and it still knows what you were working on. Wipe its fast cache, and it quietly looks the details up in its permanent store and carries on as if nothing happened.
-- **It doesn't lose the thread.** If your connection drops mid-answer, reconnect and it first hands you whatever you missed, then keeps streaming from where it left off.
+Long conversations are distilled into memories by a background job. That job is a durable queue, so it survives crashes and restarts too, and can run as its own worker process.
 
-Prefer the terminal? The same engine runs as a full-screen terminal app: `engram`.
+<!-- IMAGE SLOT: architecture diagram (insert here) -->
 
-<sub><b>Under the hood, in one paragraph.</b> The assistant is a ReAct agent built with LangGraph and wrapped in a FastAPI web service. Memories live in two tiers: a fast cache (Redis) that lets old items expire on purpose, and a permanent store (Postgres) that keeps everything. Reads try the cache first, fall back to the permanent store, and quietly re-warm the cache. Long conversations trigger a background job that distills them into memories — and that job survives crashes too. The whole project ships with 2,764 automated tests.</sub>
+---
 
-## What is this for
+## ⭐ Features
 
-- **Ask and watch** — live streaming chat: reasoning, tool calls and the answer appear as they happen
-- **Deep research on demand** — one request becomes a streamed report, saved so you can revisit it
-- **A companion that keeps context** — sessions, memories and reports survive restarts
-- **A readable example** — if you are building agent services yourself, this is a small, well-tested codebase where streaming, durable state and two-tier memory fit together without hidden magic
-- **A terminal-native option** — full TUI and CLI for people who live in the shell
+- **🔍 Live streaming chat:** reasoning, tool calls and the answer appear as they happen — no spinner, no waiting for the whole reply.
+- **🔬 Deep research:** one question becomes a streamed research report, saved and listed so you can come back to it later.
+- **🧠 Memory that survives:** sessions, memories and history persist across service restarts; a wiped hot cache is recovered from the permanent store and re-warmed on demand.
+- **🔌 Reconnect-safe streams:** if the connection drops, reconnect with the last event id and the missed events replay first, then live output continues.
+- **💻 Secure sandbox (optional):** run tool calls inside Docker containers with path enforcement, so what the agent writes actually persists.
+- **🖥️ Terminal native:** the same engine also runs as a full-screen TUI or a scrolling CLI.
+- **🧩 Readable, tested core:** a small, well-factored codebase with injectable seams — 2,764 automated tests; the recovery and replay suites run against real Redis and Postgres in CI.
 
-## Demo
+Engram works with DeepSeek out of the box, and with any OpenAI-compatible provider.
+
+More detail in the [docs](USAGE.md).
+
+---
+
+## 🧠 Memory and your data
+
+Everything runs in your own environment — no cloud round-trip, no third-party index of your conversations.
+
+- The **fast cache** (Redis) is designed to forget: hot memories expire unless they keep being recalled.
+- The **permanent store** (Postgres) is the source of truth: nothing is deleted just because it went cold.
+- Data lives in `.engram/` (journals, artifacts, database and cache volumes) and `skills/` — yours to back up, move or delete.
+- You choose the model provider; a local provider keeps even inference on your machine.
+
+---
+
+## 🧭 Access Engram from anywhere
+
+- **Web API** — a FastAPI service with sessions, streaming chat, research, run history and reports.
+- **Swagger playground** — open `/docs` and try every endpoint from the browser.
+- **Terminal** — a full-screen TUI for interactive research, or a plain scrolling CLI.
+- **CLI one-shot** — `engram run "question"` prints the report and exits.
+- **Docker** — one `docker compose up -d` runs the gateway, the databases and the background worker.
+
+---
+
+## 🎬 Demo
 
 **It remembers.** Wipe the entire fast cache to prove the point — the conversation still continues:
 
@@ -59,7 +109,7 @@ data: {"type": "answer", "content": "Last time you settled on Last-Event-ID; the
 # ^ answered from the permanent store, then re-cached automatically
 ```
 
-**It streams — and survives a dropped connection.** Submit a research question; if the connection drops, reconnect and the missed part arrives first:
+**It streams — and survives a dropped connection.**
 
 ```bash
 curl -N -X POST localhost:8000/sessions/$SID/research \
@@ -78,7 +128,9 @@ curl -N -H "Last-Event-ID: 5" -X POST localhost:8000/sessions/$SID/chat \
 
 Prefer to click through it step by step? The walkthrough: [docs/demo.md](docs/demo.md)
 
-## Installation
+---
+
+## 📦 Installation
 
 You need:
 
@@ -94,7 +146,7 @@ pip install -e ".[dev]"
 cp .env.example .env                 # add DEEPSEEK_API_KEY=sk-...
 ```
 
-## Quick Start
+## ⚡ Quick Start
 
 Start the service:
 
@@ -130,7 +182,7 @@ curl -s localhost:8000/runs/<run_id>/report     # the written report
 
 Just want the terminal? Run `engram`.
 
-## Docker Support
+## 🐳 Docker Support
 
 ```bash
 cp .env.example .env      # add your API key
@@ -150,18 +202,10 @@ docker compose up -d
 - Terminal app inside Docker: `docker compose run --rm agent`
 - Want tool calls isolated in Docker containers? Uncomment the `docker.sock` mount in `docker-compose.yml` and set `ENGRAM_SANDBOX_USE` as explained in its comments.
 
-More: [Usage Guide](USAGE.md) · [walkthrough](docs/demo.md) · [design notes](docs/interview-notes.md)
-
 ---
 
-## License
+## 📚 License
 
 [MIT](LICENSE) © Engram Authors
 
----
-
-<div align="center">
-
-<sub>Built for those who care about how agents are built.</sub>
-
-</div>
+<sub>[Back to top](#readme-top)</sub>
