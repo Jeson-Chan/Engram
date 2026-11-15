@@ -3,18 +3,23 @@
 <!-- IMAGE SLOT: centered logo / wordmark — insert here, width ~45% (e.g. docs/assets/logo.png) -->
 
 <p align="center">
-    <a href="USAGE.md" target="_blank">
-        <img src="https://img.shields.io/badge/docs-view-blue?logo=readthedocs&logoColor=white" alt="Documentation" />
-    </a>
-    <a href="docs/demo.md" target="_blank">
-        <img src="https://img.shields.io/badge/demo-walkthrough-blue" alt="Demo" />
-    </a>
-    <img src="https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white" alt="Python 3.12+" />
-    <img src="https://img.shields.io/badge/FastAPI-web%20service-blue?logo=fastapi&logoColor=white" alt="FastAPI" />
-    <img src="https://img.shields.io/badge/Redis-hot%20cache-blue?logo=redis&logoColor=white" alt="Redis" />
-    <img src="https://img.shields.io/badge/Postgres-memory-blue?logo=postgresql&logoColor=white" alt="Postgres" />
     <a href="LICENSE" target="_blank">
-        <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=blue" alt="License" />
+        <img src="https://img.shields.io/badge/License-MIT-7c6ff0?style=for-the-badge" alt="License" />
+    </a>
+    <a href="https://www.python.org/" target="_blank">
+        <img src="https://img.shields.io/badge/Python-3.12+-45c4b8?style=for-the-badge" alt="Python 3.12+" />
+    </a>
+    <a href="https://fastapi.tiangolo.com/" target="_blank">
+        <img src="https://img.shields.io/badge/FastAPI-web%20service-009488?style=for-the-badge" alt="FastAPI" />
+    </a>
+    <a href="https://redis.io/" target="_blank">
+        <img src="https://img.shields.io/badge/Redis-hot%20cache-DC382D?style=for-the-badge" alt="Redis" />
+    </a>
+    <a href="https://www.postgresql.org/" target="_blank">
+        <img src="https://img.shields.io/badge/Postgres-memory-4169E1?style=for-the-badge" alt="Postgres" />
+    </a>
+    <a href="USAGE.md" target="_blank">
+        <img src="https://img.shields.io/badge/docs-view-7c6ff0?style=for-the-badge" alt="Documentation" />
     </a>
 </p>
 
@@ -38,7 +43,7 @@ Two things make it different from a chat window: it **remembers** you across ses
 > docker compose up -d
 > ```
 
-<!-- IMAGE SLOT: main screenshot — chat streaming an answer (insert here) -->
+<!-- VIDEO SLOT: demo video / GIF — embed here when ready (e.g. <video src>, <img src>, or an asciinema link) -->
 
 ---
 
@@ -56,13 +61,12 @@ Long conversations are distilled into memories by a background job. That job is 
 
 ## ⭐ Features
 
-- **🔍 Live streaming chat:** reasoning, tool calls and the answer appear as they happen — no spinner, no waiting for the whole reply.
-- **🔬 Deep research:** one question becomes a streamed research report, saved and listed so you can come back to it later.
-- **🧠 Memory that survives:** sessions, memories and history persist across service restarts; a wiped hot cache is recovered from the permanent store and re-warmed on demand.
-- **🔌 Reconnect-safe streams:** if the connection drops, reconnect with the last event id and the missed events replay first, then live output continues.
-- **💻 Secure sandbox (optional):** run tool calls inside Docker containers with path enforcement, so what the agent writes actually persists.
+- **🔍 Live streaming chat:** reasoning, tool calls and the answer appear as they happen.
+- **🔬 Deep research:** one question becomes a streamed research report, saved and listed so you can come back to it.
+- **🧠 Memory that survives:** sessions, memories and history persist across restarts; a wiped hot cache is recovered from the permanent store.
+- **🔌 Reconnect-safe streams:** reconnect with the last event id and the missed events replay first, then live output continues.
+- **💻 Secure sandbox (optional):** run tool calls inside Docker containers, so what the agent writes actually persists.
 - **🖥️ Terminal native:** the same engine also runs as a full-screen TUI or a scrolling CLI.
-- **🧩 Readable, tested core:** a small, well-factored codebase with injectable seams — 2,764 automated tests; the recovery and replay suites run against real Redis and Postgres in CI.
 
 Engram works with DeepSeek out of the box, and with any OpenAI-compatible provider.
 
@@ -76,67 +80,48 @@ Everything runs in your own environment — no cloud round-trip, no third-party 
 
 - The **fast cache** (Redis) is designed to forget: hot memories expire unless they keep being recalled.
 - The **permanent store** (Postgres) is the source of truth: nothing is deleted just because it went cold.
-- Data lives in `.engram/` (journals, artifacts, database and cache volumes) and `skills/` — yours to back up, move or delete.
+- Data lives in `.engram/` and `skills/` — yours to back up, move or delete.
 - You choose the model provider; a local provider keeps even inference on your machine.
 
 ---
 
 ## 🧭 Access Engram from anywhere
 
-- **Web API** — a FastAPI service with sessions, streaming chat, research, run history and reports.
+- **Web API** — sessions, streaming chat, research, run history and reports.
 - **Swagger playground** — open `/docs` and try every endpoint from the browser.
 - **Terminal** — a full-screen TUI for interactive research, or a plain scrolling CLI.
-- **CLI one-shot** — `engram run "question"` prints the report and exits.
-- **Docker** — one `docker compose up -d` runs the gateway, the databases and the background worker.
+- **Docker** — one `docker compose up -d` runs everything.
 
 ---
 
-## 🎬 Demo
+## ⚡ Quick Start
 
-**It remembers.** Wipe the entire fast cache to prove the point — the conversation still continues:
-
-```bash
-# simulate "we forgot everything recent"
-docker compose exec redis redis-cli FLUSHDB
-
-# keep talking; it looks the details up in the permanent store
-curl -N -X POST localhost:8000/sessions/$SID/chat \
-    -H "Content-Type: application/json" \
-    -d '{"message": "Where were we on the buffer design?"}'
-
-event: answer
-data: {"type": "answer", "content": "Last time you settled on Last-Event-ID; the buffer is a per-session ring…"}
-# ^ answered from the permanent store, then re-cached automatically
-```
-
-**It streams — and survives a dropped connection.**
+Three commands and the whole stack is up:
 
 ```bash
-curl -N -X POST localhost:8000/sessions/$SID/research \
-    -H "Content-Type: application/json" \
-    -d '{"message": "..."}'
-# event: thinking  /  answer  /  tool_start  /  tool_end  /  done
-
-# dropped at event 5? reconnect carrying the last event id:
-curl -N -H "Last-Event-ID: 5" -X POST localhost:8000/sessions/$SID/chat \
-    -H "Content-Type: application/json" \
-    -d '{"message": "..."}'
-# the missed events (6, 7, …) arrive first, then live output continues
+git clone <repo-url> && cd Engram
+cp .env.example .env          # add your DEEPSEEK_API_KEY
+docker compose up -d          # gateway + Postgres + Redis + worker
 ```
 
-<!-- IMAGE SLOT: demo screenshot or short asciinema clip (insert here) -->
+Open **http://localhost:8000/docs** — every endpoint can be tried right there in the browser.
 
-Prefer to click through it step by step? The walkthrough: [docs/demo.md](docs/demo.md)
+| Runs | What it is | Where |
+|---|---|---|
+| **gateway** | the web API — sessions, chat, research, reports, API playground | http://localhost:8000 |
+| **postgres** | permanent memory, session state, run history | localhost:5432 |
+| **redis** | the fast cache + background job queue | localhost:6379 |
+| **consolidation-worker** | tidies old conversations into memories in the background | — |
 
----
+- Create a session, then chat: `curl -s -X POST localhost:8000/sessions` gives you a session id;
+  `curl -N -X POST localhost:8000/sessions/<session-id>/chat -H "Content-Type: application/json" -d '{"message": "hello"}'` streams the answer.
+- Terminal app inside Docker: `docker compose run --rm agent`
+- Your data lives in `.engram/` and `skills/`.
+- No Docker? See the local install below.
 
 ## 📦 Installation
 
-You need:
-
-- Python **3.12+**
-- An LLM API key — `DEEPSEEK_API_KEY` by default; any OpenAI-compatible provider works
-- Docker — only for the one-command full-stack path
+Need Python **3.12+** and an LLM API key (`DEEPSEEK_API_KEY` by default; any OpenAI-compatible provider works):
 
 ```bash
 git clone <repo-url> && cd Engram
@@ -144,63 +129,10 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows — or: source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env                 # add DEEPSEEK_API_KEY=sk-...
-```
-
-## ⚡ Quick Start
-
-Start the service:
-
-```bash
 uvicorn engram.backend.app.gateway.main:app --port 8000
 ```
 
-In another terminal, create a session and say hello:
-
-```bash
-SID=$(curl -s -X POST localhost:8000/sessions | python -c "import sys,json;print(json.load(sys.stdin)['session_id'])")
-
-curl -N -X POST localhost:8000/sessions/$SID/chat \
-    -H "Content-Type: application/json" \
-    -d '{"message": "How do most systems handle dropped SSE connections?"}'
-```
-
-Events arrive one by one:
-
-```text
-event: thinking   …   <- it is reasoning
-event: answer     …   <- answer text, token by token
-event: tool_start …   <- it searches or calls a tool
-event: done           <- finished
-```
-
-Open **http://localhost:8000/docs** to try every endpoint from your browser. After a research run:
-
-```bash
-curl -s localhost:8000/sessions/$SID/runs       # past runs
-curl -s localhost:8000/runs/<run_id>/report     # the written report
-```
-
-Just want the terminal? Run `engram`.
-
-## 🐳 Docker Support
-
-```bash
-cp .env.example .env      # add your API key
-docker compose up -d
-```
-
-| Starts up | In plain words | Where |
-|---|---|---|
-| **gateway** | the web API — sessions, live chat, research, reports, API playground | http://localhost:8000 |
-| **postgres** | permanent memory, session state, run history | localhost:5432 |
-| **redis** | the fast cache + the background job queue | localhost:6379 |
-| **consolidation-worker** | tidies old conversations into memories in the background | — |
-| **agent** | the terminal app, on demand | — |
-
-- Everything is wired for you — you only supply the API key.
-- Your data lives in `.engram/` (journals, artifacts, database and cache volumes) and `skills/`.
-- Terminal app inside Docker: `docker compose run --rm agent`
-- Want tool calls isolated in Docker containers? Uncomment the `docker.sock` mount in `docker-compose.yml` and set `ENGRAM_SANDBOX_USE` as explained in its comments.
+Terminal mode (no browser needed): `engram`.
 
 ---
 
