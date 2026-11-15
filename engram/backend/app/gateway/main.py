@@ -17,7 +17,7 @@ from pathlib import Path as _Path
 
 from dotenv import load_dotenv
 
-load_dotenv(_Path(__file__).resolve().parents[3] / ".env")
+load_dotenv(_Path(__file__).resolve().parents[4] / ".env")  # parents: gateway/app/backend/engram/项目根
 
 from collections.abc import Callable
 from contextlib import asynccontextmanager
