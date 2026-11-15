@@ -1,143 +1,79 @@
-<a name="readme-top"></a>
+<div align="center">
 
-<!-- IMAGE SLOT: 居中 Logo / 字标 —— 在此插入，宽度约 45%（如 docs/assets/logo.png） -->
+<!-- IMAGE SLOT: hero banner -->
 
-<p align="center">
-    <a href="LICENSE" target="_blank">
-        <img src="https://img.shields.io/badge/License-MIT-7c6ff0?style=for-the-badge" alt="许可证" />
-    </a>
-    <a href="https://www.python.org/" target="_blank">
-        <img src="https://img.shields.io/badge/Python-3.12+-45c4b8?style=for-the-badge" alt="Python 3.12+" />
-    </a>
-    <a href="https://fastapi.tiangolo.com/" target="_blank">
-        <img src="https://img.shields.io/badge/FastAPI-web%20service-009488?style=for-the-badge" alt="FastAPI" />
-    </a>
-    <a href="https://redis.io/" target="_blank">
-        <img src="https://img.shields.io/badge/Redis-hot%20cache-DC382D?style=for-the-badge" alt="Redis" />
-    </a>
-    <a href="https://www.postgresql.org/" target="_blank">
-        <img src="https://img.shields.io/badge/Postgres-memory-4169E1?style=for-the-badge" alt="Postgres" />
-    </a>
-    <a href="resource/USAGE.zh-CN.md" target="_blank">
-        <img src="https://img.shields.io/badge/docs-view-7c6ff0?style=for-the-badge" alt="文档" />
-    </a>
-</p>
+# Engram
 
-<p align="center">
-  <a href="./README.md">English</a> | <b>简体中文</b> | <a href="./README.ja.md">日本語</a>
-</p>
+一个记得住你的研究助手。它作为一个小型 Web 服务跑起来：提一个问题，看着答案流出来；隔天再回来，它还记得你们在聊什么，服务重启过、快缓存清空过，都没关系。
 
-# Engram - 一个会记住你的研究助手
+[![License: MIT](https://img.shields.io/badge/License-MIT-7c6ff0?style=for-the-badge)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-45c4b8?style=for-the-badge)](https://www.python.org/)
 
-> “聊天窗口在你关掉标签页的那一刻就把你忘了。我想要的是一个记得住来龙去脉的研究伙伴——跨天、跨重启、跨网络中断。”
+**简体中文** · [English](README.md) · [日本語](README.ja.md)
 
-**Engram** 是一个跑在你自己机器上的 AI 研究助手，以一个小型、自托管的 Web 服务形式提供。
-
-创建一个会话、问一个问题，答案会边生成边实时显示——它怎么思考、查了什么、写了什么，你都看得见。问题大一点，它就把这当成一项深度研究任务来做，最后交给你一份写好的报告，随时可以回来翻看。
-
-它和普通聊天窗口不一样的地方有两点：它**记得住**——跨会话、跨重启，就算快缓存被清空也不丢；它**不会丢进度**——网络断了，重连之后先把你错过的部分补给你。
-
-> [!TIP]
-> 一条命令启动完整服务：
-> ```
-> docker compose up -d
-> ```
-
-<!-- VIDEO SLOT: 演示视频 / GIF —— 准备好后在此嵌入（<video src>、<img src> 或 asciinema 链接） -->
+</div>
 
 ---
 
-## Engram 的工作原理
+## 功能特性
 
-Engram 把一个研究 agent 包进了一个小型 Web 服务。agent 负责思考、搜索、写作；服务把这一切变成浏览器或终端能实时跟上的数据流，并确保这些工作经得起重启和断线。
+- **实时对话** —— 推理和搜索的过程、答案文本，边发生边显示，不用对着加载图标干等
+- **研究模式** —— 一个问题变成一份流式报告，随时回来翻看
+- **长期记忆** —— 会话经得起重启；快缓存清空了也不丢东西
+- **断线不丢进度** —— 连接断了，重连接着上次的位置继续
+- **也能在终端用** —— 自带全屏 TUI 和 CLI（`engram`）
 
-最值得说的是记忆。它分两层：一个"快缓存"（Redis），旧内容会按设定自然过期；一个"永久存储"（Postgres），什么都不会丢。读取时先看快缓存，没有就去永久存储里找，顺便悄悄把结果放回缓存。把缓存整个清空——助手只是重新查一下需要的东西，然后若无其事地继续。
+## Demo
 
-长对话会由后台任务提炼成记忆。这个任务本身是一条持久队列，同样经得起崩溃和重启，也可以单独跑成 worker 进程。
+## 安装
 
-<!-- IMAGE SLOT: 架构图（在此插入） -->
-
----
-
-## ⭐ 功能特性
-
-- **🔍 实时流式对话：** 推理过程、工具调用、答案文本都即时出现。
-- **🔬 深度研究：** 一个问题变成一份流式输出的研究报告，自动保存并列进历史，随时回看。
-- **🧠 经得起重启的记忆：** 会话、记忆、历史跨重启保留；热缓存被清空也能从永久存储找回。
-- **🔌 断线安全的流：** 带上最后的事件编号重连，错过的事件先补发，然后继续实时输出。
-- **💻 安全沙箱（可选）：** 工具调用跑在 Docker 容器里，agent 写下的文件真正落盘。
-- **🖥️ 终端原生：** 同一个引擎也能当全屏 TUI 或滚动式 CLI 跑。
-
-Engram 默认支持 DeepSeek，也兼容任何 OpenAI 兼容的提供商。
-
-更多内容请参阅[文档](resource/USAGE.zh-CN.md)。
-
----
-
-## 🧠 记忆与你的数据
-
-一切都在你自己的环境里运行——没有云端往返，没有第三方替你索引对话。
-
-- **快缓存**（Redis）的设计目标就是遗忘：热记忆不再被想起就会过期。
-- **永久存储**（Postgres）是事实来源：不会因为变冷而被删除。
-- 数据在 `.engram/` 和 `skills/` 里——备份、迁移、删除都随你。
-- 模型提供商由你选择；用本地模型的话，连推理也在你自己的机器上。
-
----
-
-## 🧭 随时随地使用 Engram
-
-- **Web API** —— 会话、流式对话、研究、运行历史与报告。
-- **在线接口调试** —— 打开 `/docs`，所有接口都能在浏览器里当场试。
-- **终端** —— 全屏 TUI 交互研究，或朴素滚动式 CLI。
-- **Docker** —— 一条 `docker compose up -d` 全部起齐。
-
----
-
-## ⚡ 快速开始
-
-三条命令，整套服务就起来了：
+需要 Python 3.12+ 和一个 DeepSeek API key（任何 OpenAI 兼容服务也行）。
 
 ```bash
-git clone https://github.com/Jeson-Chan/Engram.git && cd Engram
-cp .env.example .env          # 填入 DEEPSEEK_API_KEY
-docker compose up -d          # 网关 + Postgres + Redis + worker
+git clone https://github.com/Jeson-Chan/Engram.git
+cd Engram
+pip install -e ".[dev]"
+cp .env.example .env
 ```
 
-浏览器打开 **http://localhost:8000/docs**，所有接口都能当场试。
+打开 `.env`，填入 `DEEPSEEK_API_KEY=sk-...`。
 
-| 会启动什么 | 用大白话说 | 在哪 |
-|---|---|---|
-| **gateway** | Web API —— 会话、对话、研究、报告、在线接口调试 | http://localhost:8000 |
-| **postgres** | 永久记忆、会话状态、运行历史 | localhost:5432 |
-| **redis** | 快缓存 + 后台任务队列 | localhost:6379 |
-| **consolidation-worker** | 在后台把旧对话整理成记忆 | — |
+## 快速开始
 
-- 创建会话再聊天：`curl -s -X POST localhost:8000/sessions` 拿到 session id；
-  `curl -N -X POST localhost:8000/sessions/<session-id>/chat -H "Content-Type: application/json" -d '{"message": "hello"}'` 即可看到流式回答。
-- 在 Docker 里用终端应用：`docker compose run --rm agent`
-- 你的数据在 `.engram/` 和 `skills/` 里。
-- 不想用 Docker？见下方的本地安装。
+**Windows（PowerShell）**
 
-## 📦 安装
-
-需要 Python **3.12+** 和一个 LLM API key（默认 `DEEPSEEK_API_KEY`，任何 OpenAI 兼容服务都行）：
-
-```bash
-git clone https://github.com/Jeson-Chan/Engram.git && cd Engram
+```powershell
 python -m venv .venv
-.venv\Scripts\activate            # Windows；Linux/macOS 用：source .venv/bin/activate
+.venv\Scripts\activate
 pip install -e ".[dev]"
-cp .env.example .env                 # 填入 DEEPSEEK_API_KEY=sk-...
 uvicorn engram.backend.app.gateway.main:app --port 8000
 ```
 
-终端模式（不需要浏览器）：`engram`。
+**macOS / Linux**
 
----
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+uvicorn engram.backend.app.gateway.main:app --port 8000
+```
 
-## 📚 许可证
+**Docker（一条命令全起）**
 
-[MIT](LICENSE) © Engram Authors
+```bash
+cp .env.example .env    # 填入 DEEPSEEK_API_KEY
+docker compose up -d
+```
 
-<sub>[回到顶部](#readme-top)</sub>
+打开 **http://localhost:8000/docs** 在浏览器里直接试接口，或者在终端里开一个会话：
+
+```bash
+curl -X POST localhost:8000/sessions
+curl -N -X POST localhost:8000/sessions/<session_id>/chat -H "Content-Type: application/json" -d '{"message": "你好"}'
+```
+
+想用终端应用？运行 `engram`。
+
+## 许可证
+
+[MIT](LICENSE)
