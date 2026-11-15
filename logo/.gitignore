@@ -1,2 +1,6 @@
 node_modules/
 dist/
+# render intermediates: frames/ and composed images (canonical copies live in docs/assets/)
+frames/
+*.png
+*.gif
