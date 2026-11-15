@@ -70,7 +70,7 @@ cp .env.example .env    # DEEPSEEK_API_KEY を記入
 docker compose up -d
 ```
 
-ブラウザで **http://localhost:8000/docs** を開けば API をその場で試せます。ターミナルからセッションを作ることもできます：
+ブラウザで http://localhost:8000/docs を開けば API をその場で試せます。ターミナルからセッションを作ることもできます：
 
 ```bash
 curl -X POST localhost:8000/sessions

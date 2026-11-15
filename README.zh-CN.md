@@ -70,7 +70,7 @@ cp .env.example .env    # 填入 DEEPSEEK_API_KEY
 docker compose up -d
 ```
 
-打开 **http://localhost:8000/docs** 在浏览器里直接试接口，或者在终端里开一个会话：
+打开 http://localhost:8000/docs 在浏览器里直接试接口，或者在终端里开一个会话：
 
 ```bash
 curl -X POST localhost:8000/sessions

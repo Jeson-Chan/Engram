@@ -70,7 +70,7 @@ cp .env.example .env    # set DEEPSEEK_API_KEY
 docker compose up -d
 ```
 
-Open **http://localhost:8000/docs** to try the API in your browser, or start a session from the terminal:
+Open http://localhost:8000/docs to try the API in your browser, or start a session from the terminal:
 
 ```bash
 curl -X POST localhost:8000/sessions
