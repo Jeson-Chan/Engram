@@ -83,3 +83,7 @@ opencode.json
 # === Local code intelligence index / design tooling (regenerable, not project artifacts) ===
 .codegraph/
 .archify/
+
+# === Node tooling (logo/ TS project) ===
+node_modules/
+dist/
