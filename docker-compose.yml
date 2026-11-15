@@ -1,6 +1,7 @@
 # Engram docker-compose — 一键启动深度研究 Agent
 #
 # 用法:
+#   docker compose up -d                       # 默认：网关(8000) + postgres + redis + 巩固 worker
 #   docker compose run --rm agent              # TUI 交互（首次会启动配置向导）
 #   docker compose run --rm agent cli          # 传统 CLI 滚动模式
 #   docker compose run --rm agent run "问题"   # 单次研究
@@ -24,6 +25,7 @@ services:
     build: .
     image: engram:latest
     container_name: engram-agent
+    profiles: ["tui"]   # 按需启动：docker compose run --rm agent
     stdin_open: true      # 交互式输入
     tty: true             # 终端色彩 + TUI 全屏
     env_file:
@@ -54,6 +56,44 @@ services:
     # 默认无 command，走 ENTRYPOINT 的 engram（TUI 模式）
     # 覆盖示例: docker compose run --rm agent cli
     #           docker compose run --rm agent run "研究问题"
+
+  # 网关服务（FastAPI + SSE）：HTTP API + Swagger，监听 8000。
+  # 与 TUI 共用同一镜像与内核；会话/流式/历史端点见 README。
+  gateway:
+    build: .
+    image: engram:latest
+    container_name: engram-gateway
+    # ENTRYPOINT 是 engram CLI——覆写为 uvicorn，否则 command 会被当成 CLI 参数
+    entrypoint: ["uvicorn"]
+    command: ["engram.backend.app.gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - ENGRAM_MEMORY_USE=default
+      - ENGRAM_MEMORY_PHASE2_ENABLED=true
+      - ENGRAM_MULTIAGENT_ENABLED=true
+      # 会话状态持久层（issue 05）
+      - ENGRAM_CHECKPOINT_DSN=postgresql://engram:engram@postgres:5432/engram
+      # 记忆热层（issue 06）
+      - ENGRAM_REDIS_URL=redis://redis:6379/0
+      # 记忆冷层（issue 07）
+      - ENGRAM_MEMORY_PG_DSN=postgresql://engram:engram@postgres:5432/engram
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./.engram:/app/.engram   # 运行时数据（checkpointer 外的 journal/artifacts/memory）
+      - ./skills:/app/skills
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/openapi.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
   # Postgres — LangGraph checkpointer 持久层（issue 05）。
   # agent 通过 ENGRAM_CHECKPOINT_DSN 注入连接；重启后同一会话状态读回。
@@ -95,13 +135,16 @@ services:
     build: .
     image: engram:latest
     container_name: engram-consolidation-worker
-    command: ["python", "-m", "engram.backend.agents.memory.consolidation_worker"]
+    # 同上：覆写 ENTRYPOINT，直接跑 python -m
+    entrypoint: ["python", "-m"]
+    command: ["engram.backend.agents.memory.consolidation_worker"]
     env_file:
       - path: .env
         required: false
     environment:
       - ENGRAM_REDIS_URL=redis://redis:6379/0
       - ENGRAM_MEMORY_USE=default
+      - ENGRAM_MEMORY_PG_DSN=postgresql://engram:engram@postgres:5432/engram
     depends_on:
       redis:
         condition: service_healthy
