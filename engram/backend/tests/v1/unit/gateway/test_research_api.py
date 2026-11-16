@@ -62,7 +62,8 @@ def _make_runtime(chunks: list, tmp_dir: str) -> Any:
             artifacts = output_dir / "artifacts"
             artifacts.mkdir(parents=True, exist_ok=True)
             return SimpleNamespace(
-                run_id=run_id, thread_id=thread_id, journal=SimpleNamespace(),
+                run_id=run_id, thread_id=thread_id, user_id=user_id,
+                journal=SimpleNamespace(),
                 output_dir=str(output_dir),
                 config=SimpleNamespace(
                     runtime=SimpleNamespace(
@@ -302,7 +303,8 @@ def test_post_success_bookkeeping_failure_keeps_success(tmp_path) -> None:
             out = tmp_path / "run-bk"
             (out / "artifacts").mkdir(parents=True, exist_ok=True)
             return SimpleNamespace(
-                run_id="run-bk-1", thread_id=thread_id, journal=SimpleNamespace(),
+                run_id="run-bk-1", thread_id=thread_id, user_id=user_id,
+                journal=SimpleNamespace(),
                 output_dir=str(out),
                 config=SimpleNamespace(runtime=SimpleNamespace(
                     expert_mode=False, plan_enabled=True, timezone="UTC",

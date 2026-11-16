@@ -33,7 +33,17 @@ async def create_pg_checkpointer(dsn: str | None = None) -> Checkpointer:
 
     pool 参数照抄官方 AsyncConnection.connect 形态：
     autocommit + dict_row（BasePostgresSaver 的 Conn 协议要求）。
+
+    E2E 缺陷 A 兜底：win32 + Proactor 循环在建池之前秒级失败（可操作
+    提示），而不是等 psycopg 拒绝后 30 秒 PoolTimeout。推荐入口
+    python -m engram.backend.app.gateway 已保证 Selector 策略。
     """
+    # 放在建池之前——快速失败不占连接资源；真实驱动路径必经此处
+    # （lifespan / 独立调用方），fake saver 的测试 monkeypatch 本函数即可绕过。
+    from engram.backend.app.gateway.entry import assert_loop_compatible_for_pg
+
+    assert_loop_compatible_for_pg()
+
     from psycopg_pool import AsyncConnectionPool
 
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver

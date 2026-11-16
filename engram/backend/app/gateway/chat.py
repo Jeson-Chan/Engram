@@ -18,6 +18,7 @@ import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from engram.backend.app.gateway.run_projection import track_run, track_run_sync
 from engram.backend.app.gateway.sse_buffer import (
     frame_with_id,
     last_event_id_from,
@@ -79,6 +80,8 @@ def mount_chat_routes(app: FastAPI) -> None:
                 )
                 run_id = ctx.run_id
                 await asyncio.to_thread(runtime.run_manager.mark_running, ctx.run_id)
+                # E2E 缺陷 G：chat 与 research 同款运行历史投影（start 转移点）
+                await track_run(app, ctx)
                 config = _build_stream_config(runtime, ctx)
 
                 from engram.backend.app.services.stream_service import EngramStreamClient
@@ -95,11 +98,15 @@ def mount_chat_routes(app: FastAPI) -> None:
                 await asyncio.to_thread(
                     runtime.run_manager.mark_success, ctx.run_id,
                 )
+                # 成功转移点投影（与 research 同款；失败只 log 不翻转终态）
+                await track_run(app, ctx)
             except asyncio.CancelledError:
-                # 客户端断连：best-effort 标记 failed（不 await——任务已在取消中）
+                # 客户端断连：best-effort 标记 failed + PG 投影（不 await——
+                # 任务已在取消中，同步 best-effort 与本分支 mark_failed 一致）
                 if run_id is not None:
                     try:
                         runtime.run_manager.mark_failed(run_id, "client disconnected")
+                        track_run_sync(app, ctx)
                     except Exception:
                         pass
                 raise
@@ -118,6 +125,7 @@ def mount_chat_routes(app: FastAPI) -> None:
                         await asyncio.to_thread(
                             runtime.run_manager.mark_failed, run_id, str(exc),
                         )
+                        await track_run(app, ctx)  # 失败转移点投影
                     except Exception:
                         pass
                 # 流内错误后仍以 done 收尾，客户端统一等 done 判终止

@@ -1,4 +1,4 @@
-# E2E 基线（2026-11-16）
+﻿# E2E 基线（2026-11-16）
 
 本文件是 2026-11-16 全功能端到端测试的缺陷基线，作为 OpenSpec change `web-tui-research-workbench` 的修复追踪底账。完整测试过程、复现命令与原始证据见 `.scratch/engram-e2e-2026-11-16/report.md`（仓库外工作目录）。
 
@@ -16,7 +16,7 @@
 | D | 中 | 记忆线程归属全部为 `unknown`（Redis 键 `engram:mem:default:unknown:<id>`） | 已修复 | `runtime-hardening` / 记忆线程归属（任务 2.4） |
 | E | 中 | Redis Stream 巩固 worker 因局部导入 `NameError` 静默降级为进程内队列 | 已修复 | `runtime-hardening` / Redis Stream 巩固队列（任务 2.5） |
 | F | 中 | HTTP session_id 不跨网关重启持久化（`SessionRegistry` 纯内存） | 待修复 | `gateway-client-api` / 会话持久化（任务 4.1） |
-| G | 中 | `/chat` 运行不进入 PG 运行历史；断连状态不可见 | 待修复 | `runtime-hardening` / Chat 运行历史（任务 3.1） |
+| G | 中 | `/chat` 运行不进入 PG 运行历史；断连状态不可见 | 已修复 | `runtime-hardening` / Chat 运行历史（任务 3.1） |
 | H | 低 | TUI 弹层（命令面板/MCP）输入框聚焦时 Esc 关不掉 | 待修复 | `tui-research-cockpit` / 键盘优先操作（任务 6.4） |
 | I | 低/前向兼容 | LangGraph checkpoint 反序列化 `AgentError` 未注册类型告警 | 待修复 | `runtime-hardening` / Checkpoint 兼容性（任务 3.2） |
 | J | 环境限制 | 内置 `web_search` 在当前网络无结果（DuckDuckGo 不可达） | 环境限制 | 非目标：不修复网络；演示不依赖外网搜索（任务 3.3 记录规避） |
@@ -35,6 +35,7 @@
 - **B（内部 subagent）已修复**：`LeaderAgent.invoke(state, config)` 同步兼容入口（委托 `graph.ainvoke`——MCP async-only 工具要求；无循环→asyncio.run，循环内→独立线程新循环；缺省自动生成隔离 thread_id 供 checkpointer）。回归：`engram/backend/tests/v1/unit/multiagent/test_subagent_real_leader.py`（真实 `make_lead_agent` 编译 graph，4 tests；旧测试用 MagicMock 假 agent 正是漏测原因）。
 - **C（记忆用户隔离）+ D（线程归属）已修复**：`MemoryQuery.user_id/thread_id`（retriever 按用户过滤，旧数据视为 `default` 仍可读，CLI 无 user 路径不变）；`MemoryTask.user_id` → encode 归属 metadata；`_compute_trace_id` 纳入 user（同内容跨用户不撞 id）；consolidate 候选按用户过滤 + 合并产物继承归属；两个 middleware 改用 `langgraph.config.get_config()`（旧 `getattr(runtime, "config")` 永远 None → `unknown` 根因）；网关 chat/research config 透传 `ctx.user_id`。回归：`engram/backend/tests/v1/unit/memory/test_user_thread_isolation.py`（17 tests：Alice/Bob 隔离、旧数据可读、真实 Runtime、fakeredis 分区键、真实 worker+retriever 端到端）。
 - **E（Stream 巩固队列）已修复**：`StreamConsolidationQueue/Consumer` 导入提升到 `memory/bootstrap.py` 模块级（原在 `_build_worker` 函数内局部导入，`_StreamModeWorker.__init__` 在全局作用域查名必然 NameError → 静默降级）；降级路径改为明确的 warning（含 "events will NOT survive a restart" 提示）；Stream 事件载荷补齐 `user_id` 序列化（缺陷 C 的 Stream 路径）。回归：`engram/backend/tests/v1/unit/memory/test_stream_worker_mode.py`（6 tests：fakeredis 下 `_build_worker` 返回 Stream 模式、XADD/消费/ack 全链路、失败留 PEL、降级可见）。
+- **G（Chat 运行历史）已修复**：抽出 `engram/backend/app/gateway/run_projection.py`（chat/research 共用 RunProjection，best-effort：投影失败不断流、不翻转终态）；chat 在 start/success/failure/client-disconnect 四个转移点写 PGRunStore；research 的断连分支也补投影（同步 best-effort，CancelledError 分支不能 await）。回归：`engram/backend/tests/v1/unit/gateway/test_chat_run_history.py`（5 tests：成功→success、流内异常→error+原因、断连→error+断连原因、无 PG no-op、投影故障不外抛）。
 
 ## 环境限制与演示规避
 

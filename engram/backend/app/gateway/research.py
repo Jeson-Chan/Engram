@@ -21,6 +21,11 @@ import json
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 
+from engram.backend.app.gateway.run_projection import (
+    record_of as _record_of,
+    track_run as _track,
+    track_run_sync,
+)
 from engram.backend.app.schemas.chat import ChatRequest
 
 logger = logging.getLogger(__name__)
@@ -38,20 +43,6 @@ def mount_research_routes(app: FastAPI) -> None:
     def _pg_runs():
         """网关的运行持久层（未配 PG 时 None——历史端点 503）。"""
         return getattr(app.state, "run_store", None)
-
-    async def _track(ctx, status_record=None):
-        """Project the RunRecord into PG (blocking IO on the thread pool)."""
-        record = status_record or _record_of(app.state.runtime, ctx.run_id)
-        if record is None:
-            return
-        store = _pg_runs()
-        if store is None:
-            return
-        await asyncio.to_thread(store.upsert, record)
-
-    def _record_of(runtime, run_id):
-        rec = runtime.run_manager.get_run(run_id)
-        return rec.to_dict() if rec is not None else None
 
     @app.post("/sessions/{session_id}/research")
     def research(session_id: str, request: ChatRequest) -> StreamingResponse:
@@ -72,7 +63,7 @@ def mount_research_routes(app: FastAPI) -> None:
                 )
                 run_id = ctx.run_id
                 await asyncio.to_thread(runtime.run_manager.mark_running, ctx.run_id)
-                await _track(ctx, _record_of(runtime, run_id))
+                await _track(app, ctx, status_record=_record_of(runtime, run_id))
                 config = _build_stream_config(runtime, ctx)
 
                 from engram.backend.app.services.stream_service import EngramStreamClient
@@ -110,6 +101,9 @@ def mount_research_routes(app: FastAPI) -> None:
                 if run_id is not None:
                     try:
                         runtime.run_manager.mark_failed(run_id, "client disconnected")
+                        # E2E 缺陷 G：断连也进 PG 运行历史（同步 best-effort，
+                        # CancelledError 分支不能 await）
+                        track_run_sync(app, ctx)
                     except Exception:
                         pass
                 raise
@@ -124,7 +118,7 @@ def mount_research_routes(app: FastAPI) -> None:
                         await asyncio.to_thread(
                             runtime.run_manager.mark_failed, run_id, str(exc),
                         )
-                        await _track(ctx, _record_of(runtime, run_id))
+                        await _track(app, ctx, status_record=_record_of(runtime, run_id))
                     except Exception:
                         pass
                 yield _sse_frame({"type": "done", "content": "",

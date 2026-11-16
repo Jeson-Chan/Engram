@@ -36,6 +36,7 @@ def _make_runtime(chunks: list) -> Any:
             return SimpleNamespace(
                 run_id="run-test-1",
                 thread_id=thread_id,
+                user_id=user_id,
                 journal=SimpleNamespace(),
                 output_dir="unused",
                 config=SimpleNamespace(

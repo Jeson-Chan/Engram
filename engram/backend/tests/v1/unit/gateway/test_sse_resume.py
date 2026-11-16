@@ -40,7 +40,8 @@ def _runtime_with_graph(graph) -> Any:
     class _RM:
         def create_run(self, thread_id, user_id=None, model_name=None, **kw):
             return SimpleNamespace(
-                run_id="run-r", thread_id=thread_id, journal=SimpleNamespace(),
+                run_id="run-r", thread_id=thread_id, user_id=user_id,
+                journal=SimpleNamespace(),
                 output_dir="unused",
                 config=SimpleNamespace(
                     runtime=SimpleNamespace(

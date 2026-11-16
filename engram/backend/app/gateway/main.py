@@ -60,12 +60,9 @@ def create_app(
         pg_saver = None
         dsn = pg_dsn_from_env()
         if dsn:
-            # E2E 缺陷 A 兜底：win32 + Proactor 循环秒级失败（可操作提示），
-            # 而不是等 psycopg 拒绝后 30 秒 PoolTimeout。推荐入口
-            # python -m engram.backend.app.gateway 已保证 Selector。
-            from engram.backend.app.gateway.entry import assert_loop_compatible_for_pg
-
-            assert_loop_compatible_for_pg()
+            # E2E 缺陷 A 兜底在 create_pg_checkpointer 内（建池前秒级失败，
+            # 可操作提示）；推荐入口 python -m engram.backend.app.gateway
+            # 已保证 win32 Selector 策略。
             pg_saver = await create_pg_checkpointer(dsn)
             set_checkpointer(pg_saver)
         # 运行历史持久层（issue 09）：复用 checkpointer DSN 或独立
