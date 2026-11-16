@@ -22,7 +22,7 @@ class SettingsScreen(Screen):
     """配置面板 — Ctrl+B 打开，编辑 provider 配置直写 .env。"""
 
     BINDINGS = [
-        Binding("escape", "app.pop_screen", "Close", show=False),
+        Binding("escape", "app.pop_screen", "Close", show=False, priority=True),
         Binding("ctrl+s", "save", "Save", show=True),
     ]
 

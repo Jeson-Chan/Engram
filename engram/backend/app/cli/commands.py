@@ -36,6 +36,21 @@ def _cmd_help(ctx: CommandContext) -> None:
     ctx.console.print("[bold]Available commands:[/bold]")
     for spec in _registry.list_all():
         ctx.console.print(f"  [cyan]{spec.name}[/cyan]     {spec.description}")
+    # TUI 快捷键（与 EngramTUI.BINDINGS 实际一致——tui-research-cockpit 任务 6.5；
+    # 修改 app.py 的 BINDINGS 时必须同步更新这里）
+    ctx.console.print("[bold]Keyboard shortcuts (TUI):[/bold]")
+    ctx.console.print(
+        "  [cyan]Ctrl+K[/cyan]     会话切换 / 新建会话\n"
+        "  [cyan]Ctrl+R[/cyan]     Run 时间线（运行历史 + 事件）\n"
+        "  [cyan]Ctrl+M[/cyan]     Memory 面板（统计 + 记忆列表）\n"
+        "  [cyan]Ctrl+J[/cyan]     Inspector（模型/模式/能力 + Context 预算）\n"
+        "  [cyan]Ctrl+P[/cyan]     命令面板\n"
+        "  [cyan]Ctrl+N[/cyan]     MCP 面板\n"
+        "  [cyan]Ctrl+B[/cyan]     设置面板（API Key 等）\n"
+        "  [cyan]Ctrl+L[/cyan]     清屏\n"
+        "  [cyan]Esc[/cyan]       关闭弹层（任何焦点）/ 运行中=中断\n"
+        "  [cyan]Ctrl+C[/cyan]     退出"
+    )
 
 
 def _cmd_clear(ctx: CommandContext) -> None:

@@ -37,7 +37,7 @@ class McpPanel(ModalScreen[None]):
     """Ctrl+N 弹出的 MCP 管理面板。"""
 
     BINDINGS = [
-        Binding("escape", "dismiss_panel", "Close", show=False),
+        Binding("escape", "dismiss_panel", "Close", show=False, priority=True),
         Binding("ctrl+n", "dismiss_panel", "Close", show=False),
         Binding("up", "focus_previous", "Previous", show=False, priority=True),
         Binding("down", "focus_next", "Next", show=False, priority=True),

@@ -104,6 +104,25 @@ class ConversationLog(RichLog):
         ))
         self.write("")
 
+    def render_history(self, messages: list) -> None:
+        """历史消息回放（会话切换 / thread 复用，tui-research-cockpit 任务 6.1）。
+
+        checkpointer 的 messages 即时间序；与实时渲染同款视觉语言：
+        用户 → 左竖条卡片；AI → Markdown；工具消息 → 摘要行。
+        只渲染 Human/AI 消息（工具调用结果并入相邻 AI 消息由实时流负责，
+        历史回放取最终形态）。
+        """
+        for msg in messages:
+            cls_name = msg.__class__.__name__
+            content = msg.content if isinstance(msg.content, str) else str(msg.content or "")
+            if not content:
+                continue
+            if cls_name == "HumanMessage":
+                self.render_user_input(content)
+            elif cls_name in ("AIMessage", "AIMessageChunk"):
+                self.write(Markdown(content))
+                self.write("")
+
     def render_event(self, event: StreamEvent) -> None:
         """StreamEvent → rich renderable，写入 RichLog。"""
         etype = event["type"]

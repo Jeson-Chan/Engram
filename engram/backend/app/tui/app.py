@@ -14,6 +14,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from rich.text import Text
+
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -27,6 +29,13 @@ from engram.backend.app.cli.banner import render_logo
 from engram.backend.app.cli.commands import get_registry, handle_command
 from engram.backend.app.services.stream_service import EngramStreamClient
 from engram.backend.app.tui import theme
+from engram.backend.app.tui.cockpit import (
+    GatewayClient,
+    InspectorPanel,
+    MemoryPanel,
+    RunTimelinePanel,
+    SessionSwitcher,
+)
 from engram.backend.app.tui.command_palette import CommandPalette
 from engram.backend.app.tui.conversation import ConversationLog
 from engram.backend.app.tui.help_screen import HelpRequestScreen
@@ -402,6 +411,11 @@ class EngramTUI(App):
         Binding("ctrl+p", "toggle_command_palette", "Commands", show=False),
         Binding("ctrl+n", "toggle_mcp_panel", "MCP", show=True, priority=True),
         Binding("ctrl+b", "toggle_settings", "Settings", show=True, priority=True),
+        # 研究驾驶舱（tui-research-cockpit 任务 6.1/6.2/6.3）
+        Binding("ctrl+k", "session_switcher", "Sessions", show=True, priority=True),
+        Binding("ctrl+r", "run_timeline", "Run", show=True, priority=True),
+        Binding("ctrl+m", "memory_panel", "Memory", show=True, priority=True),
+        Binding("ctrl+j", "inspector", "Inspector", show=True, priority=True),
     ]
 
     def __init__(self, runtime: Any, provider: str | None = None, model: str | None = None) -> None:
@@ -411,6 +425,12 @@ class EngramTUI(App):
         self.model = model
         self._first_input = True
         self.draft = DraftState()
+        # 驾驶舱状态：当前活跃 thread（可切换）+ 网关客户端（只读面板数据源）
+        self.active_thread_id = runtime.thread_id
+        self.active_thread_title = "会话 1"
+        self._thread_count = 1
+        self._gateway = GatewayClient()
+        self._gateway_session_id: str | None = None
         self.cli_state: dict[str, Any] = {
             "pending_expert_mode": None,
             "pending_report": None,
@@ -606,6 +626,93 @@ class EngramTUI(App):
             mcp_manager = getattr(self.runtime, "mcp_manager", None) if self.runtime else None
             self.push_screen(McpPanel(mcp_manager, self.runtime))
 
+    # ---- 研究驾驶舱（tui-research-cockpit） ----
+
+    def action_session_switcher(self) -> None:
+        """Ctrl+K：会话切换器（网关会话列表 + 新建）。"""
+        if isinstance(self.screen, SessionSwitcher):
+            self.pop_screen()
+        else:
+            user_id = "default-user"
+            self.push_screen(
+                SessionSwitcher(self._gateway, user_id), self._on_session_picked,
+            )
+
+    def _on_session_picked(self, result: str | None) -> None:
+        if result is None:
+            return
+        if result == "__new__":
+            from engram.backend.app.bootstrap import _make_thread_id
+
+            self._thread_count += 1
+            self.active_thread_id = _make_thread_id()
+            self.active_thread_title = f"会话 {self._thread_count}"
+            self._gateway_session_id = None
+            conv = self.query_one(ConversationLog)
+            conv.clear()
+            conv.write(Text(
+                f"◈ 新会话已创建（thread {self.active_thread_id}）——从空对话开始",
+                style=theme.ACCENT_BRAND,
+            ))
+            self._focus_conv_input()
+            return
+        # 切到网关已有会话：透传其 thread_id（共享 checkpointer 时可回放历史）
+        sessions = self._gateway.sessions() or []
+        for s in sessions:
+            if s.get("session_id") == result:
+                self.active_thread_id = s["thread_id"]
+                self.active_thread_title = str(
+                    (s.get("metadata") or {}).get("title") or f"会话 {result[:8]}",
+                )
+                self._gateway_session_id = result
+                self._load_thread_history()
+                return
+
+    def _load_thread_history(self) -> None:
+        """复用 thread 加载历史：graph.aget_state(active_thread) → 对话区回放。"""
+        conv = self.query_one(ConversationLog)
+        conv.clear()
+        conv.write(Text(
+            f"◈ 会话「{self.active_thread_title}」（thread {self.active_thread_id}）",
+            style=theme.ACCENT_BRAND,
+        ))
+        try:
+            import asyncio
+
+            graph = self.runtime.leader_agent.graph
+            snapshot = asyncio.run(graph.aget_state(
+                {"configurable": {"thread_id": self.active_thread_id}},
+            ))
+            values = getattr(snapshot, "values", None) or {}
+            messages = values.get("messages", []) if isinstance(values, dict) else []
+            conv.render_history(messages)
+            if not messages:
+                conv.write(Text("（空会话）", style="dim"))
+        except Exception as exc:
+            conv.write(Text(f"历史不可读（{type(exc).__name__}）——继续新对话即可", style="dim"))
+        self._focus_conv_input()
+
+    def action_run_timeline(self) -> None:
+        """Ctrl+R：Run 时间线（网关只读 API）。"""
+        if isinstance(self.screen, RunTimelinePanel):
+            self.pop_screen()
+        else:
+            self.push_screen(RunTimelinePanel(self._gateway, self._gateway_session_id))
+
+    def action_memory_panel(self) -> None:
+        """Ctrl+M：Memory 面板（网关只读 API）。"""
+        if isinstance(self.screen, MemoryPanel):
+            self.pop_screen()
+        else:
+            self.push_screen(MemoryPanel(self._gateway, "default-user"))
+
+    def action_inspector(self) -> None:
+        """Ctrl+J：Inspector（模型/模式/能力 + Context 预算）。"""
+        if isinstance(self.screen, InspectorPanel):
+            self.pop_screen()
+        else:
+            self.push_screen(InspectorPanel(self._gateway, self.cli_state))
+
     def action_toggle_settings(self) -> None:
         """Ctrl+B 弹出/收起配置面板（编辑 API Key / Base URL，直写 .env）。"""
         from pathlib import Path
@@ -781,7 +888,7 @@ class EngramTUI(App):
 
         try:
             ctx = self.runtime.run_manager.create_run(
-                thread_id=self.runtime.thread_id,
+                thread_id=self.active_thread_id,
                 user_id="default-user",
                 run_id=None,
                 model_name=self.runtime.researcher_model_name,

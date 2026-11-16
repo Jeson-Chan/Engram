@@ -46,7 +46,7 @@ class CommandPalette(ModalScreen[None]):
     """Ctrl+P 弹出的命令面板浮层。"""
 
     BINDINGS = [
-        Binding("escape", "dismiss_palette", "Close", show=False),
+        Binding("escape", "dismiss_palette", "Close", show=False, priority=True),
         Binding("ctrl+p", "dismiss_palette", "Close", show=False),
     ]
 

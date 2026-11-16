@@ -15,7 +15,7 @@ class HelpRequestScreen(ModalScreen[str | None]):
     """Display SituationReport and receive user's choice or custom guidance."""
 
     BINDINGS = [
-        Binding("escape", "abandon", "Abandon", show=False),
+        Binding("escape", "abandon", "Abandon", show=False, priority=True),
     ]
 
     DEFAULT_CSS = f"""
