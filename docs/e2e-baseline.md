@@ -15,10 +15,10 @@
 | C | 高/隐私 | 长期记忆不按用户隔离：Bob 能召回 Alice 的私有记忆 | 已修复 | `runtime-hardening` / 记忆用户与线程隔离（任务 2.3） |
 | D | 中 | 记忆线程归属全部为 `unknown`（Redis 键 `engram:mem:default:unknown:<id>`） | 已修复 | `runtime-hardening` / 记忆线程归属（任务 2.4） |
 | E | 中 | Redis Stream 巩固 worker 因局部导入 `NameError` 静默降级为进程内队列 | 已修复 | `runtime-hardening` / Redis Stream 巩固队列（任务 2.5） |
-| F | 中 | HTTP session_id 不跨网关重启持久化（`SessionRegistry` 纯内存） | 待修复 | `gateway-client-api` / 会话持久化（任务 4.1） |
+| F | 中 | HTTP session_id 不跨网关重启持久化（`SessionRegistry` 纯内存） | 已修复 | `gateway-client-api` / 会话持久化（任务 4.1） |
 | G | 中 | `/chat` 运行不进入 PG 运行历史；断连状态不可见 | 已修复 | `runtime-hardening` / Chat 运行历史（任务 3.1） |
 | H | 低 | TUI 弹层（命令面板/MCP）输入框聚焦时 Esc 关不掉 | 待修复 | `tui-research-cockpit` / 键盘优先操作（任务 6.4） |
-| I | 低/前向兼容 | LangGraph checkpoint 反序列化 `AgentError` 未注册类型告警 | 待修复 | `runtime-hardening` / Checkpoint 兼容性（任务 3.2） |
+| I | 低/前向兼容 | LangGraph checkpoint 反序列化 `AgentError` 未注册类型告警 | 已修复 | `runtime-hardening` / Checkpoint 兼容性（任务 3.2） |
 | J | 环境限制 | 内置 `web_search` 在当前网络无结果（DuckDuckGo 不可达） | 环境限制 | 非目标：不修复网络；演示不依赖外网搜索（任务 3.3 记录规避） |
 | K | 环境限制 | Docker sandbox（`agent-sandbox` / 镜像）未安装，仅验证 LocalSandbox | 环境限制 | 非目标：proposal 明确不做 Docker sandbox |
 | L | 环境限制 | 仅 `OPENAI_API_KEY` 可用，其它 Provider 无法真实切换测试 | 环境限制 | 非目标：不做 Provider 切换 UI；外部专家缺失按设计优雅失败 |

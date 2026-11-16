@@ -6,6 +6,8 @@ thread_id 是 agent 侧一切按会话隔离状态（LangGraph checkpointer /
 端点透传给 AppRuntime.run_question(thread_id=...)。
 
 仅内存实现（issue 03 范围）；持久化随 PG checkpointer issue 演进。
+→ E2E 缺陷 F 修复：可选注入 SessionStore（默认 SQLite .engram/gateway.db，
+见 session_store.py）；store=None 保持纯内存（测试/旧行为）。
 thread_dir / thread_journal 的磁盘创建推迟到会话首次真正跑 run
 （issue 04），创建会话保持纯内存快速路径。
 """
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import threading
 import uuid
+from typing import Any
 
 from engram.backend.app.bootstrap import _make_thread_id
 
@@ -38,11 +41,18 @@ class SessionRegistry:
 
     FastAPI 的同步端点跑在线程池里，create/list/delete 可能并发——
     一把 Lock 保护 dict 即可（CRUD 微秒级，无竞争热点）。
+
+    store（E2E 缺陷 F）：可选持久后端（SqliteSessionStore 等）——
+    create/delete 落盘，构造时回灌；store=None 保持纯内存（旧行为）。
     """
 
-    def __init__(self) -> None:
+    def __init__(self, store: Any = None) -> None:
         self._sessions: dict[str, SessionRecord] = {}
         self._lock = threading.Lock()
+        self._store = store
+        if store is not None:
+            for record in store.load_all():
+                self._sessions[record.session_id] = record
 
     def create(self, user_id: str = "default-user",
                metadata: dict | None = None) -> SessionRecord:
@@ -56,6 +66,8 @@ class SessionRegistry:
         )
         with self._lock:
             self._sessions[record.session_id] = record
+        if self._store is not None:
+            self._store.save(record)  # 落盘失败上抛（端点 500，不静默）
         return record
 
     def get(self, session_id: str) -> SessionRecord | None:
@@ -72,7 +84,10 @@ class SessionRegistry:
 
     def delete(self, session_id: str) -> bool:
         with self._lock:
-            return self._sessions.pop(session_id, None) is not None
+            existed = self._sessions.pop(session_id, None) is not None
+        if existed and self._store is not None:
+            self._store.delete(session_id)
+        return existed
 
 
 def _utc_now_iso() -> str:

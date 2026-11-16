@@ -26,7 +26,11 @@ from fastapi import FastAPI, HTTPException
 
 from engram.backend.app.bootstrap import AppRuntime, bootstrap_runtime
 from engram.backend.app.gateway.chat import mount_chat_routes
+from engram.backend.app.gateway.history import mount_history_routes
+from engram.backend.app.gateway.memory_api import mount_memory_routes
 from engram.backend.app.gateway.registry import SessionRegistry
+from engram.backend.app.gateway.status_api import mount_status_routes
+from engram.backend.app.gateway.web_ui import mount_web_ui
 from engram.backend.app.gateway.research import mount_research_routes
 from engram.backend.app.schemas.sessions import SessionCreateRequest, SessionResponse
 from engram.backend.agents.runtime.checkpointer import (
@@ -104,15 +108,27 @@ def create_app(
         version="0.1.0",
         lifespan=lifespan,
     )
-    app.state.session_registry = SessionRegistry()
+    # E2E 缺陷 F：会话映射持久化（默认 SQLite .engram/gateway.db，WAL；
+    # ENGRAM_GATEWAY_DB 可覆盖路径，=memory 显式不落盘）。重启后
+    # GET /sessions 仍返回旧会话，session_id 仍可解析到原 thread。
+    from engram.backend.app.gateway.session_store import build_default_session_store
+
+    app.state.session_registry = SessionRegistry(store=build_default_session_store())
     mount_chat_routes(app)
     mount_research_routes(app)
+    mount_history_routes(app)
+    mount_memory_routes(app)
+    mount_status_routes(app)
     app.state.runtime = None  # lifespan 填充；会话 CRUD 不依赖它
     app.state.run_store = None  # lifespan 填充（PG 配置时）
     # SSE 断线重连缓冲（issue 10）：per-session 事件环形缓冲
     from engram.backend.app.gateway.sse_buffer import SessionEventBuffers
 
     app.state.sse_buffers = SessionEventBuffers()
+
+    # Web 工作台静态挂载（feature flag，默认关——迁移计划 3：
+    # 关闭/产物缺失时零路由注册，网关行为不变）
+    mount_web_ui(app)
 
     @app.post("/sessions", response_model=SessionResponse, status_code=201)
     def create_session(request: SessionCreateRequest | None = None) -> SessionResponse:

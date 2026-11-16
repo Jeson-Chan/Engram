@@ -123,6 +123,29 @@ class TieredMemoryStore:
             pass  # hot unavailable: cold is the truth, list still complete
         return list(merged.values())
 
+    # ---- 只读层视图（gateway-client-api / 记忆查询，design.md 决策 6） ----
+
+    def layer_of(self, trace_id: str) -> str | None:
+        """trace 当前所在层："hot" / "cold" / None（不存在）。
+
+        hot 命中即 hot（读回填后冷层也有副本，但热层在场即视为热）。
+        """
+        try:
+            if self._hot.get(trace_id) is not None:
+                return "hot"
+        except Exception:
+            pass
+        if self._cold.get(trace_id) is not None:
+            return "cold"
+        return None
+
+    def iter_views(self) -> list[tuple[MemoryTrace, str | None]]:
+        """(trace, layer) 全量视图——list_all 的层标注版（Memory Explorer 用）。"""
+        return [
+            (trace, self.layer_of(trace.id))
+            for trace in self.list_all()
+        ]
+
     # ---- internals ----
 
     @staticmethod
