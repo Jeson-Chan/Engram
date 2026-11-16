@@ -51,8 +51,12 @@ cp .env.example .env
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[dev]"
-uvicorn engram.backend.app.gateway.main:app --port 8000
+python -m engram.backend.app.gateway --port 8000
 ```
+
+> Windows 下网关入口会强制 `WindowsSelectorEventLoopPolicy`（异步 Postgres 驱动
+> 的要求）——直接 `uvicorn engram.backend.app.gateway.main:app` 会以 Proactor
+> 循环启动，配置 PG DSN 后启动失败。
 
 **macOS / Linux**
 

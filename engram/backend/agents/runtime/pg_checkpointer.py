@@ -42,10 +42,10 @@ async def create_pg_checkpointer(dsn: str | None = None) -> Checkpointer:
     if not effective:
         raise ValueError("no postgres DSN configured (set ENGRAM_CHECKPOINT_DSN)")
 
-    # Windows note: psycopg async rejects ProactorEventLoop. The gateway runs
-    # this inside uvicorn (which uses SelectorEventLoop when async psycopg is
-    # in play via its own loop policy); callers on Windows outside a server
-    # context must pass a Selector loop (see tests for the loop_factory idiom).
+    # Windows note: psycopg async rejects ProactorEventLoop, and uvicorn 0.54
+    # creates Proactor by default on win32 (E2E 缺陷 A). 兼容启动走
+    # `python -m engram.backend.app.gateway`（entry.py 强制 Selector 策略）；
+    # lifespan 里 assert_loop_compatible_for_pg() 在这里之前快速失败。
     pool = AsyncConnectionPool(
         conninfo=effective,
         min_size=1,

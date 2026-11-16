@@ -51,8 +51,13 @@ cp .env.example .env
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[dev]"
-uvicorn engram.backend.app.gateway.main:app --port 8000
+python -m engram.backend.app.gateway --port 8000
 ```
+
+> Windows ではゲートウェイの起動エントリが `WindowsSelectorEventLoopPolicy`
+> を強制します（非同期 Postgres ドライバの要件）。素の
+> `uvicorn engram.backend.app.gateway.main:app` は Proactor ループで起動し、
+> PG DSN を設定すると起動に失敗します。
 
 **macOS / Linux**
 

@@ -51,8 +51,12 @@ Open `.env` and set `DEEPSEEK_API_KEY=sk-...`.
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[dev]"
-uvicorn engram.backend.app.gateway.main:app --port 8000
+python -m engram.backend.app.gateway --port 8000
 ```
+
+> On Windows the gateway entry forces `WindowsSelectorEventLoopPolicy`, which async
+> Postgres drivers require — plain `uvicorn engram.backend.app.gateway.main:app`
+> would start with a Proactor loop and fail once a PG DSN is configured.
 
 **macOS / Linux**
 
