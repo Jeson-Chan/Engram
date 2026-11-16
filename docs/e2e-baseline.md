@@ -11,7 +11,7 @@
 | # | 优先级 | 缺陷 | 状态 | 处置 |
 |---|---|---|---|---|
 | A | 高 | Windows + PG：uvicorn 0.54 默认 Proactor 循环，psycopg 异步拒绝，网关启动失败 | 已修复 | `runtime-hardening` / Windows 与 Postgres 启动（任务 2.1） |
-| B | 高 | `delegate_to_subagent` 调用不存在的 `LeaderAgent.invoke`，真实运行时 100% 失败 | 待修复 | `runtime-hardening` / 内部 subagent 委托（任务 2.2） |
+| B | 高 | `delegate_to_subagent` 调用不存在的 `LeaderAgent.invoke`，真实运行时 100% 失败 | 已修复 | `runtime-hardening` / 内部 subagent 委托（任务 2.2） |
 | C | 高/隐私 | 长期记忆不按用户隔离：Bob 能召回 Alice 的私有记忆 | 待修复 | `runtime-hardening` / 记忆用户与线程隔离（任务 2.3） |
 | D | 中 | 记忆线程归属全部为 `unknown`（Redis 键 `engram:mem:default:unknown:<id>`） | 待修复 | `runtime-hardening` / 记忆线程归属（任务 2.4） |
 | E | 中 | Redis Stream 巩固 worker 因局部导入 `NameError` 静默降级为进程内队列 | 待修复 | `runtime-hardening` / Redis Stream 巩固队列（任务 2.5） |
@@ -32,6 +32,7 @@
 ## 修复记录
 
 - **A（Windows + PG 启动）已修复**：新增 `engram/backend/app/gateway/entry.py`（推荐入口 `python -m engram.backend.app.gateway`：win32 强制 Selector 策略 + `uvicorn.run(loop="none")`）与 lifespan 快速失败自检 `assert_loop_compatible_for_pg()`（win32 + Proactor + PG DSN → 秒级 RuntimeError + 可操作提示，替代 30 秒 PoolTimeout）。回归：`engram/backend/tests/v1/unit/gateway/test_loop_selection.py`（9 tests）。README（en/zh/ja）Windows 快速开始已改用新入口。
+- **B（内部 subagent）已修复**：`LeaderAgent.invoke(state, config)` 同步兼容入口（委托 `graph.ainvoke`——MCP async-only 工具要求；无循环→asyncio.run，循环内→独立线程新循环；缺省自动生成隔离 thread_id 供 checkpointer）。回归：`engram/backend/tests/v1/unit/multiagent/test_subagent_real_leader.py`（真实 `make_lead_agent` 编译 graph，4 tests；旧测试用 MagicMock 假 agent 正是漏测原因）。
 
 ## 环境限制与演示规避
 

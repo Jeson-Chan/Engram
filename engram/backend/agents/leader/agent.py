@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from dataclasses import dataclass
 from typing import Any
 
@@ -73,6 +74,43 @@ class LeaderAgent:
 
     graph: Any
     capability_registry: CapabilityRegistry
+
+    def invoke(self, state: Any, config: dict | None = None) -> Any:
+        """同步兼容入口 — SubagentRuntime.invoke 委托目标（E2E 缺陷 B）。
+
+        设计决策（web-tui-research-workbench design.md §8）：LeaderAgent 暴露
+        invoke(state, config)，保留 run() 调用方与测试不动。委托目标是
+        graph.ainvoke（而非 graph.invoke）——MCP tools 是 async-only
+        StructuredTool，同步 invoke 在 MCP 启用时会失败。
+
+        两种调用上下文：
+        - 无运行循环（同步工具在线程池执行器里被 ToolNode 调用）→
+          asyncio.run(ainvoke)
+        - 已在事件循环内（嵌套调用防御）→ 独立线程跑新循环，避免
+          asyncio.run 嵌套 RuntimeError
+        """
+        effective_config = dict(config or {})
+        # checkpointer 需要 configurable.thread_id；subagent 的隔离上下文
+        # 没有父 thread 信息——缺省时生成独立 thread_id（每调用独立会话状态）。
+        configurable = effective_config.get("configurable")
+        if not isinstance(configurable, dict):
+            configurable = dict(effective_config.get("configurable") or {})
+            effective_config["configurable"] = configurable
+        if not configurable.get("thread_id"):
+            import uuid
+
+            configurable["thread_id"] = uuid.uuid4().hex
+
+        async def _ainvoke() -> Any:
+            return await self.graph.ainvoke(state, config=effective_config)
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(_ainvoke())
+        # 已在循环内：新线程 + 新循环（bootstrap 的 MCP load 同款 idiom）
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, _ainvoke()).result()
 
     def run(self, question: str, run_context: Any) -> AgentRunResult:
         initial = create_initial_thread_state(question)
