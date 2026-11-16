@@ -97,8 +97,20 @@ class HybridRetriever:
         now = time.time()
         query_tokens = self._tokenize(query.text)
 
-        # 3B forgotten 过滤 + 候选集
+        # 3B forgotten 过滤 + 用户隔离过滤（E2E 缺陷 C）+ 候选集
         candidates = [t for t in self._store.list_all() if not t.metadata.get("forgotten")]
+        if query.user_id is not None:
+            # 只召回当前用户可见的记忆；旧 trace（metadata 无 user_id）
+            # 视为 "default" 用户，default 查询仍可读（数据兼容）。
+            candidates = [
+                t for t in candidates
+                if (t.metadata.get("user_id") or "default") == query.user_id
+            ]
+        if query.thread_id is not None:
+            candidates = [
+                t for t in candidates
+                if (t.metadata.get("thread_id") or "default") == query.thread_id
+            ]
         if query.type_filter is not None:
             type_key = (
                 query.type_filter.value

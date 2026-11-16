@@ -53,10 +53,16 @@ _MAX_CONSOLIDATE = 10  # E1 既有决策
 
 @dataclass
 class MemoryTask:
-    """worker 队列任务结构。"""
+    """worker 队列任务结构。
+
+    user_id（E2E 缺陷 C）：会话用户——encode 出的 trace metadata 携带，
+    Redis/PG 分区列据此落对归属；None 时 metadata 不带 user_id
+    （store 层按 "default" 分区，与旧数据一致）。
+    """
     thread_id: str
     messages: list[BaseMessage]  # 最近 N 轮快照（已截断）
     turn_count: int
+    user_id: str | None = None
 
 
 class MemoryWorker:
@@ -133,6 +139,11 @@ class MemoryWorker:
             return []
 
         ids: list[str] = []
+        # 归属 metadata（E2E 缺陷 C/D）：user_id/thread_id 进 trace metadata，
+        # Redis 分区键与 PG 分区列据此落对（redis_store._partition_of 读它）
+        ownership: dict = {"thread_id": task.thread_id}
+        if task.user_id is not None:
+            ownership["user_id"] = task.user_id
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -142,6 +153,7 @@ class MemoryWorker:
                     type=MemoryType(item.get("type", "episodic")),
                     importance=float(item.get("importance", 0.5)),
                     source=f"worker:{task.thread_id}",
+                    metadata=dict(ownership),
                 )
                 ids.append(trace.id)
             except Exception as exc:
@@ -158,10 +170,17 @@ class MemoryWorker:
         threshold = int(config.phase2.get("trigger_every_n_turns", 10))
 
         # 查 store 中所有非 forgotten episodic trace(不是单轮候选数)
+        # E2E 缺陷 C：按用户过滤候选——不同用户的记忆不互相合并；
+        # user_id=None（CLI 单用户/旧路径）时保持全局（兼容）。
         all_episodic = [
             t for t in self._manager._store.list_by_type(MemoryType.EPISODIC)
             if not t.metadata.get("forgotten")
         ]
+        if task.user_id is not None:
+            all_episodic = [
+                t for t in all_episodic
+                if (t.metadata.get("user_id") or "default") == task.user_id
+            ]
         if len(all_episodic) < threshold:
             return
 
@@ -181,7 +200,9 @@ class MemoryWorker:
             return
 
         try:
-            self._manager.consolidate([t.id for t in to_consolidate], merged)
+            self._manager.consolidate(
+                [t.id for t in to_consolidate], merged, user_id=task.user_id,
+            )
             logger.info(
                 f"worker: consolidated {len(to_consolidate)} episodic traces "
                 f"into 1 semantic (thread={task.thread_id} turn={task.turn_count})"

@@ -21,6 +21,7 @@ from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
 
+from engram.backend.agents.middlewares.memory_recall_middleware import _config_value
 from engram.backend.agents.memory.worker import MemoryTask, MemoryWorker
 from engram.backend.agents.state.types import ThreadState
 
@@ -61,20 +62,20 @@ class MemoryConsolidationMiddleware(AgentMiddleware):
 
         # 取最近 N*2 条（N 轮 ≈ 2N messages，避免 token 爆炸）
         recent = messages[-(self._n * 2):]
-        # thread_id 优先从 runtime config 取(fallback state → "unknown")
-        thread_id = "unknown"
-        try:
-            config = getattr(runtime, "config", None) or {}
-            configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
-            thread_id = configurable.get("thread_id") or state.get("thread_id") or "unknown"
-        except Exception:
-            thread_id = state.get("thread_id", "unknown")
+        # E2E 缺陷 D：thread_id 从 langgraph get_config() 取真实值（Runtime
+        # 刻意不含 config，旧 getattr(runtime, "config") 永远 None → unknown）
+        thread_id = (
+            _config_value("thread_id") or state.get("thread_id") or "unknown"
+        )
+        # E2E 缺陷 C：user_id 透传到 MemoryTask → encode 归属 + 分区列
+        user_id = _config_value("user_id")
         task = MemoryTask(
-            thread_id=thread_id, messages=recent, turn_count=user_turn_count,
+            thread_id=thread_id, messages=recent,
+            turn_count=user_turn_count, user_id=user_id,
         )
         self._worker.submit(task)
         logger.debug(
             f"MemoryConsolidationMiddleware submitted task: "
-            f"thread={thread_id} turn={user_turn_count}"
+            f"thread={thread_id} user={user_id} turn={user_turn_count}"
         )
         return None

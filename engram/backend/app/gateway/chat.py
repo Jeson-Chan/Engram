@@ -152,13 +152,18 @@ def _create_run_context(runtime, record):
 
 
 def _build_stream_config(runtime, ctx) -> dict:
-    """graph config（与 CLI _build_stream_config 同构，网关侧不带 skill_override）。"""
+    """graph config（与 CLI _build_stream_config 同构，网关侧不带 skill_override）。
+
+    user_id（E2E 缺陷 C）：session 用户透传到 configurable → 记忆召回/
+    巩固中间件按用户隔离。
+    """
     rc = ctx.config.runtime
     return {
         "configurable": {
             "expert_mode": rc.expert_mode,
             "run_id": ctx.run_id,
             "thread_id": ctx.thread_id,
+            "user_id": ctx.user_id,
             "journal": ctx.journal,
             "output_dir": str(ctx.output_dir),
             "plan_enabled": rc.plan_enabled,

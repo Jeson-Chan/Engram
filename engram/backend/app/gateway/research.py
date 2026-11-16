@@ -182,6 +182,7 @@ def _build_stream_config(runtime, ctx) -> dict:
             "expert_mode": rc.expert_mode,
             "run_id": ctx.run_id,
             "thread_id": ctx.thread_id,
+            "user_id": ctx.user_id,  # E2E 缺陷 C：记忆按用户隔离
             "journal": ctx.journal,
             "output_dir": str(ctx.output_dir),
             "plan_enabled": rc.plan_enabled,

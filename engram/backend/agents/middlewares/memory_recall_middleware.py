@@ -37,6 +37,27 @@ logger = logging.getLogger(__name__)
 _CHARS_PER_TOKEN = 4
 
 
+def _config_value(key: str) -> Any:
+    """从当前 LangGraph runnable config 读 configurable 值。
+
+    E2E 缺陷 D 修复基础：LangGraph 官方契约要求用 get_config()（Runtime
+    对象刻意不含 config）。不在 runnable 上下文（单测直调 middleware）时
+    返 None——调用方回退 state/默认值。
+    """
+    try:
+        from langgraph.config import get_config
+
+        config = get_config()
+    except RuntimeError:
+        return None
+    except Exception:
+        return None
+    configurable = config.get("configurable") if isinstance(config, dict) else None
+    if not isinstance(configurable, dict):
+        return None
+    return configurable.get(key)
+
+
 class MemoryMiddleware(AgentMiddleware):
     """记忆召回中间件（before_model recall + after_model 清除）。
 
@@ -73,6 +94,9 @@ class MemoryMiddleware(AgentMiddleware):
         """before_model：召回 + 注入 per-call HumanMessage + set_turn_id 注入。
 
         1A 强化写回在 HybridRetriever.retrieve 内部完成（caller 不负责）。
+
+        E2E 缺陷 C：召回带 user_id（config configurable 透传），跨用户
+        记忆不注入当前对话。user_id 缺席（CLI 单用户）时不加过滤，兼容旧路径。
         """
         if not self._enable_recall:
             return None
@@ -85,8 +109,12 @@ class MemoryMiddleware(AgentMiddleware):
         turn_id = self._build_turn_id(state, runtime)
         set_turn_id(turn_id)
 
-        # retrieve（L3 HybridRetriever，内部强化写回 1A + forgotten 过滤 3B）
-        results = self._provider.retriever().retrieve(MemoryQuery(text=query))
+        # retrieve（L3 HybridRetriever，内部强化写回 1A + forgotten 过滤 3B
+        # + 用户隔离过滤 C）。thread_id 不参与召回过滤（跨会话召回是特性）。
+        user_id = self._current_user_id()
+        results = self._provider.retriever().retrieve(MemoryQuery(
+            text=query, user_id=user_id,
+        ))
         if not results:
             set_turn_id(None)  # 无召回，清除 turn_id
             return None
@@ -160,15 +188,17 @@ class MemoryMiddleware(AgentMiddleware):
     def _build_turn_id(self, state: ThreadState, runtime: Runtime) -> str:
         """构造 turn_id（traceability C，关联记忆操作到对话轮次）。
 
-        从 runtime config 取 thread_id + message 数作 turn 标识。
+        E2E 缺陷 D：thread_id 从 langgraph get_config() 取真实值——
+        LangGraph 的 Runtime 刻意不含 config（官方契约），旧代码读
+        getattr(runtime, "config") 永远是 None，归属全部降级 unknown。
         """
         messages = state.get("messages", []) or []
-        # thread_id 优先从 runtime config 取
-        thread_id = "unknown"
-        try:
-            config = getattr(runtime, "config", None) or {}
-            configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
-            thread_id = configurable.get("thread_id") or state.get("thread_id") or "unknown"
-        except Exception:
-            thread_id = state.get("thread_id", "unknown")
+        thread_id = _config_value("thread_id") or state.get("thread_id") or "unknown"
         return f"{thread_id}:turn:{len(messages)}"
+
+    def _current_user_id(self) -> str | None:
+        """当前用户（configurable.user_id 透传链，E2E 缺陷 C）。
+
+        无 user_id（CLI 单用户路径）→ None = 召回不加用户过滤（兼容）。
+        """
+        return _config_value("user_id")

@@ -84,13 +84,17 @@ class DefaultMemoryManager:
         self._journal = journal
 
     @staticmethod
-    def _compute_trace_id(content: str, type: MemoryType) -> str:
-        """F2：id = SHA256(content + type.value) 前 16 位。
+    def _compute_trace_id(content: str, type: MemoryType, user_id: str | None = None) -> str:
+        """F2：id = SHA256(content + type.value [+ user_id]) 前 16 位。
 
         同 content + 同 type → 同 id → store.add 冲突 → encode 幂等返回旧 trace。
+        user_id（E2E 缺陷 C）：纳入哈希——不同用户写相同内容得到不同 id，
+        各自归属互不覆盖；user_id=None 时保持旧公式（legacy 数据兼容）。
         """
         type_key = type.value if isinstance(type, MemoryType) else str(type)
         raw = f"{content}\x00{type_key}"
+        if user_id is not None:
+            raw += f"\x00{user_id}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
     @staticmethod
@@ -120,6 +124,28 @@ class DefaultMemoryManager:
     def _get_actor(self) -> str | None:
         """C：取当前 turn_id（Layer 4 MemoryMiddleware 注入 ContextVar）。"""
         return _turn_id_var.get()
+
+    @staticmethod
+    def _merge_metadata(
+        base: dict,
+        user_id: str | None,
+        source_traces: list[MemoryTrace],
+    ) -> dict:
+        """consolidate 产物 metadata：归属字段（user_id/thread_id）从源 trace
+        推断——全部一致时继承，不一致/缺失时省略（store 层按 default 分区）。
+
+        E2E 缺陷 C/D：合并产物不再丢归属（此前 metadata 只有
+        consolidated_from，Redis/PG 分区列全部落 default）。
+        """
+        merged = dict(base)
+        if user_id is not None:
+            merged["user_id"] = user_id
+        source_threads = {
+            t.metadata.get("thread_id") for t in source_traces
+        } - {None}
+        if len(source_threads) == 1:
+            merged["thread_id"] = source_threads.pop()
+        return merged
 
     def _emit_journal(self, event: str, payload: dict) -> None:
         """B：emit journal 事件（Layer 4 注入 RunJournal，Layer 2 测试用 mock）。"""
@@ -165,8 +191,10 @@ class DefaultMemoryManager:
         Returns:
             MemoryTrace（新建 或 已存在，幂等）
         """
-        # F2：id = content hash（同内容同 type 去重）
-        trace_id = self._compute_trace_id(content, type)
+        # F2：id = content hash（同内容同 type 同用户去重；跨用户不同 id）
+        trace_id = self._compute_trace_id(
+            content, type, user_id=(metadata or {}).get("user_id"),
+        )
 
         # 点4：get-then-add 幂等
         existing = self._store.get(trace_id)
@@ -275,12 +303,16 @@ class DefaultMemoryManager:
         self,
         trace_ids: list[str],
         merged_content: str,
+        *,
+        user_id: str | None = None,
     ) -> MemoryTrace:
         """Consolidate（巩固）：多条零散记忆合并为一条稳定知识（00 §5.3）。
 
         E1：max_traces_to_consolidate=10（数量校验）。
         C1：旧 trace 标记 forgotten（不删除），Retriever 过滤留 L3；consolidate 幂等。
         merged_content 由外部 LLM 生成后传入（工具里无 LLM）。
+        user_id（E2E 缺陷 C）：合并产物归属；None 时从源 trace metadata
+        推断（一致时用之，不一致落 None=全局）。
 
         Args:
             trace_ids: 待合并的旧记忆 id 列表（min~max 范围校验）
@@ -318,8 +350,14 @@ class DefaultMemoryManager:
         max_importance = max(t.importance for t in old_traces)
         new_importance = min(1.0, max_importance + params["default_importance_boost"])
 
-        # C1 决策：consolidate 幂等（同 merged_content + 同 SEMANTIC type → 同 id）
-        new_trace_id = self._compute_trace_id(merged_content, MemoryType.SEMANTIC)
+        # 归属推断（E2E 缺陷 C）：显式 user_id 优先；否则从源 trace metadata
+        # 推断——全部一致时用该用户，不一致（跨用户合并，不应发生）时落 None。
+        if user_id is None:
+            source_users = {t.metadata.get("user_id") for t in old_traces}
+            user_id = source_users.pop() if len(source_users) == 1 else None
+
+        # C1 决策：consolidate 幂等（同 merged_content + 同 SEMANTIC type + 同用户 → 同 id）
+        new_trace_id = self._compute_trace_id(merged_content, MemoryType.SEMANTIC, user_id)
         existing = self._store.get(new_trace_id)
         if existing is not None:
             # 已存在同 merged_content 的 semantic trace，返回旧 trace（幂等，不重复创建/标记）
@@ -358,7 +396,7 @@ class DefaultMemoryManager:
             embedding=None,
             source=f"consolidate:{','.join(trace_ids)}",
             created_at=now,
-            metadata={"consolidated_from": trace_ids},
+            metadata=self._merge_metadata({"consolidated_from": trace_ids}, user_id, old_traces),
             operation_log=(OperationLog(
                 timestamp=now,
                 operation="consolidate",
