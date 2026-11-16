@@ -83,6 +83,15 @@ curl -N -X POST localhost:8000/sessions/<session_id>/chat -H "Content-Type: appl
 
 Prefer the terminal app? Run `engram`.
 
+## Known limitations
+
+- The built-in `web_search` (DuckDuckGo) needs outbound network access to
+  DuckDuckGo; on restricted networks it returns no results. Research flows and
+  the demo script do not depend on it — they use the local sandbox and seeded
+  memories (see `docs/e2e-baseline.md`).
+- Docker-backed sandboxing is optional; without `agent-sandbox` installed the
+  gateway uses `LocalSandboxProvider`.
+
 ## License
 
 [MIT](LICENSE)

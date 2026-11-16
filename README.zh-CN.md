@@ -83,6 +83,11 @@ curl -N -X POST localhost:8000/sessions/<session_id>/chat -H "Content-Type: appl
 
 想用终端应用？运行 `engram`。
 
+## 已知限制
+
+- 内置 `web_search`（DuckDuckGo）需要出网访问 DuckDuckGo；受限网络下返回空结果。研究链路与演示脚本不依赖它——使用本地沙箱与预置记忆（见 `docs/e2e-baseline.md`）。
+- Docker sandbox 为可选项；未安装 `agent-sandbox` 时网关使用 `LocalSandboxProvider`。
+
 ## 许可证
 
 [MIT](LICENSE)

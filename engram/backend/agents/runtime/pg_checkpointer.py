@@ -47,15 +47,25 @@ async def create_pg_checkpointer(dsn: str | None = None) -> Checkpointer:
     from psycopg_pool import AsyncConnectionPool
 
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
     effective = (dsn or pg_dsn_from_env() or "").strip()
     if not effective:
         raise ValueError("no postgres DSN configured (set ENGRAM_CHECKPOINT_DSN)")
 
+    # E2E 缺陷 I（前向兼容）：checkpoint 里冻结的 Engram 状态 dataclass
+    # （AgentError 等）默认按"未注册类型"反序列化——LangGraph 未来严格
+    # 模式会直接拦截。显式允许 engram.backend.agents.state.types 模块内
+    # 定义的全部状态类（类形式 = (dotted_module, ClassName) 键，随重构
+    # 自校验；只放开明确状态模块，不放开任意模块）。
+    # 注意：必须走构造器 allowed_msgpack_modules——with_msgpack_allowlist()
+    # 在默认 permissive 基座（True）上是 no-op（返回原实例不合并）。
+    serde = JsonPlusSerializer(allowed_msgpack_modules=_engram_state_types())
+
     # Windows note: psycopg async rejects ProactorEventLoop, and uvicorn 0.54
     # creates Proactor by default on win32 (E2E 缺陷 A). 兼容启动走
     # `python -m engram.backend.app.gateway`（entry.py 强制 Selector 策略）；
-    # lifespan 里 assert_loop_compatible_for_pg() 在这里之前快速失败。
+    # assert_loop_compatible_for_pg() 在这里之前快速失败。
     pool = AsyncConnectionPool(
         conninfo=effective,
         min_size=1,
@@ -64,7 +74,7 @@ async def create_pg_checkpointer(dsn: str | None = None) -> Checkpointer:
         kwargs={"autocommit": True, "row_factory": _dict_row()},
     )
     await pool.open()
-    saver = AsyncPostgresSaver(pool)
+    saver = AsyncPostgresSaver(pool, serde=serde)
     await saver.setup()  # 幂等建表（checkpoints / checkpoint_writes / …）
     return saver
 
@@ -83,3 +93,17 @@ def _dict_row():
     from psycopg.rows import dict_row
 
     return dict_row
+
+
+def _engram_state_types() -> list[type]:
+    """checkpoint 允许清单：engram.backend.agents.state.types 模块内定义的类。
+
+    只收集 __module__ 即本模块的类（排除 import 进来的外部类型），
+    保持"明确状态模块"边界。
+    """
+    import engram.backend.agents.state.types as state_types_mod
+
+    return [
+        cls for cls in vars(state_types_mod).values()
+        if isinstance(cls, type) and cls.__module__ == state_types_mod.__name__
+    ]
