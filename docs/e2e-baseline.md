@@ -12,9 +12,9 @@
 |---|---|---|---|---|
 | A | 高 | Windows + PG：uvicorn 0.54 默认 Proactor 循环，psycopg 异步拒绝，网关启动失败 | 已修复 | `runtime-hardening` / Windows 与 Postgres 启动（任务 2.1） |
 | B | 高 | `delegate_to_subagent` 调用不存在的 `LeaderAgent.invoke`，真实运行时 100% 失败 | 已修复 | `runtime-hardening` / 内部 subagent 委托（任务 2.2） |
-| C | 高/隐私 | 长期记忆不按用户隔离：Bob 能召回 Alice 的私有记忆 | 待修复 | `runtime-hardening` / 记忆用户与线程隔离（任务 2.3） |
-| D | 中 | 记忆线程归属全部为 `unknown`（Redis 键 `engram:mem:default:unknown:<id>`） | 待修复 | `runtime-hardening` / 记忆线程归属（任务 2.4） |
-| E | 中 | Redis Stream 巩固 worker 因局部导入 `NameError` 静默降级为进程内队列 | 待修复 | `runtime-hardening` / Redis Stream 巩固队列（任务 2.5） |
+| C | 高/隐私 | 长期记忆不按用户隔离：Bob 能召回 Alice 的私有记忆 | 已修复 | `runtime-hardening` / 记忆用户与线程隔离（任务 2.3） |
+| D | 中 | 记忆线程归属全部为 `unknown`（Redis 键 `engram:mem:default:unknown:<id>`） | 已修复 | `runtime-hardening` / 记忆线程归属（任务 2.4） |
+| E | 中 | Redis Stream 巩固 worker 因局部导入 `NameError` 静默降级为进程内队列 | 已修复 | `runtime-hardening` / Redis Stream 巩固队列（任务 2.5） |
 | F | 中 | HTTP session_id 不跨网关重启持久化（`SessionRegistry` 纯内存） | 待修复 | `gateway-client-api` / 会话持久化（任务 4.1） |
 | G | 中 | `/chat` 运行不进入 PG 运行历史；断连状态不可见 | 待修复 | `runtime-hardening` / Chat 运行历史（任务 3.1） |
 | H | 低 | TUI 弹层（命令面板/MCP）输入框聚焦时 Esc 关不掉 | 待修复 | `tui-research-cockpit` / 键盘优先操作（任务 6.4） |
@@ -33,6 +33,8 @@
 
 - **A（Windows + PG 启动）已修复**：新增 `engram/backend/app/gateway/entry.py`（推荐入口 `python -m engram.backend.app.gateway`：win32 强制 Selector 策略 + `uvicorn.run(loop="none")`）与 lifespan 快速失败自检 `assert_loop_compatible_for_pg()`（win32 + Proactor + PG DSN → 秒级 RuntimeError + 可操作提示，替代 30 秒 PoolTimeout）。回归：`engram/backend/tests/v1/unit/gateway/test_loop_selection.py`（9 tests）。README（en/zh/ja）Windows 快速开始已改用新入口。
 - **B（内部 subagent）已修复**：`LeaderAgent.invoke(state, config)` 同步兼容入口（委托 `graph.ainvoke`——MCP async-only 工具要求；无循环→asyncio.run，循环内→独立线程新循环；缺省自动生成隔离 thread_id 供 checkpointer）。回归：`engram/backend/tests/v1/unit/multiagent/test_subagent_real_leader.py`（真实 `make_lead_agent` 编译 graph，4 tests；旧测试用 MagicMock 假 agent 正是漏测原因）。
+- **C（记忆用户隔离）+ D（线程归属）已修复**：`MemoryQuery.user_id/thread_id`（retriever 按用户过滤，旧数据视为 `default` 仍可读，CLI 无 user 路径不变）；`MemoryTask.user_id` → encode 归属 metadata；`_compute_trace_id` 纳入 user（同内容跨用户不撞 id）；consolidate 候选按用户过滤 + 合并产物继承归属；两个 middleware 改用 `langgraph.config.get_config()`（旧 `getattr(runtime, "config")` 永远 None → `unknown` 根因）；网关 chat/research config 透传 `ctx.user_id`。回归：`engram/backend/tests/v1/unit/memory/test_user_thread_isolation.py`（17 tests：Alice/Bob 隔离、旧数据可读、真实 Runtime、fakeredis 分区键、真实 worker+retriever 端到端）。
+- **E（Stream 巩固队列）已修复**：`StreamConsolidationQueue/Consumer` 导入提升到 `memory/bootstrap.py` 模块级（原在 `_build_worker` 函数内局部导入，`_StreamModeWorker.__init__` 在全局作用域查名必然 NameError → 静默降级）；降级路径改为明确的 warning（含 "events will NOT survive a restart" 提示）；Stream 事件载荷补齐 `user_id` 序列化（缺陷 C 的 Stream 路径）。回归：`engram/backend/tests/v1/unit/memory/test_stream_worker_mode.py`（6 tests：fakeredis 下 `_build_worker` 返回 Stream 模式、XADD/消费/ack 全链路、失败留 PEL、降级可见）。
 
 ## 环境限制与演示规避
 

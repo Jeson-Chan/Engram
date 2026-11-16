@@ -84,6 +84,9 @@ class StreamConsolidationQueue:
         payload = {
             "thread_id": task.thread_id,
             "turn_count": str(task.turn_count),
+            # user_id（E2E 缺陷 C）：归属随事件持久化，消费端重建 MemoryTask
+            # 时还原——Stream 路径不丢用户隔离
+            "user_id": task.user_id or "",
             "messages": json.dumps(
                 _messages_to_json(task.messages), ensure_ascii=False
             ),
@@ -226,6 +229,8 @@ class StreamConsolidationConsumer:
                 thread_id=fields["thread_id"],
                 messages=_messages_from_json(json.loads(fields["messages"])),
                 turn_count=int(fields.get("turn_count", "0")),
+                # user_id：空串还原为 None（旧事件/无归属兼容 default 分区）
+                user_id=fields.get("user_id") or None,
             )
         except Exception as exc:
             # 载荷损坏：无法处理的消息 ack 掉（毒丸防护），避免永久重放

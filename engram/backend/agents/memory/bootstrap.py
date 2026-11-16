@@ -26,6 +26,15 @@ from typing import Any
 
 from engram.backend.agents.memory.config import get_memory_config
 
+# E2E 缺陷 E：StreamConsolidationQueue/Consumer 此前在 _build_worker 函数内
+# 局部导入，而 _StreamModeWorker.__init__（同类方法）在模块全局作用域查
+# 名 → 必然 NameError → 被吞掉后静默降级为进程内队列（重启丢巩固任务）。
+# 修复：提升到模块级导入，_StreamModeWorker 直接引用。
+from engram.backend.agents.memory.stream_queue import (
+    StreamConsolidationConsumer,
+    StreamConsolidationQueue,
+)
+
 logger = logging.getLogger(__name__)
 
 _provider_lock = threading.Lock()
@@ -117,19 +126,18 @@ def _build_worker(manager: Any, llm: Any) -> Any:
         try:
             import redis
 
-            from engram.backend.agents.memory.stream_queue import (
-                StreamConsolidationQueue,
-                StreamConsolidationConsumer,
-            )
-
             client = redis.Redis.from_url(
                 config.redis_url, decode_responses=True,
                 socket_connect_timeout=5,
             )
             return _StreamModeWorker(client, manager, llm)
         except Exception as exc:
+            # 显式降级（可见告警，启动不阻断）：只有 Redis 真正连不上才走这里；
+            # 巩固事件退回进程内队列，进程重启即丢（Stream 持久化语义失效）。
             logger.warning(
-                "stream worker unavailable (%s); falling back to in-process queue",
+                "stream worker unavailable (%s): consolidation falls back to the "
+                "in-process queue -- events will NOT survive a restart; check "
+                "ENGRAM_REDIS_URL / Redis availability",
                 exc,
             )
     from engram.backend.agents.memory.worker import MemoryWorker
