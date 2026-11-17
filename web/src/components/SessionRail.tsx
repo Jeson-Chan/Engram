@@ -5,10 +5,10 @@ export function titleOf(record: SessionRecord): string {
   return String(record.metadata?.title || `Session ${record.session_id.slice(0, 8)}`);
 }
 
-export function SessionRail() {
+export function SessionRail({ drawer = false }: { drawer?: boolean }) {
   const { state, actions } = useApp();
   return (
-    <div className="rail" data-testid="session-rail">
+    <div className={`rail${drawer ? " drawer-rail" : ""}`} data-testid="session-rail">
       <div className="panel-title">会话</div>
       <button className="new-session" onClick={() => actions.createSession()}>
         + 新建会话

@@ -9,7 +9,7 @@ import {
   useRef,
 } from "react";
 import { EngramAPI, type SessionRecord } from "./lib/api";
-import { parseEventData, streamSSE, type SSEFrame } from "./lib/sse";
+import { parseEventData, streamSSE } from "./lib/sse";
 import type {
   MemoryTraceView,
   MessageView,
@@ -36,6 +36,8 @@ export interface ChatTurn {
   skillActive: string[] | null;
   memoryRecalled: RecalledMemory[] | null;
   budget: { total: number; fraction: number; window: string } | null;
+  /** thinking 增量累积（展示为可折叠摘要行） */
+  thinking: string;
 }
 
 export interface RecalledMemory {
@@ -73,6 +75,8 @@ export interface AppState {
 
 type Action =
   | { type: "sessions"; sessions: SessionRecord[] }
+  | { type: "addSession"; session: SessionRecord }
+  | { type: "removeSession"; sessionId: string }
   | { type: "selectSession"; sessionId: string | null; }
   | { type: "history"; messages: MessageView[] }
   | { type: "turnStart"; turn: ChatTurn }
@@ -112,6 +116,16 @@ function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "sessions":
       return { ...state, sessions: action.sessions };
+    case "addSession":
+      return {
+        ...state,
+        sessions: [...state.sessions, action.session],
+      };
+    case "removeSession":
+      return {
+        ...state,
+        sessions: state.sessions.filter((s) => s.session_id !== action.sessionId),
+      };
     case "selectSession":
       return { ...state, currentSessionId: action.sessionId, turns: [], history: [], runs: [], runEvents: [], currentRunId: null };
     case "history":
@@ -176,6 +190,12 @@ export interface AppActions {
 
 const AppContext = createContext<{ state: AppState; actions: AppActions } | null>(null);
 
+export function useApp(): { state: AppState; actions: AppActions } {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("useApp 必须在 <AppProvider> 内使用");
+  return ctx;
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const api = useRef(new EngramAPI());
@@ -201,19 +221,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const createSession = useCallback(async () => {
     const record = await api.current.createSession(stateRef.current.user_id);
+    // reducer 内 append（闭包里读 stateRef 会拿到过期列表覆盖丢会话）
+    dispatch({ type: "addSession", session: record });
     dispatch({ type: "selectSession", sessionId: record.session_id });
-    dispatch({
-      type: "sessions",
-      sessions: [...stateRef.current.sessions, record],
-    });
   }, []);
 
   const deleteSession = useCallback(async (sessionId: string) => {
     await api.current.deleteSession(sessionId).catch(() => undefined);
-    const sessions = stateRef.current.sessions.filter(
-      (s) => s.session_id !== sessionId,
-    );
-    dispatch({ type: "sessions", sessions });
+    dispatch({ type: "removeSession", sessionId });
     if (stateRef.current.currentSessionId === sessionId) {
       dispatch({ type: "selectSession", sessionId: null });
     }
@@ -267,6 +282,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         skillActive: null,
         memoryRecalled: null,
         budget: null,
+        thinking: "",
       },
     });
     dispatch({
@@ -279,6 +295,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         skillActive: null,
         memoryRecalled: null,
         budget: null,
+        thinking: "",
       },
     });
     const assistantIndex = stateRef.current.turns.length + 1;
@@ -352,7 +369,8 @@ function applyStreamEvent(
       patch.content = (turn?.content || "") + (event.content || "");
       break;
     case "thinking":
-      // 思考增量暂存（轻渲染：拼在折屉里，本实现并入 content 前缀区）
+      // 思考增量累积（折叠摘要行渲染，不打断 answer）
+      patch.thinking = (turn?.thinking || "") + (event.content || "");
       break;
     case "skill_active":
       try {

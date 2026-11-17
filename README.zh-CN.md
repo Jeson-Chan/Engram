@@ -83,6 +83,18 @@ curl -N -X POST localhost:8000/sessions/<session_id>/chat -H "Content-Type: appl
 
 想用终端应用？运行 `engram`。
 
+想用浏览器？构建并开启 Web 研究工作台：
+
+```powershell
+cd web; npm install; npm run build
+$env:ENGRAM_WEB_UI_ENABLED="true"; python -m engram.backend.app.gateway --port 8000
+# 打开 http://127.0.0.1:8000/app —— 会话 / 流式对话与研究 / Run Inspector /
+# Memory Explorer / 断线续传
+```
+
+一键演示（compose + 预置会话 + 5 分钟脚本）：`python scripts/demo.py`；
+详见 `docs/demo.md` 与 `docs/api.md`。
+
 ## 已知限制
 
 - 内置 `web_search`（DuckDuckGo）需要出网访问 DuckDuckGo；受限网络下返回空结果。研究链路与演示脚本不依赖它——使用本地沙箱与预置记忆（见 `docs/e2e-baseline.md`）。

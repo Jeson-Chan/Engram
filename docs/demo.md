@@ -1,7 +1,33 @@
-# Engram 演示脚本（两幕）
+# Engram 演示脚本（两幕 + Web 工作台）
 
 > 全程 curl 可照走。前置：`docker compose up`（agent + redis + postgres），
 > 网关默认监听 `http://localhost:8000`（容器内 uvicorn）。本地裸跑见文末备选。
+
+---
+
+## 零幕（推荐）：一键演示 + Web 工作台
+
+```bash
+# 一键：起 PG/Redis → 幂等 seed（固定会话/记忆/run/报告）→ 网关 + Web UI
+python scripts/demo.py
+# → 打开 http://127.0.0.1:8000/app（ENGRAM_WEB_UI_ENABLED 已置）
+# 清理 demo 数据（只删 seed 标记的数据）：
+python scripts/demo.py --clean
+```
+
+Web 工作台 5 分钟脚本（seed 的「上周的 LangGraph 记忆研究」会话已就绪，
+不依赖现场生成、不依赖外网搜索——环境限制见 `docs/e2e-baseline.md`）：
+
+1. 打开 `/app` → 左栏选「上周的 LangGraph 记忆研究」（历史/记忆/run 预置）。
+2. Run Inspector：最近 run 的时间线 + 报告预览/下载；工具节点与对话区工具卡片互相定位。
+3. Memory Explorer：热层/冷层/遗忘/巩固计数；按类型/强度/层筛选，看强度条。
+4. 现场流式研究：输入「分层记忆怎么实现？」→ token 级流式 + 工具卡片 + 召回提示展开。
+5. 刷新页面 → 会话/历史消息/最近 run 恢复（SQLite 会话映射 + checkpointer）；
+   流中途断线 → 重连带 `Last-Event-ID` 补发，缺口超限显式提示。
+6. TUI 驾驶舱（另开终端 `engram`）：`Ctrl+K` 切会话 / `Ctrl+R` Run 时间线 /
+   `Ctrl+M` Memory / `Ctrl+J` Inspector / `Esc` 关闭任何弹层。
+
+API 细节见 `docs/api.md`；SSE 事件语义见 `docs/event-semantics.md`。
 
 ---
 
@@ -130,8 +156,10 @@ pip install -e ".[dev]"
 ENGRAM_REDIS_URL=redis://localhost:6379/0 \
 ENGRAM_MEMORY_PG_DSN=postgresql://engram:engram@localhost:5432/engram \
 ENGRAM_CHECKPOINT_DSN=postgresql://engram:engram@localhost:5432/engram \
-uvicorn engram.backend.app.gateway.main:app --port 8000
+python -m engram.backend.app.gateway --port 8000
 ```
 
-> 注：Windows 上 psycopg async 需 Selector 事件循环（uvicorn 自带；
-> 自写脚本入口需 `asyncio.run(..., loop_factory=asyncio.SelectorEventLoop)`）。
+> 注（E2E 缺陷 A 修复后的正确姿势）：Windows 上必须用
+> `python -m engram.backend.app.gateway` 启动（强制 `WindowsSelectorEventLoopPolicy`，
+> psycopg async 要求）；裸 `uvicorn ...:app` 会以 Proactor 循环启动，
+> 配置 PG DSN 后启动失败。macOS/Linux 两种入口都可用。

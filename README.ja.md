@@ -84,6 +84,18 @@ curl -N -X POST localhost:8000/sessions/<session_id>/chat -H "Content-Type: appl
 
 ターミナルアプリがいい方は `engram` を実行してください。
 
+ブラウザがいい方は Web 研究ワークベンチをビルドして有効化：
+
+```bash
+cd web && npm install && npm run build
+ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
+# http://127.0.0.1:8000/app を開く —— セッション / ストリーミング対話・リサーチ /
+# Run インスペクタ / Memory エクスプローラ / 再接続レジューム
+```
+
+ワンコマンドデモ（compose + シード済みセッション + 5 分スクリプト）：
+`python scripts/demo.py`。詳細は `docs/demo.md` と `docs/api.md`。
+
 ## 既知の制限
 
 - 内蔵 `web_search`（DuckDuckGo）は DuckDuckGo へのアウトバウンド接続が必要で、制限されたネットワークでは結果が空になります。リサーチフローとデモスクリプトはこれに依存しません——ローカルサンドボックスとシード済みメモリを使います（`docs/e2e-baseline.md` 参照）。

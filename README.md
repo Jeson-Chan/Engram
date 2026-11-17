@@ -83,6 +83,18 @@ curl -N -X POST localhost:8000/sessions/<session_id>/chat -H "Content-Type: appl
 
 Prefer the terminal app? Run `engram`.
 
+Prefer a browser? Build and enable the web research workbench:
+
+```bash
+cd web && npm install && npm run build
+ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
+# open http://127.0.0.1:8000/app -- sessions, streaming chat/research,
+# run inspector, memory explorer, reconnect resume
+```
+
+A one-command demo (compose + seeded session + 5-minute script) lives at
+`scripts/demo.py`; see `docs/demo.md` and `docs/api.md`.
+
 ## Known limitations
 
 - The built-in `web_search` (DuckDuckGo) needs outbound network access to

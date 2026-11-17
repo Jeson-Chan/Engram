@@ -5,6 +5,7 @@
  * 解析同一份文档——两侧共用同一份事实。
  */
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   SSEDecoder,
@@ -14,8 +15,12 @@ import {
 } from "../sse";
 import type { StreamEvent } from "../types";
 
-const DOC = new URL("../../../../../docs/event-semantics.md", import.meta.url);
-const docText = readFileSync(DOC, "utf-8");
+// 文档路径：仓库根/docs/event-semantics.md（vitest 从 web/ 起——cwd 相对；
+// jsdom 环境下 import.meta.url 非 file scheme，不能用 new URL）
+const docText = readFileSync(
+  path.resolve(process.cwd(), "..", "docs", "event-semantics.md"),
+  "utf-8",
+);
 
 /** 提取文档全部 ```sse 示例块（与后端测试同构）。 */
 function extractDocBlocks(): string[] {

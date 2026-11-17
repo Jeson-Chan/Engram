@@ -82,6 +82,19 @@ export function RunInspector() {
           } ${e.event_type === "run.failed" ? "run-failed" : ""}`}
           data-testid="timeline-item"
           data-event-type={e.event_type}
+          onClick={() => {
+            // 互定位：工具时间线节点点击 → 滚动到对话区同名工具卡片
+            const toolName = String(
+              (e.payload as Record<string, unknown>).tool
+                ?? (e.payload as Record<string, unknown>).tool_name
+                ?? "",
+            );
+            if (toolName) {
+              document
+                .querySelector(`[data-tool-name="${toolName}"]`)
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }}
         >
           <div>
             {iconOf(e.event_type)} {timelineLabel(e)}

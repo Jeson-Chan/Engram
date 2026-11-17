@@ -904,6 +904,26 @@ Reasoning tokens fold into a summary line: `+ Thought: 120ms`
 
 Hold `Shift` and drag to bypass Textual's mouse capture and use terminal-native selection.
 
+### Research Cockpit Shortcuts
+
+| Key | Action |
+|---|---|
+| `Ctrl+K` | Session switcher — gateway session list + new session (fresh thread) |
+| `Ctrl+R` | Run timeline — run history + persisted event log |
+| `Ctrl+M` | Memory panel — stats + traces with hot/cold/forgotten tags |
+| `Ctrl+J` | Inspector — model/mode/capabilities + context budget |
+| `Ctrl+P` | Command palette |
+| `Ctrl+N` | MCP panel |
+| `Ctrl+B` | Settings panel (API keys) |
+| `Ctrl+L` | Clear screen |
+| `Esc` | Close any overlay (works even while an input has focus) / interrupt a run |
+| `Ctrl+C` | Quit |
+
+Panels read the gateway read-only API (`ENGRAM_GATEWAY_URL`, default
+`http://127.0.0.1:8000`); when the gateway is offline they show an explicit
+offline state and the in-process chat/research stream is unaffected. `/help`
+prints the same table — keep them in sync when bindings change.
+
 ---
 
 ## Troubleshooting

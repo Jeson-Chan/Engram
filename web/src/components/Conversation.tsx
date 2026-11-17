@@ -9,7 +9,7 @@ export function ToolCard({ tool }: { tool: ToolCallState }) {
   const dur =
     tool.finishedAt != null ? `${((tool.finishedAt - tool.startedAt) / 1000).toFixed(1)}s` : "…";
   return (
-    <div className="tool-card" data-testid="tool-card">
+    <div className="tool-card" data-testid="tool-card" data-tool-name={tool.name}>
       <div className="head" onClick={() => setOpen(!open)}>
         <span className="name">{tool.name}</span>
         <span className="dur">{dur}</span>
@@ -61,9 +61,31 @@ function RecalledHint({ turn }: { turn: ChatTurn }) {
   );
 }
 
+function roleClass(role: string): string {
+  if (role === "human") return "user";
+  if (role === "ai") return "assistant";
+  return role;
+}
+
+function ThinkingRow({ text }: { text: string }) {
+  if (!text) return null;
+  return (
+    <div className="recalled thinking" data-testid="thinking-row">
+      <details>
+        <summary>
+          思考过程（{text.length} 字符，点击展开）
+        </summary>
+        <div style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "var(--muted)" }}>
+          {text.slice(0, 2000)}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function HistoryMessage({ msg }: { msg: MessageView }) {
   return (
-    <div className={`msg ${msg.role}`}>
+    <div className={`msg ${roleClass(msg.role)}`}>
       <div className="role">{msg.role}</div>
       <div className="body">
         <Markdown text={msg.content} />
@@ -101,6 +123,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
       </div>
       <div className="body">
         <RecalledHint turn={turn} />
+        <ThinkingRow text={turn.thinking} />
         <Markdown text={turn.content} />
         {turn.streaming && <span className="cursor" />}
         {turn.toolCalls.map((tool, i) => (

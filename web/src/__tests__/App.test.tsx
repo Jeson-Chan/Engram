@@ -1,17 +1,29 @@
 /** 三栏壳 + 响应式收起 + 选中会话 URL 状态（任务 5.3）。 */
 
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import App from "../App";
 
-const narrowMq = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
-const wideMq = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
-const mqMap: Record<string, MediaQueryList> = {
+// vitest 关闭 globals 模式时 RTL 不会自动注册 cleanup——手动挂
+afterEach(() => cleanup());
+
+const narrowMq: { matches: boolean } & Partial<MediaQueryList> = {
+  matches: false, media: "", onchange: null,
+  addEventListener: vi.fn(), removeEventListener: vi.fn(),
+  addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+};
+const wideMq: { matches: boolean } & Partial<MediaQueryList> = {
+  matches: false, media: "", onchange: null,
+  addEventListener: vi.fn(), removeEventListener: vi.fn(),
+  addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+};
+const mqMap: Record<string, { matches: boolean } & Partial<MediaQueryList>> = {
   "(max-width: 900px)": wideMq,
 };
 // localStorage / location
 beforeAll(() => {
-  window.matchMedia = (query: string) => mqMap[query] ?? narrowMq;
+  window.matchMedia = ((query: string) =>
+    mqMap[query] ?? narrowMq) as unknown as typeof window.matchMedia;
 });
 
 const sessions = [
@@ -73,9 +85,9 @@ describe("App 三栏壳（宽视口）", () => {
     stubApi();
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByTestId("session-aaaabb")).toBeTruthy();
+      expect(screen.getByTestId("session-sess-a")).toBeTruthy();
     });
-    screen.getByTestId("session-aaaabb").click();
+    screen.getByTestId("session-sess-a").click();
     await waitFor(() => {
       expect(new URLSearchParams(window.location.search).get("s")).toBe("sess-aaaabbbbcccc");
     });

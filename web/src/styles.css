@@ -46,6 +46,9 @@ body {
 }
 .shell.narrow { grid-template-columns: 1fr; grid-template-areas: "chat"; }
 .shell.narrow .rail, .shell.narrow .inspector { display: none; }
+/* 窄屏抽屉里渲染的 rail 不受隐藏规则影响（drawer 场景显式可见） */
+.shell.narrow .chat > .drawer-rail { display: block; max-height: 40vh; overflow-y: auto; border-bottom: 1px solid var(--border); }
+.shell.narrow .chat > .drawer-inspector { display: block; max-height: 50vh; overflow-y: auto; border-bottom: 1px solid var(--border); }
 
 .rail { grid-area: rail; background: var(--panel); overflow-y: auto; }
 .chat { grid-area: chat; background: var(--panel); display: flex; flex-direction: column; min-width: 0; }
