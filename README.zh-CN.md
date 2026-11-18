@@ -45,55 +45,55 @@ cp .env.example .env
 
 ## 快速开始
 
-**Windows（PowerShell）**
+两种入口：全屏 **TUI 研究驾驶舱**（键盘优先）或 **Web 研究工作台**（浏览器三栏）——共用同一套会话、记忆与运行数据。
+
+### 1 · TUI（研究驾驶舱）
 
 ```powershell
-python -m venv .venv
-.venv\Scripts\activate
-pip install -e ".[dev]"
-python -m engram.backend.app.gateway --port 8000
+pip install -e ".[dev]"        # .env 里填好 API Key（见上文）
+engram                          # 或 python -m engram.backend.app.cli.main
 ```
 
-> Windows 下网关入口会强制 `WindowsSelectorEventLoopPolicy`（异步 Postgres 驱动
-> 的要求）——直接 `uvicorn engram.backend.app.gateway.main:app` 会以 Proactor
-> 循环启动，配置 PG DSN 后启动失败。
+就这么多——直接提问。驾驶舱里：
 
-**macOS / Linux**
+| 快捷键 | 作用 |
+|---|---|
+| `Ctrl+K` | 会话切换 / 新建会话 |
+| `Ctrl+O` | Run 时间线（运行历史 + 持久事件） |
+| `Ctrl+G` | Memory 面板（热/冷/遗忘计数） |
+| `Ctrl+U` | Inspector（模型/模式/能力 + Context 预算） |
+| `Esc` | 关闭任何弹层 |
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn engram.backend.app.gateway.main:app --port 8000
+面板数据来自网关只读 API（`ENGRAM_GATEWAY_URL`，默认 `http://127.0.0.1:8000`）；
+网关没开时显示离线态——对话/研究本身不受影响。
+
+### 2 · Web（研究工作台）
+
+```powershell
+cd web; npm install; npm run build    # 一次性构建前端
+$env:ENGRAM_WEB_UI_ENABLED="true"; python -m engram.backend.app.gateway --port 8000
+# 打开 http://127.0.0.1:8000/app
 ```
 
-**Docker（一条命令全起）**
+> Windows 下网关必须用 `python -m engram.backend.app.gateway` 启动（强制
+> `WindowsSelectorEventLoopPolicy`——异步 Postgres 驱动的要求；裸 `uvicorn
+> ...:app` 配 PG DSN 后启动失败）。
+
+三栏：会话 / 流式对话与研究 / Run Inspector（含 Memory Explorer）。刷新页面
+自动恢复会话、历史与最近 Run。全部接口见 `/docs`；完整走查：`docs/api.md`。
+
+### Docker（一条命令全起）
 
 ```bash
 cp .env.example .env    # 填入 DEEPSEEK_API_KEY
 docker compose up -d
 ```
 
-打开 http://localhost:8000/docs 在浏览器里直接试接口，或者在终端里开一个会话：
+### 一键演示
 
-```bash
-curl -X POST localhost:8000/sessions
-curl -N -X POST localhost:8000/sessions/<session_id>/chat -H "Content-Type: application/json" -d '{"message": "你好"}'
-```
-
-想用终端应用？运行 `engram`。
-
-想用浏览器？构建并开启 Web 研究工作台：
-
-```powershell
-cd web; npm install; npm run build
-$env:ENGRAM_WEB_UI_ENABLED="true"; python -m engram.backend.app.gateway --port 8000
-# 打开 http://127.0.0.1:8000/app —— 会话 / 流式对话与研究 / Run Inspector /
-# Memory Explorer / 断线续传
-```
-
-一键演示（compose + 预置会话 + 5 分钟脚本）：`python scripts/demo.py`；
-详见 `docs/demo.md` 与 `docs/api.md`。
+`python scripts/demo.py`：起 compose + 预置「上周的 LangGraph 记忆研究」会话 +
+带 Web 的网关，并打印 5 分钟演示脚本。清理演示数据：`python scripts/demo.py
+--clean`。详见 `docs/demo.md`。
 
 ## 已知限制
 

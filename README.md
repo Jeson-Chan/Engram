@@ -45,55 +45,59 @@ Open `.env` and set `DEEPSEEK_API_KEY=sk-...`.
 
 ## Quick Start
 
-**Windows (PowerShell)**
+Two ways to run Engram — the full-screen **TUI** (keyboard-first research
+cockpit) or the **Web workbench** (three-pane browser UI). Both share the same
+sessions, memory, and runs.
 
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-pip install -e ".[dev]"
-python -m engram.backend.app.gateway --port 8000
-```
-
-> On Windows the gateway entry forces `WindowsSelectorEventLoopPolicy`, which async
-> Postgres drivers require — plain `uvicorn engram.backend.app.gateway.main:app`
-> would start with a Proactor loop and fail once a PG DSN is configured.
-
-**macOS / Linux**
+### 1 · TUI — the research cockpit
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn engram.backend.app.gateway.main:app --port 8000
+pip install -e ".[dev]"        # after setting API keys in .env (see above)
+engram                          # or: python -m engram.backend.app.cli.main
 ```
 
-**Docker (everything in one command)**
+That's it — ask anything. Inside the cockpit:
+
+| Keys | Action |
+|---|---|
+| `Ctrl+K` | session switcher / new session |
+| `Ctrl+O` | Run timeline (history + persisted events) |
+| `Ctrl+G` | Memory panel (hot/cold/forgotten counts) |
+| `Ctrl+U` | Inspector (model/mode/capabilities + context budget) |
+| `Esc` | close any overlay |
+
+Panels read the gateway's read-only API when one is running
+(`ENGRAM_GATEWAY_URL`, default `http://127.0.0.1:8000`) and show an offline
+state otherwise — chat/research itself always works.
+
+### 2 · Web — the research workbench
+
+```bash
+cd web && npm install && npm run build   # once: build the frontend
+ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
+# open http://127.0.0.1:8000/app
+```
+
+> On Windows, always start the gateway with
+> `python -m engram.backend.app.gateway` — it forces the Selector event loop
+> async Postgres requires (plain `uvicorn ...:app` fails with a PG DSN).
+
+Three panes: sessions / streaming chat & research / Run Inspector with Memory
+Explorer. Refresh restores the session, history, and last run. All endpoints:
+`/docs`; the full walkthrough: `docs/api.md`.
+
+### Docker (everything in one command)
 
 ```bash
 cp .env.example .env    # set DEEPSEEK_API_KEY
 docker compose up -d
 ```
 
-Open http://localhost:8000/docs to try the API in your browser, or start a session from the terminal:
+### One-command demo
 
-```bash
-curl -X POST localhost:8000/sessions
-curl -N -X POST localhost:8000/sessions/<session_id>/chat -H "Content-Type: application/json" -d '{"message": "hello"}'
-```
-
-Prefer the terminal app? Run `engram`.
-
-Prefer a browser? Build and enable the web research workbench:
-
-```bash
-cd web && npm install && npm run build
-ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
-# open http://127.0.0.1:8000/app -- sessions, streaming chat/research,
-# run inspector, memory explorer, reconnect resume
-```
-
-A one-command demo (compose + seeded session + 5-minute script) lives at
-`scripts/demo.py`; see `docs/demo.md` and `docs/api.md`.
+`python scripts/demo.py` starts compose + a seeded session ("上周的 LangGraph
+记忆研究") + the gateway with the web UI, and prints a 5-minute script. Clean
+demo data with `python scripts/demo.py --clean`. Details: `docs/demo.md`.
 
 ## Known limitations
 

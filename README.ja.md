@@ -45,56 +45,59 @@ cp .env.example .env
 
 ## クイックスタート
 
-**Windows（PowerShell）**
+2 つの入口：フルスクリーン **TUI リサーチコックピット**（キーボード優先）と
+**Web 研究ワークベンチ**（ブラウザ 3 ペイン）。セッション・メモリ・ラン履歴は両者で共有されます。
 
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-pip install -e ".[dev]"
-python -m engram.backend.app.gateway --port 8000
-```
-
-> Windows ではゲートウェイの起動エントリが `WindowsSelectorEventLoopPolicy`
-> を強制します（非同期 Postgres ドライバの要件）。素の
-> `uvicorn engram.backend.app.gateway.main:app` は Proactor ループで起動し、
-> PG DSN を設定すると起動に失敗します。
-
-**macOS / Linux**
+### 1 · TUI（リサーチコックピット）
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn engram.backend.app.gateway.main:app --port 8000
+pip install -e ".[dev]"        # .env に API Key を設定済み（上記参照）
+engram                          # または python -m engram.backend.app.cli.main
 ```
 
-**Docker（コマンド一発ですべて起動）**
+これだけ —— 何でも質問してください。コックピット内：
+
+| キー | 操作 |
+|---|---|
+| `Ctrl+K` | セッション切替 / 新規セッション |
+| `Ctrl+O` | Run タイムライン（履歴 + 永続イベント） |
+| `Ctrl+G` | Memory パネル（hot/cold/forgotten カウント） |
+| `Ctrl+U` | Inspector（モデル/モード/能力 + Context 予算） |
+| `Esc` | オーバーレイを閉じる |
+
+パネルはゲートウェイの読み取り専用 API を参照します（`ENGRAM_GATEWAY_URL`、
+デフォルト `http://127.0.0.1:8000`）。未起動ならオフライン表示——対話・
+リサーチ自体は常に動作します。
+
+### 2 · Web（研究ワークベンチ）
+
+```bash
+cd web && npm install && npm run build   # 一度だけ：フロントエンドをビルド
+ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
+# http://127.0.0.1:8000/app を開く
+```
+
+> Windows では必ず `python -m engram.backend.app.gateway` で起動すること
+> （非同期 Postgres ドライバが要求する Selector ループを強制します。素の
+> `uvicorn ...:app` は PG DSN 設定時に起動失敗します）。
+
+3 ペイン：セッション / ストリーミング対話・リサーチ / Run インスペクタ +
+Memory エクスプローラ。リロードするとセッション・履歴・直近の Run が復元されます。
+全エンドポイントは `/docs`、完全なウォークスルーは `docs/api.md`。
+
+### Docker（コマンド一発）
 
 ```bash
 cp .env.example .env    # DEEPSEEK_API_KEY を記入
 docker compose up -d
 ```
 
-ブラウザで http://localhost:8000/docs を開けば API をその場で試せます。ターミナルからセッションを作ることもできます：
+### ワンコマンドデモ
 
-```bash
-curl -X POST localhost:8000/sessions
-curl -N -X POST localhost:8000/sessions/<session_id>/chat -H "Content-Type: application/json" -d '{"message": "こんにちは"}'
-```
-
-ターミナルアプリがいい方は `engram` を実行してください。
-
-ブラウザがいい方は Web 研究ワークベンチをビルドして有効化：
-
-```bash
-cd web && npm install && npm run build
-ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
-# http://127.0.0.1:8000/app を開く —— セッション / ストリーミング対話・リサーチ /
-# Run インスペクタ / Memory エクスプローラ / 再接続レジューム
-```
-
-ワンコマンドデモ（compose + シード済みセッション + 5 分スクリプト）：
-`python scripts/demo.py`。詳細は `docs/demo.md` と `docs/api.md`。
+`python scripts/demo.py`：compose + シード済みセッション（「先週の
+LangGraph メモリ研究」）+ Web 有効のゲートウェイを起動し、5 分デモスクリプト
+を表示。デモデータの片付けは `python scripts/demo.py --clean`。詳細は
+`docs/demo.md`。
 
 ## 既知の制限
 
