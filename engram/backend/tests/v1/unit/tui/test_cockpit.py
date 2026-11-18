@@ -92,6 +92,33 @@ def test_cockpit_panels_escape_priority():
     asyncio.run(check())
 
 
+async def _wait_for(obj, attr: str, timeout: float = 8.0) -> None:
+    """等 thread worker 渲染完成（属性非空即就绪）。"""
+    import time as _t
+
+    deadline = _t.monotonic() + timeout
+    while not getattr(obj, attr, None):
+        if _t.monotonic() > deadline:
+            return  # 超时：交由断言给出明确失败
+        await asyncio.sleep(0.05)
+
+
+async def _wait_list_items(switcher, count: int, timeout: float = 8.0) -> None:
+    """等 switcher 列表渲染出至少 count 个子项，且子项内部 Label 已挂载
+    （ListItem 的 children 在 mount 周期后才填充——两层时序）。"""
+    import time as _t
+
+    deadline = _t.monotonic() + timeout
+    while True:
+        items = switcher.query_one("#switcher-list").children
+        ready = len(items) >= count and all(
+            len(getattr(item, "children", [])) > 0 for item in items[:count]
+        )
+        if ready or _t.monotonic() > deadline:
+            return
+        await asyncio.sleep(0.05)
+
+
 def test_session_switcher_offline_shows_offline_and_new():
     """离线网关：面板显式离线态；列表仍含新建会话项。"""
 
@@ -101,6 +128,8 @@ def test_session_switcher_offline_shows_offline_and_new():
             await pilot.pause()
             switcher = app.screen
             assert isinstance(switcher, SessionSwitcher)
+            await _wait_for(switcher, "offline_text")
+            await _wait_list_items(switcher, 1)
             assert "离线" in switcher.offline_text
             items = switcher.query_one("#switcher-list").children
             assert len(items) == 1  # 仅"新建会话"项
@@ -131,6 +160,7 @@ def test_memory_panel_renders_gateway_data(monkeypatch):
         app = _PanelApp(lambda: MemoryPanel(gw, "default-user"))
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
+            await _wait_for(app.screen, "rendered_text")
             content = app.screen.rendered_text
             assert "全部 6" in content and "热 2" in content and "冷 4" in content
             assert "alice 的记忆" in content
@@ -162,6 +192,7 @@ def test_run_timeline_renders_gateway_data(monkeypatch):
         app = _PanelApp(lambda: RunTimelinePanel(gw, "sess-1"))
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
+            await pilot.pause()  # worker 渲染节拍
             content = app.screen.rendered_text
             assert "run-abc123" in content
             assert "success" in content and "error" in content
@@ -198,6 +229,7 @@ def test_tui_session_switch_new_thread():
             await pilot.press("ctrl+k")
             await pilot.pause()
             assert isinstance(app.screen, SessionSwitcher)
+            await _wait_list_items(app.screen, 1)  # worker 渲染节拍
             await pilot.press("down", "enter")  # 高亮唯一项（新建）并确认
             await pilot.pause()
             assert app.active_thread_id != original_thread  # 新 thread
@@ -207,30 +239,53 @@ def test_tui_session_switch_new_thread():
 
 
 def test_tui_cockpit_bindings_open_panels():
-    """Ctrl+R / Ctrl+M / Ctrl+J 打开对应面板（任务 6.2/6.3 快捷键）。"""
+    """Ctrl+O / Ctrl+G / Ctrl+U 打开对应面板（新键位避开 CR/LF 别名——review medium）。"""
 
     async def check() -> None:
         app = EngramTUI(runtime=_stub_runtime())
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
             app._gateway = _offline_gateway()
-            await pilot.press("ctrl+r")
+            await pilot.press("ctrl+o")
             await pilot.pause()
             assert isinstance(app.screen, RunTimelinePanel)
             await pilot.press("escape")
             await pilot.pause()
 
-            await pilot.press("ctrl+m")
+            await pilot.press("ctrl+g")
             await pilot.pause()
             assert isinstance(app.screen, MemoryPanel)
             await pilot.press("escape")
             await pilot.pause()
 
-            await pilot.press("ctrl+j")
+            await pilot.press("ctrl+u")
             await pilot.pause()
             assert isinstance(app.screen, InspectorPanel)
             await pilot.press("escape")
             await pilot.pause()
+
+    asyncio.run(check())
+
+
+def test_tui_session_switch_dismiss_record_switches_thread():
+    """选已有会话：dismiss 记录 dict → thread 切换 + 进入对话态（review medium：旧实现
+    二次 HTTP 拉列表且 welcome-mode 下写隐藏 log）。"""
+
+    async def check() -> None:
+        app = EngramTUI(runtime=_stub_runtime())
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            app._on_session_picked({
+                "session_id": "sess-picked",
+                "thread_id": "thread-picked-77",
+                "user_id": "default-user",
+                "metadata": {"title": "已有会话"},
+            })
+            await pilot.pause()
+            assert app.active_thread_id == "thread-picked-77"
+            assert app._gateway_session_id == "sess-picked"
+            assert app.has_class("conversation-mode")  # 脱离隐藏的欢迎态
+            assert not app.has_class("welcome-mode")
 
     asyncio.run(check())
 
@@ -246,7 +301,7 @@ def test_tui_draft_not_lost_when_opening_panel():
             input_widget = app.query_one("#welcome-input")
             input_widget.text = "未发送的草稿"
             await pilot.pause()
-            await pilot.press("ctrl+j")
+            await pilot.press("ctrl+u")
             await pilot.pause()
             assert isinstance(app.screen, InspectorPanel)
             await pilot.press("escape")

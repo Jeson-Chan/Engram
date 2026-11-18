@@ -124,6 +124,7 @@ class SessionSwitcher(ModalScreen):
         self._gateway = gateway
         self._user_id = user_id
         self._sessions: list[dict] = []
+        self.offline_text = ""  # worker 完成前测试可读（空态）
 
     def compose(self) -> ComposeResult:
         with Vertical(id="panel-box"):
@@ -132,20 +133,31 @@ class SessionSwitcher(ModalScreen):
             yield ListView(id="switcher-list")
 
     def on_mount(self) -> None:
+        # review medium：阻塞 HTTP 不在事件循环里做——thread worker 拉数
+        # 据后 call_from_thread 更新 UI（列表项构建放 _render）
+        self.run_worker(self._fetch_sessions, thread=True, exclusive=True)
+
+    def _fetch_sessions(self) -> None:
         sessions = self._gateway.sessions(self._user_id)
+        # call_from_thread 是 App 的方法（Screen 没有）——经 self.app 转发
+        self.app.call_from_thread(self._render_data, sessions)
+
+    def _render_data(self, sessions: list[dict] | None) -> None:
         if sessions is None:
             self.offline_text = _OFFLINE + "\n本地新建会话仍可用（最后一项）。"
             self.query_one("#switcher-offline", Static).update(
                 Text(self.offline_text, style="dim"),
             )
             sessions = []
-        self._sessions = sessions
+        # 只保留实际渲染的截断列表（review medium：>30 会话时"新建"项
+        # 索引会落在旧列表范围内，选择"新建"会误切到未展示的会话）
+        self._sessions = sessions[:30]
         items = [
             ListItem(Label(
                 f"{str((s.get('metadata') or {}).get('title') or s['session_id'][:8])}"
                 f"  ·  {s.get('user_id', '')}  ·  {s['session_id'][:12]}",
             ))
-            for s in sessions[:30]
+            for s in self._sessions
         ]
         items.append(ListItem(Label("＋ 新建会话（新 thread，从空对话开始）")))
         self.query_one("#switcher-list", ListView).extend(items)
@@ -161,7 +173,9 @@ class SessionSwitcher(ModalScreen):
         if index >= len(self._sessions):
             self.dismiss("__new__")
         else:
-            self.dismiss(self._sessions[index]["session_id"])
+            # dismiss 完整记录（session_id/thread_id/title 一次带回——
+            # 调用方不再二次 HTTP 拉列表，review medium）
+            self.dismiss(self._sessions[index])
 
     def action_dismiss_panel(self) -> None:
         self.dismiss(None)
@@ -174,14 +188,23 @@ class RunTimelinePanel(CockpitPanel):
         super().__init__()
         self._gateway = gateway
         self._session_id = session_id
+        self.rendered_text = ""  # worker 完成前测试可读（空态）
 
     def panel_content(self) -> ComposeResult:
         yield Static("Run Inspector · Esc 关闭", id="timeline-title")
         yield Static("加载中…", id="timeline-content")
 
     def on_mount(self) -> None:
-        lines = [Text("运行历史", style="bold")]
+        # review medium：阻塞 HTTP 挪 thread worker
+        self.run_worker(self._fetch_timeline, thread=True, exclusive=True)
+
+    def _fetch_timeline(self) -> None:
         runs = self._gateway.runs(self._session_id) if self._session_id else None
+        events = self._gateway.run_events(runs[0]["run_id"]) if runs else None
+        self.app.call_from_thread(self._render_data, runs, events)
+
+    def _render_data(self, runs: list[dict] | None, events: dict | None) -> None:
+        lines = [Text("运行历史", style="bold")]
         if runs is None:
             lines.append(Text(_OFFLINE, style="dim"))
         elif not runs:
@@ -192,7 +215,6 @@ class RunTimelinePanel(CockpitPanel):
                 style = {"success": "green", "error": "red", "running": "yellow"}.get(status, "white")
                 lines.append(Text(f"● {r['run_id'][:18]}  {status}", style=style))
             latest = runs[0]
-            events = self._gateway.run_events(latest["run_id"])
             if events:
                 lines.append(Text(f"最近 Run 事件（{latest['run_id'][:18]}）：", style="bold"))
                 for e in events.get("events", [])[:40]:
@@ -210,14 +232,23 @@ class MemoryPanel(CockpitPanel):
         super().__init__()
         self._gateway = gateway
         self._user_id = user_id
+        self.rendered_text = ""  # worker 完成前测试可读（空态）
 
     def panel_content(self) -> ComposeResult:
         yield Static("Memory Explorer · Esc 关闭", id="memory-title")
         yield Static("加载中…", id="memory-content")
 
     def on_mount(self) -> None:
-        lines = [Text("Memory 面板", style="bold")]
+        # review medium：阻塞 HTTP 挪 thread worker
+        self.run_worker(self._fetch_memory, thread=True, exclusive=True)
+
+    def _fetch_memory(self) -> None:
         stats = self._gateway.memory_stats(self._user_id)
+        traces = self._gateway.memory_traces(self._user_id)
+        self.app.call_from_thread(self._render_data, stats, traces)
+
+    def _render_data(self, stats: dict | None, traces: list[dict] | None) -> None:
+        lines = [Text("Memory 面板", style="bold")]
         if stats is None:
             lines.append(Text(_OFFLINE, style="dim"))
         else:
@@ -225,7 +256,6 @@ class MemoryPanel(CockpitPanel):
                 f"全部 {stats.get('total', 0)} · 热 {stats.get('hot', 0)} · 冷 {stats.get('cold', 0)}"
                 f" · 遗忘 {stats.get('forgotten', 0)} · 巩固 {stats.get('consolidation', 0)}",
             ))
-        traces = self._gateway.memory_traces(self._user_id)
         if traces:
             lines.append(Text(""))
             for t in traces[:20]:
@@ -252,8 +282,15 @@ class InspectorPanel(CockpitPanel):
         yield Static("加载中…", id="inspector-content")
 
     def on_mount(self) -> None:
-        lines = [Text("Runtime Inspector", style="bold")]
+        # review medium：阻塞 HTTP 挪 thread worker
+        self.run_worker(self._fetch_status, thread=True, exclusive=True)
+
+    def _fetch_status(self) -> None:
         status = self._gateway.status()
+        self.app.call_from_thread(self._render_data, status)
+
+    def _render_data(self, status: dict | None) -> None:
+        lines = [Text("Runtime Inspector", style="bold")]
         if status is None:
             lines.append(Text(_OFFLINE, style="dim"))
             lines.append(Text(f"本地模型：{self._cli_state.get('model', '?')}"))

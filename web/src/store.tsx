@@ -26,6 +26,8 @@ export interface ToolCallState {
   startedAt: number;
   finishedAt: number | null;
   failed: boolean;
+  /** tool-call id（tool_start/tool_end 都带 msg_id——按 id 配对，review medium） */
+  msgId: string | null;
 }
 
 export interface ChatTurn {
@@ -91,7 +93,9 @@ type Action =
   | { type: "memory"; traces: MemoryTraceView[]; stats: Record<string, number> | null }
   | { type: "status"; status: RuntimeStatus | null; error?: string | null }
   | { type: "inspectorTab"; tab: "run" | "memory" }
-  | { type: "resetTurns" };
+  | { type: "resetTurns" }
+  /** 流事件进 reducer 累积（批内不丢 delta、越界不崩——review high/medium） */
+  | { type: "streamEvent"; index: number; event: StreamEvent };
 
 const initialState: AppState = {
   sessions: [],
@@ -127,26 +131,42 @@ function reducer(state: AppState, action: Action): AppState {
         sessions: state.sessions.filter((s) => s.session_id !== action.sessionId),
       };
     case "selectSession":
-      return { ...state, currentSessionId: action.sessionId, turns: [], history: [], runs: [], runEvents: [], currentRunId: null };
+      // review medium：事件 id 是 per-session 序列——切换必须清（否则新会话
+      // 带旧 id 空间的 Last-Event-ID → 假"缺口超限"提示）
+      return {
+        ...state, currentSessionId: action.sessionId, turns: [], history: [],
+        runs: [], runEvents: [], currentRunId: null,
+        lastEventId: null, droppedNotice: null,
+      };
     case "history":
       return { ...state, history: action.messages };
     case "turnStart":
       return { ...state, turns: [...state.turns, action.turn] };
     case "turnPatch": {
+      const current = state.turns[action.index];
+      if (!current) return state; // review high：会话切换后旧流补丁不打幽灵轮
       const turns = state.turns.slice();
-      turns[action.index] = { ...turns[action.index], ...action.patch };
+      turns[action.index] = { ...current, ...action.patch };
       return { ...state, turns };
     }
     case "toolPatch": {
+      const turn = state.turns[action.turnIndex];
+      if (!turn) return state;
       const turns = state.turns.slice();
-      const turn = { ...turns[action.turnIndex] };
-      turn.toolCalls = turn.toolCalls.slice();
-      turn.toolCalls[action.toolIndex] = {
-        ...turn.toolCalls[action.toolIndex],
+      const turnCopy = { ...turn };
+      turnCopy.toolCalls = turnCopy.toolCalls.slice();
+      turnCopy.toolCalls[action.toolIndex] = {
+        ...turnCopy.toolCalls[action.toolIndex],
         ...action.patch,
       };
-      turns[action.turnIndex] = turn;
+      turns[action.turnIndex] = turnCopy;
       return { ...state, turns };
+    }
+    case "streamEvent": {
+      const turn = state.turns[action.index];
+      if (!turn) return state; // 越界守卫（会话已切换/删除）
+      const next = applyEventToTurn(turn, action.event);
+      return next === turn ? state : { ...state, turns: replaceAt(state.turns, action.index, next) };
     }
     case "streaming":
       return { ...state, streaming: action.on };
@@ -170,6 +190,75 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, turns: [], droppedNotice: null, lastEventId: null };
     default:
       return state;
+  }
+}
+
+function replaceAt<T>(arr: T[], index: number, value: T): T[] {
+  const out = arr.slice();
+  out[index] = value;
+  return out;
+}
+
+/** 单个流事件 → turn 的纯函数累积（review medium：批内多帧共享同一 state
+ * 快照会把彼此的 delta 抹掉——搬进 reducer 后每帧都基于最新 state）。 */
+function applyEventToTurn(turn: ChatTurn, event: StreamEvent): ChatTurn {
+  switch (event.type) {
+    case "answer":
+      return { ...turn, content: turn.content + (event.content || "") };
+    case "thinking":
+      return { ...turn, thinking: turn.thinking + (event.content || "") };
+    case "skill_active": {
+      // review medium：skill_active 实际载荷在 event.skills（content 可能为空串）
+      let skills = event.skills ?? null;
+      if (!skills && event.content) {
+        try {
+          const parsed = JSON.parse(event.content);
+          if (Array.isArray(parsed)) skills = parsed;
+        } catch {
+          skills = [event.content];
+        }
+      }
+      return { ...turn, skillActive: skills };
+    }
+    case "tool_start": {
+      const tool: ToolCallState = {
+        name: event.tool_name || "tool",
+        args: event.tool_args || {},
+        result: null,
+        startedAt: Date.now(),
+        finishedAt: null,
+        failed: false,
+        msgId: event.msg_id, // review medium：按 tool-call id 配对（同名并行不串卡）
+      };
+      return { ...turn, toolCalls: [...turn.toolCalls, tool] };
+    }
+    case "tool_end": {
+      const toolCalls = turn.toolCalls.slice();
+      // 先按 msg_id 精确配对；无 msg_id 时回退按名字找第一个未完成的
+      let i = event.msg_id
+        ? toolCalls.findIndex((t) => t.msgId === event.msg_id)
+        : toolCalls.findIndex((t) => t.name === event.tool_name && t.result === null);
+      if (i < 0 && event.tool_name) {
+        i = toolCalls.findIndex((t) => t.name === event.tool_name && t.result === null);
+      }
+      if (i >= 0) {
+        toolCalls[i] = {
+          ...toolCalls[i],
+          result: event.tool_result,
+          finishedAt: Date.now(),
+          failed: /error|fail/i.test(event.tool_result || ""),
+        };
+      }
+      return { ...turn, toolCalls };
+    }
+    case "budget_update":
+      return { ...turn, budget: event.budget || null };
+    case "error":
+      return { ...turn, content: turn.content + `\n\n[流内错误] ${event.content}` };
+    case "done":
+      return { ...turn, streaming: false };
+    default:
+      return turn;
   }
 }
 
@@ -201,6 +290,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const api = useRef(new EngramAPI());
   const stateRef = useRef(state);
   stateRef.current = state;
+  const streamAbort = useRef<AbortController | null>(null);
 
   const refreshSessions = useCallback(async () => {
     const sessions = await api.current
@@ -210,23 +300,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const selectSession = useCallback(async (sessionId: string) => {
+    // review medium：切换先中止在途流（旧流继续 dispatch 会写进 stale 索引）
+    streamAbort.current?.abort();
+    streamAbort.current = null;
     dispatch({ type: "selectSession", sessionId });
     const [messages, runs] = await Promise.all([
       api.current.messages(sessionId).catch(() => [] as MessageView[]),
       api.current.runs(sessionId).catch(() => [] as RunRecord[]),
     ]);
+    // review medium：stale guard——快切 A→B 时 A 的晚到响应不得覆盖 B 的视图
+    if (stateRef.current.currentSessionId !== sessionId) return;
     dispatch({ type: "history", messages });
     dispatch({ type: "runs", runs });
   }, []);
 
   const createSession = useCallback(async () => {
-    const record = await api.current.createSession(stateRef.current.user_id);
+    // review medium：失败要可见（无提示的静默点击最迷惑）
+    const record = await api.current
+      .createSession(stateRef.current.user_id)
+      .catch((err: Error) => {
+        dispatch({ type: "dropped", notice: `新建会话失败：${err.message}` });
+        return null;
+      });
+    if (!record) return;
     // reducer 内 append（闭包里读 stateRef 会拿到过期列表覆盖丢会话）
     dispatch({ type: "addSession", session: record });
     dispatch({ type: "selectSession", sessionId: record.session_id });
   }, []);
 
   const deleteSession = useCallback(async (sessionId: string) => {
+    // 删的是当前会话 → 先中止流
+    if (stateRef.current.currentSessionId === sessionId) {
+      streamAbort.current?.abort();
+      streamAbort.current = null;
+    }
     await api.current.deleteSession(sessionId).catch(() => undefined);
     dispatch({ type: "removeSession", sessionId });
     if (stateRef.current.currentSessionId === sessionId) {
@@ -302,6 +409,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "streaming", on: true });
     dispatch({ type: "dropped", notice: null });
 
+    // review medium：可中止（切会话/删除时 abort，AbortError 单独归类不算错误）
+    const controller = new AbortController();
+    streamAbort.current = controller;
+
     try {
       await streamSSE(
         `/sessions/${sid}/${mode}`,
@@ -312,10 +423,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
           const event = parseEventData<StreamEvent>(frame);
           if (!event) return;
-          applyStreamEvent(event, assistantIndex, dispatch, stateRef);
+          // review medium：事件累积走 reducer（批内多帧曾共享过期快照互相抹 delta）
+          dispatch({ type: "streamEvent", index: assistantIndex, event });
         },
         {
           lastEventId: stateRef.current.lastEventId,
+          signal: controller.signal,
           onDropped: (reason) => {
             dispatch({
               type: "dropped",
@@ -325,16 +438,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
       );
     } catch (err) {
-      dispatch({
-        type: "turnPatch",
-        index: assistantIndex,
-        patch: { streaming: false, content: (stateRef.current.turns[assistantIndex]?.content || "") + `\n\n[连接错误] ${(err as Error).message}` },
-      });
+      const aborted =
+        controller.signal.aborted ||
+        (err as Error).name === "AbortError";
+      if (!aborted) {
+        dispatch({
+          type: "turnPatch",
+          index: assistantIndex,
+          patch: {
+            streaming: false,
+            content: (stateRef.current.turns[assistantIndex]?.content || "") +
+              `\n\n[连接错误] ${(err as Error).message}`,
+          },
+        });
+      }
     } finally {
+      if (streamAbort.current === controller) streamAbort.current = null;
       dispatch({ type: "turnPatch", index: assistantIndex, patch: { streaming: false } });
       dispatch({ type: "streaming", on: false });
-      // 流结束后刷新运行历史（run 投影可见）
-      refreshRuns().catch(() => undefined);
+      // 流结束后刷新运行历史（run 投影可见；仅当仍是同一会话）
+      if (stateRef.current.currentSessionId === sid) {
+        refreshRuns().catch(() => undefined);
+      }
     }
   }, [refreshRuns]);
 
@@ -352,75 +477,4 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   return <AppContext.Provider value={{ state, actions }}>{children}</AppContext.Provider>;
-}
-
-type Dispatch = React.Dispatch<Action>;
-
-function applyStreamEvent(
-  event: StreamEvent,
-  assistantIndex: number,
-  dispatch: Dispatch,
-  stateRef: React.MutableRefObject<AppState>,
-) {
-  const turn = stateRef.current.turns[assistantIndex];
-  const patch: Partial<ChatTurn> = {};
-  switch (event.type) {
-    case "answer":
-      patch.content = (turn?.content || "") + (event.content || "");
-      break;
-    case "thinking":
-      // 思考增量累积（折叠摘要行渲染，不打断 answer）
-      patch.thinking = (turn?.thinking || "") + (event.content || "");
-      break;
-    case "skill_active":
-      try {
-        patch.skillActive = JSON.parse(event.content || "[]");
-      } catch {
-        patch.skillActive = [event.content];
-      }
-      break;
-    case "tool_start": {
-      const tool: ToolCallState = {
-        name: event.tool_name || "tool",
-        args: event.tool_args || {},
-        result: null,
-        startedAt: Date.now(),
-        finishedAt: null,
-        failed: false,
-      };
-      const toolCalls = [...(turn?.toolCalls || []), tool];
-      patch.toolCalls = toolCalls;
-      break;
-    }
-    case "tool_end": {
-      const toolCalls = (turn?.toolCalls || []).slice();
-      for (let i = toolCalls.length - 1; i >= 0; i -= 1) {
-        if (toolCalls[i].name === event.tool_name && toolCalls[i].result === null) {
-          toolCalls[i] = {
-            ...toolCalls[i],
-            result: event.tool_result,
-            finishedAt: Date.now(),
-            failed: /error|fail/i.test(event.tool_result || ""),
-          };
-          break;
-        }
-      }
-      patch.toolCalls = toolCalls;
-      break;
-    }
-    case "budget_update":
-      patch.budget = event.budget || null;
-      break;
-    case "error":
-      patch.content = (turn?.content || "") + `\n\n[流内错误] ${event.content}`;
-      break;
-    case "done":
-      patch.streaming = false;
-      break;
-    default:
-      break;
-  }
-  if (Object.keys(patch).length > 0) {
-    dispatch({ type: "turnPatch", index: assistantIndex, patch });
-  }
 }

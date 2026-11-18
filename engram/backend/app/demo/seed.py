@@ -21,7 +21,6 @@ ENGRAM_REDIS_URL / ENGRAM_MEMORY_USE=default）；缺失时给出可操作错误
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -31,7 +30,9 @@ _PROJECT_ROOT = Path(__file__).parents[4]
 DEMO_SESSION_ID = "demo-session-0001"
 DEMO_THREAD_ID = "demo-thread-0001"
 DEMO_RUN_ID = "demo-run-0001"
-DEMO_USER_ID = "demo-user"
+# review high：必须与 Web/TUI 客户端的默认 user_id 一致（"default-user"）——
+# 会话列表与记忆端点都按 user_id 过滤，用别的值会让 seed 数据对演示界面不可见。
+DEMO_USER_ID = "default-user"
 
 # 固定记忆内容（中文叙事：上周的 LangGraph 记忆研究）
 DEMO_MEMORIES = [
@@ -166,7 +167,11 @@ def seed_run(logs_root: Path) -> str:
     report_path = output_dir / "final_report.md"
     report_path.write_text(DEMO_REPORT, encoding="utf-8")
 
-    journal = RunJournal(run_id=DEMO_RUN_ID, events_path=output_dir / "events.jsonl")
+    # review medium：RunJournal.append 是追加模式——先清空事件文件，
+    # 重复 seed 不叠加重复事件（时间线不会翻倍）
+    events_path = output_dir / "events.jsonl"
+    events_path.write_text("", encoding="utf-8")
+    journal = RunJournal(run_id=DEMO_RUN_ID, events_path=events_path)
     for event_type, payload in [
         ("run.started", {"expert_mode": True, "demo": True}),
         ("memory.recall", {"hits": 4, "thread": DEMO_THREAD_ID}),

@@ -68,7 +68,14 @@ async def track_run(app, ctx, *, status_record: dict | None = None,
 
 
 def track_run_sync(app, ctx, reason: str | None = None) -> None:
-    """断连路径的同步 best-effort 投影（CancelledError 分支不能 await）。"""
+    """断连路径的 best-effort 投影（CancelledError 分支不能 await）。
+
+    review medium：不能在事件循环线程上做阻塞 PG IO（慢/不可达 PG 的
+    同步池获取最长等 ~30s，会卡死整个网关的所有在途流）。改为把 upsert
+    调度到线程池（create_task + to_thread，不等待）；任务引用挂在 app.state
+    防 GC。当前恰在事件循环内时可用；否则回退同步 best-effort（极少数
+    非 loop 调用方）。
+    """
     try:
         runtime = getattr(app.state, "runtime", None)
         store = getattr(app.state, "run_store", None)
@@ -77,9 +84,33 @@ def track_run_sync(app, ctx, reason: str | None = None) -> None:
         record = record_of(runtime, getattr(ctx, "run_id", None))
         if record is None:
             return
-        _upsert(store, record, None)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            task = loop.create_task(asyncio.to_thread(_upsert, store, record, None))
+            _keep(task, app)
+            return
+        _upsert(store, record, None)  # 无 loop 的同步调用方（测试）
     except Exception:
         logger.exception("run projection (sync) failed (run %s)", getattr(ctx, "run_id", None))
+
+
+def _keep(task: "asyncio.Task[None]", app) -> None:
+    """持有 task 引用直至完成（防 GC 中断）；失败只 log。"""
+    pending = getattr(app.state, "_projection_tasks", None)
+    if pending is None:
+        pending = set()
+        app.state._projection_tasks = pending
+    pending.add(task)
+    task.add_done_callback(lambda t: (pending.discard(t), _log_task_error(t)))
+
+
+def _log_task_error(task: "asyncio.Task[None]") -> None:
+    if not task.cancelled() and task.exception() is not None:
+        logger.warning("run projection task failed: %s", task.exception())
 
 
 def _upsert(store, record: dict, report_path: str | None) -> None:

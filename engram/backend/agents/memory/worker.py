@@ -179,7 +179,7 @@ class MemoryWorker:
         if task.user_id is not None:
             all_episodic = [
                 t for t in all_episodic
-                if (t.metadata.get("user_id") or "default") == task.user_id
+                if (t.metadata.get("user_id") or "default-user") == task.user_id
             ]
         if len(all_episodic) < threshold:
             return

@@ -45,6 +45,9 @@ def test_disabled_by_default_no_web_routes():
 def test_enabled_serves_index_and_fallback(fake_dist, monkeypatch):
     monkeypatch.setenv("ENGRAM_WEB_UI_ENABLED", "true")
     monkeypatch.setenv("ENGRAM_WEB_UI_DIST", str(fake_dist))
+    # dist 外的敏感文件：穿越目标
+    secret = fake_dist.parent / "secret.env"
+    secret.write_text("API_KEY=leaked", encoding="utf-8")
     client, _ = _client()
     with client as c:
         index = c.get("/app")
@@ -60,6 +63,18 @@ def test_enabled_serves_index_and_fallback(fake_dist, monkeypatch):
         fallback = c.get("/app/sessions/some-id/inspector")
         assert fallback.status_code == 200
         assert "ENGRAM WEB" in fallback.text
+
+        # 路径穿越（review critical）：.. 编码 / 绝对路径都不读 dist 外文件。
+        # 行为两种都安全：路由层不匹配 → 404；路由匹配 → 回退 index。
+        # 红线只有一条：不泄漏 secret.env / win.ini 内容。
+        for evil in ("/app/%2e%2e/%2e%2e/secret.env", "/app/../../secret.env",
+                     "/app/..%2f..%2fsecret.env", "/app//etc/passwd",
+                     "/app/C:/Windows/win.ini"):
+            resp = c.get(evil)
+            assert resp.status_code in (200, 404)
+            assert "leaked" not in resp.text and "win.ini" not in resp.text
+            if resp.status_code == 200:
+                assert "ENGRAM WEB" in resp.text  # 是 index 回退
 
         # 既有端点不受影响
         assert c.get("/sessions").status_code == 200

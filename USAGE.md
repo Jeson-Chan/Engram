@@ -909,9 +909,9 @@ Hold `Shift` and drag to bypass Textual's mouse capture and use terminal-native 
 | Key | Action |
 |---|---|
 | `Ctrl+K` | Session switcher — gateway session list + new session (fresh thread) |
-| `Ctrl+R` | Run timeline — run history + persisted event log |
-| `Ctrl+M` | Memory panel — stats + traces with hot/cold/forgotten tags |
-| `Ctrl+J` | Inspector — model/mode/capabilities + context budget |
+| `Ctrl+O` | Run timeline — run history + persisted event log |
+| `Ctrl+G` | Memory panel — stats + traces with hot/cold/forgotten tags |
+| `Ctrl+U` | Inspector — model/mode/capabilities + context budget |
 | `Ctrl+P` | Command palette |
 | `Ctrl+N` | MCP panel |
 | `Ctrl+B` | Settings panel (API keys) |

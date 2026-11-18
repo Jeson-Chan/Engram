@@ -48,13 +48,23 @@ def _layer_of(store: Any, trace_id: str) -> str | None:
     return None
 
 
-def _view_of(store: Any, trace: Any) -> MemoryTraceView:
-    return memory_trace_view_from(trace, layer=_layer_of(store, trace.id))
+def _view_of(store: Any, trace: Any, layer: str | None = None) -> MemoryTraceView:
+    """层标注优先用已算好的 layer（_all_views 一趟带出——review performance：
+    每条单独 layer_of 是 2 次远程 GET，且 Redis get 会续命热层）。"""
+    if layer is None:
+        layer = _layer_of(store, trace.id)
+    return memory_trace_view_from(trace, layer=layer)
 
 
 def _user_of(trace: Any) -> str:
+    """trace 的归属用户。
+
+    review medium：sentinel 必须与网关默认会话用户一致（"default-user"，
+    SessionCreateRequest/registry 同款）——此前用 "default"，
+    默认用户的查询会把旧 trace 全部过滤掉。
+    """
     metadata = getattr(trace, "metadata", None) or {}
-    return str(metadata.get("user_id") or "default")
+    return str(metadata.get("user_id") or "default-user")
 
 
 def _matches(
@@ -98,12 +108,10 @@ def mount_memory_routes(app: FastAPI) -> None:
                 detail="memory not configured (set ENGRAM_MEMORY_USE and Redis/PG)",
             )
         stats = {"hot": 0, "cold": 0, "forgotten": 0, "consolidation": 0, "total": 0}
-        traces = _all_traces(store)
-        for trace in traces:
+        for trace, layer in _all_views(store):
             if user_id is not None and _user_of(trace) != user_id:
                 continue
             stats["total"] += 1
-            layer = _layer_of(store, trace.id)
             if layer == "hot":
                 stats["hot"] += 1
             elif layer == "cold":
@@ -132,30 +140,29 @@ def mount_memory_routes(app: FastAPI) -> None:
                 detail="memory not configured (set ENGRAM_MEMORY_USE and Redis/PG)",
             )
         out: list[MemoryTraceView] = []
-        for trace in _all_traces(store):
+        for trace, trace_layer in _all_views(store):
             if not _matches(
                 trace, user_id=user_id, q=q, type_filter=type,
                 min_strength=min_strength, forgotten=forgotten,
             ):
                 continue
-            view = _view_of(store, trace)
-            if layer is not None and (view.layer or "") != layer:
+            if layer is not None and (trace_layer or "") != layer:
                 continue
-            out.append(view)
+            out.append(_view_of(store, trace, trace_layer))
             if len(out) >= limit:
                 break
         return out
 
 
-def _all_traces(store: Any) -> list[Any]:
-    """全量 trace（layer 视图有 iter_views 用之；否则 list_all）。"""
+def _all_views(store: Any) -> list[tuple[Any, str | None]]:
+    """全量 (trace, layer) 视图——iter_views 一趟带层；否则 list_all + 逐条标注。"""
     iter_views = getattr(store, "iter_views", None)
     if callable(iter_views):
         try:
-            return [trace for trace, _layer in iter_views()]
+            return list(iter_views())
         except Exception:
             pass
     try:
-        return list(store.list_all())
+        return [(trace, _layer_of(store, trace.id)) for trace in store.list_all()]
     except Exception:
         return []

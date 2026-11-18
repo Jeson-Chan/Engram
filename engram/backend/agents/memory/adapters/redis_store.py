@@ -123,6 +123,12 @@ class RedisMemoryStore:
             self._client.expire(key, self._ttl)
         return _load(raw)
 
+    def contains(self, trace_id: str) -> bool:
+        """无副作用存在检查（review medium）：不刷新 TTL、不触发 _lazy_forget——
+        层视图/统计/列表用的只读语义（get() 会续命热层，浏览 Memory Explorer
+        反而把所有热记忆永久保温，破坏热→冷冷却）。"""
+        return bool(self._client.exists(self._key_of(trace_id)))
+
     def update(self, trace: MemoryTrace) -> None:
         key = self._key_of(trace.id)
         if self._client.get(key) is None:
@@ -181,7 +187,9 @@ class RedisMemoryStore:
     # ---- internals ----
 
     def _partition_of(self, trace: MemoryTrace) -> tuple:
-        user_id = str(trace.metadata.get("user_id", "default"))
+        # user sentinel 统一 "default-user"（网关/registry 默认用户——review
+        # medium：与检索/查询侧的 sentinel 保持一致，否则跨层判断不一致）
+        user_id = str(trace.metadata.get("user_id", "default-user"))
         thread_id = trace.metadata.get("thread_id")
         if not thread_id:
             source = trace.source or ""

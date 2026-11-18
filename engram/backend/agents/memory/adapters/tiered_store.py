@@ -128,10 +128,16 @@ class TieredMemoryStore:
     def layer_of(self, trace_id: str) -> str | None:
         """trace 当前所在层："hot" / "cold" / None（不存在）。
 
-        hot 命中即 hot（读回填后冷层也有副本，但热层在场即视为热）。
+        review medium：存在探测走无副作用路径——RedisMemoryStore.contains
+        （get() 命中会刷新 TTL：浏览/统计不该给热层续命，破坏热→冷冷却；
+        miss 还会触发 _lazy_forget 写操作）。热层无 contains 能力时回退 get。
         """
+        hot_contains = getattr(self._hot, "contains", None)
         try:
-            if self._hot.get(trace_id) is not None:
+            if callable(hot_contains):
+                if hot_contains(trace_id):
+                    return "hot"
+            elif self._hot.get(trace_id) is not None:
                 return "hot"
         except Exception:
             pass
@@ -140,11 +146,27 @@ class TieredMemoryStore:
         return None
 
     def iter_views(self) -> list[tuple[MemoryTrace, str | None]]:
-        """(trace, layer) 全量视图——list_all 的层标注版（Memory Explorer 用）。"""
-        return [
-            (trace, self.layer_of(trace.id))
-            for trace in self.list_all()
-        ]
+        """(trace, layer) 全量视图——list_all 的层标注版（Memory Explorer 用）。
+
+        review performance：热层 id 集一次取出再标注（每条 layer_of 都是
+        两次远程 GET；list_all 已拉过全部热 trace——直接建 set）。
+        """
+        hot_ids: set[str] | None = None
+        try:
+            hot_contains = getattr(self._hot, "contains", None)
+            if callable(hot_contains):
+                hot_ids = {
+                    trace.id for trace in self._hot.list_all()
+                }
+        except Exception:
+            hot_ids = None
+        out: list[tuple[MemoryTrace, str | None]] = []
+        for trace in self.list_all():
+            if hot_ids is not None and trace.id in hot_ids:
+                out.append((trace, "hot"))
+            else:
+                out.append((trace, self.layer_of(trace.id)))
+        return out
 
     # ---- internals ----
 

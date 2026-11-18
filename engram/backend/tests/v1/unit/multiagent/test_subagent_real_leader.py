@@ -82,18 +82,42 @@ def test_real_leader_agent_invoke_is_callable_directly():
     assert final.get("messages")
 
 
-def test_real_leader_agent_invoke_inside_running_loop():
-    """在事件循环内调用 invoke（嵌套防御路径）也能返回结果。"""
+def test_real_leader_agent_invoke_inside_running_loop_fails_fast():
+    """事件循环内调用 invoke（嵌套调用）→ 快速 RuntimeError（review high：
+    旧线程兜底会阻塞调用方循环整段 graph 时长，AsyncPostgresSaver 池绑定
+    原循环时直接死锁）。"""
     leader = _make_real_leader()
     state = {"messages": [], "user_input": "hi", "research_question": "hi"}
 
     async def _call_from_loop():
-        # 已有运行循环：invoke 走独立线程新循环路径
         return leader.invoke(state, config={"recursion_limit": 20})
 
-    final = asyncio.run(_call_from_loop())
+    with pytest.raises(RuntimeError, match="running event loop"):
+        asyncio.run(_call_from_loop())
+
+
+def test_real_leader_agent_invoke_deep_copies_caller_config():
+    """invoke 不改写调用方的 config dict（浅拷贝会跨调用共享生成的
+    thread_id，污染会话状态——review medium）。"""
+    leader = _make_real_leader()
+    caller_config = {"configurable": {"user_id": "alice"}, "recursion_limit": 20}
+    state = {"messages": [], "user_input": "hi", "research_question": "hi"}
+
+    leader.invoke(state, config=caller_config)
+
+    # 调用方原 dict 未被注入 thread_id（生成的 id 只在内部副本里）
+    assert "thread_id" not in caller_config["configurable"]
+    assert caller_config["configurable"]["user_id"] == "alice"
+
+
+def test_real_leader_agent_invoke_defaults_user_id():
+    """user_id 缺省（无 ambient config）→ 显式 "default"，绝不留 None
+    （None = 记忆召回不过滤 → 跨用户泄漏——review high）。"""
+    leader = _make_real_leader()
+    state = {"messages": [], "user_input": "hi", "research_question": "hi"}
+
+    final = leader.invoke(state, config={"recursion_limit": 20})
     assert isinstance(final, dict)
-    assert final.get("messages")
 
 
 def test_real_leader_agent_failure_is_structured_not_attributeerror():

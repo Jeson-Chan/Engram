@@ -106,7 +106,12 @@ export async function streamSSE(
     const detail = await resp.text().catch(() => "");
     throw new SSEHTTPError(resp.status, detail);
   }
-  if (resp.headers.get("X-Engram-Events-Dropped") === "true") {
+  // review medium：dropped 头只在实际续传（带了 Last-Event-ID）时才提示——
+  // 网关对"缓冲曾经溢出过"的会话每个请求都发该头，全新消息不该告警。
+  if (
+    options.lastEventId != null &&
+    resp.headers.get("X-Engram-Events-Dropped") === "true"
+  ) {
     options.onDropped?.("dropped header: events outside buffer capacity");
   }
   if (!resp.body) throw new Error("no response body");
@@ -123,7 +128,17 @@ export async function streamSSE(
         emit(frame, onEvent, options);
       }
     }
+    // review medium：流结束冲刷 TextDecoder 尾部不完整多字节序列，
+    // 再冲刷 SSE 半帧（截尾连接不再丢最后一个字符/帧）
+    for (const frame of decoder.push(decoderText.decode())) {
+      emit(frame, onEvent, options);
+    }
     for (const frame of decoder.flush()) emit(frame, onEvent, options);
+  } catch (err) {
+    // review medium：异常路径取消 reader（否则 body 不排空、服务端生成器
+    // 一直跑到自然结束；onEvent 抛错 / abort 中途都会走到这里）
+    await reader.cancel().catch(() => undefined);
+    throw err;
   } finally {
     reader.releaseLock();
   }

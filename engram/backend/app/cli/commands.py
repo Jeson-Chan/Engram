@@ -41,9 +41,9 @@ def _cmd_help(ctx: CommandContext) -> None:
     ctx.console.print("[bold]Keyboard shortcuts (TUI):[/bold]")
     ctx.console.print(
         "  [cyan]Ctrl+K[/cyan]     会话切换 / 新建会话\n"
-        "  [cyan]Ctrl+R[/cyan]     Run 时间线（运行历史 + 事件）\n"
-        "  [cyan]Ctrl+M[/cyan]     Memory 面板（统计 + 记忆列表）\n"
-        "  [cyan]Ctrl+J[/cyan]     Inspector（模型/模式/能力 + Context 预算）\n"
+        "  [cyan]Ctrl+O[/cyan]     Run 时间线（运行历史 + 事件）\n"
+        "  [cyan]Ctrl+G[/cyan]     Memory 面板（统计 + 记忆列表）\n"
+        "  [cyan]Ctrl+U[/cyan]     Inspector（模型/模式/能力 + Context 预算）\n"
         "  [cyan]Ctrl+P[/cyan]     命令面板\n"
         "  [cyan]Ctrl+N[/cyan]     MCP 面板\n"
         "  [cyan]Ctrl+B[/cyan]     设置面板（API Key 等）\n"

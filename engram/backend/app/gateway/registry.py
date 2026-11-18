@@ -56,7 +56,11 @@ class SessionRegistry:
 
     def create(self, user_id: str = "default-user",
                metadata: dict | None = None) -> SessionRecord:
-        """新建会话：分配独立 thread_id（每会话隔离的作用域键）。"""
+        """新建会话：分配独立 thread_id（每会话隔离的作用域键）。
+
+        review medium：先落盘再进内存——save() 失败（SQLite 锁/盘满）时
+        端点 500 且内存不残留幽灵会话（否则重启后凭空消失）。
+        """
         record = SessionRecord(
             session_id=uuid.uuid4().hex,
             thread_id=_make_thread_id(),
@@ -64,10 +68,10 @@ class SessionRegistry:
             created_at=_utc_now_iso(),
             metadata=metadata or {},
         )
-        with self._lock:
-            self._sessions[record.session_id] = record
         if self._store is not None:
             self._store.save(record)  # 落盘失败上抛（端点 500，不静默）
+        with self._lock:
+            self._sessions[record.session_id] = record
         return record
 
     def get(self, session_id: str) -> SessionRecord | None:
@@ -83,11 +87,17 @@ class SessionRegistry:
         return records
 
     def delete(self, session_id: str) -> bool:
+        """删除会话。store 先删（失败上抛，内存条目保留 → 端点 500 而不是
+        假 204，重启后数据也一致——review medium 的对称修复）。"""
         with self._lock:
-            existed = self._sessions.pop(session_id, None) is not None
-        if existed and self._store is not None:
-            self._store.delete(session_id)
-        return existed
+            existed = self._sessions.get(session_id) is not None
+        if not existed:
+            return False
+        if self._store is not None:
+            self._store.delete(session_id)  # 失败上抛：内存未删，状态一致
+        with self._lock:
+            self._sessions.pop(session_id, None)
+        return True
 
 
 def _utc_now_iso() -> str:

@@ -45,16 +45,24 @@ def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
 
 
 def _wait_services(timeout: float = 60.0) -> bool:
-    """轮询 PG/Redis 就绪（docker compose 起容器需要几秒）。"""
+    """轮询 PG/Redis 就绪（docker compose 起容器需要几秒）。
+
+    review medium：探测目标必须与 seed/网关实际用的 DSN 一致（_seed_env
+    优先取 ENGRAM_* env 覆盖）——否则配置指向别处时假就绪/假失败。
+    """
     import psycopg
     import redis
+
+    env = _seed_env()
+    pg_dsn = env["ENGRAM_RUNS_PG_DSN"]
+    redis_url = env["ENGRAM_REDIS_URL"]
 
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            with psycopg.connect(PG_DSN, connect_timeout=2) as conn:
+            with psycopg.connect(pg_dsn, connect_timeout=2) as conn:
                 conn.execute("SELECT 1")
-            redis.Redis.from_url(REDIS_URL, socket_connect_timeout=2).ping()
+            redis.Redis.from_url(redis_url, socket_connect_timeout=2).ping()
             return True
         except Exception:
             time.sleep(1.5)
@@ -149,8 +157,8 @@ def _print_script() -> None:
 ║    召回提示展开（记忆按 demo-user 隔离，不会跨用户泄漏）      ║
 ║ 5. 断线续传：刷新页面 → 会话/历史/最近 run 恢复（SQLite +     ║
 ║    checkpointer）；流中途断网 → Last-Event-ID 补发            ║
-║ 6. TUI 驾驶舱（另开终端 `engram`）：Ctrl+K 切会话 / Ctrl+R   ║
-║    时间线 / Ctrl+M 记忆 / Ctrl+J Inspector                    ║
+║ 6. TUI 驾驶舱（另开终端 `engram`）：Ctrl+K 切会话 / Ctrl+O   ║
+║    时间线 / Ctrl+G 记忆 / Ctrl+U Inspector                    ║
 ║ 7. （加分）清 Redis 热层 → 冷层召回仍可用；重启网关 → 会话   ║
 ║    仍在（记忆分层的持久性叙事）                               ║
 ╚══════════════════════════════════════════════════════════════╝

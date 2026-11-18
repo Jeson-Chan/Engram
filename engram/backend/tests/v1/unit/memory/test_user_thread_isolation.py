@@ -101,7 +101,7 @@ class TestRecallUserIsolation:
 
         results = retriever.retrieve(MemoryQuery(text="secret 秘密", user_id="bob"))
         assert all(
-            (r.trace.metadata.get("user_id") or "default") == "bob" for r in results
+            (r.trace.metadata.get("user_id") or "default-user") == "bob" for r in results
         )
         assert "ALICE-SECRET-777" not in " ".join(r.trace.content for r in results)
 
@@ -114,7 +114,7 @@ class TestRecallUserIsolation:
         store.add(_trace("legacy memory without user metadata", user_id=None, thread_id=None))
         retriever = self._retriever(store)
 
-        results = retriever.retrieve(MemoryQuery(text="legacy memory", user_id="default"))
+        results = retriever.retrieve(MemoryQuery(text="legacy memory", user_id="default-user"))
         assert any("legacy" in r.trace.content for r in results)
 
     def test_no_user_filter_keeps_legacy_behavior(self):
@@ -387,7 +387,7 @@ class TestRedisPartitionKeys:
         )
         store.add(trace)
         keys = [k for k in client.keys("*") if k.startswith("engram:mem:")]
-        assert any(":default:default:trace-old" in k for k in keys)
+        assert any(":default-user:default:trace-old" in k for k in keys)
 
 
 class TestEndToEndIsolation:

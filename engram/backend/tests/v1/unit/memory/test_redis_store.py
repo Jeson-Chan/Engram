@@ -59,14 +59,14 @@ def test_partition_isolation_between_threads() -> None:
     store.add(t1)
     store.add(t2)
 
-    part1 = store.partition("default", "thread-aaa")
-    part2 = store.partition("default", "thread-bbb")
+    part1 = store.partition("default-user", "thread-aaa")
+    part2 = store.partition("default-user", "thread-bbb")
     assert [t.content for t in part1.list()] == ["thread-1 memory"]
     assert [t.content for t in part2.list()] == ["thread-2 memory"]
     # 键按 thread 分区（键名含 thread id）
     ids1 = {t.id for t in part1.list()}
-    assert store._client.exists("engram:mem:default:thread-aaa:" + t1.id)
-    assert not store._client.exists("engram:mem:default:thread-bbb:" + t1.id)
+    assert store._client.exists("engram:mem:default-user:thread-aaa:" + t1.id)
+    assert not store._client.exists("engram:mem:default-user:thread-bbb:" + t1.id)
 
 
 def test_partition_isolation_between_users() -> None:
@@ -90,7 +90,7 @@ def test_ttl_expiry_key_vanishes() -> None:
     store = RedisMemoryStore(client, ttl_seconds=1)
     trace = _trace("hot memory", source="worker:thread-ttl:1")
     store.add(trace)
-    key = "engram:mem:default:thread-ttl:" + trace.id
+    key = "engram:mem:default-user:thread-ttl:" + trace.id
     assert client.exists(key)
     ttl_before = client.ttl(key)
     assert 0 < ttl_before <= 1
@@ -99,7 +99,7 @@ def test_ttl_expiry_key_vanishes() -> None:
     assert not client.exists(key)  # 键消失
     assert store.get(trace.id) is None  # 读取 = 不存在
     assert trace.id not in client.hkeys(_IDX_KEY)  # 索引残留被惰性清理
-    assert store.partition("default", "thread-ttl").list() == []
+    assert store.partition("default-user", "thread-ttl").list() == []
 
 
 def test_read_refreshes_ttl() -> None:
@@ -108,7 +108,7 @@ def test_read_refreshes_ttl() -> None:
     store = RedisMemoryStore(client, ttl_seconds=2)
     trace = _trace("refreshed", source="worker:thread-hot:1")
     store.add(trace)
-    key = "engram:mem:default:thread-hot:" + trace.id
+    key = "engram:mem:default-user:thread-hot:" + trace.id
 
     time.sleep(1.1)
     assert store.get(trace.id) is not None  # 读命中
@@ -123,7 +123,7 @@ def test_no_ttl_permanent() -> None:
     store = RedisMemoryStore(client, ttl_seconds=None)
     trace = _trace("permanent", source="worker:thread-p:1")
     store.add(trace)
-    assert client.ttl("engram:mem:default:thread-p:" + trace.id) == -1
+    assert client.ttl("engram:mem:default-user:thread-p:" + trace.id) == -1
 
 
 # ── 协议语义（与 MarkdownFileStore 对齐） ──────────────────────
@@ -180,8 +180,8 @@ def test_live_redis_roundtrip_and_ttl() -> None:
     store.add(t_a)
     store.add(t_b)
 
-    assert [t.content for t in store.partition("default", "thread-live-a").list()] == ["live-a"]
-    key = "engram:mem:default:thread-live-a:" + t_a.id
+    assert [t.content for t in store.partition("default-user", "thread-live-a").list()] == ["live-a"]
+    key = "engram:mem:default-user:thread-live-a:" + t_a.id
     assert 0 < client.ttl(key) <= 2  # redis-cli 可见 TTL 倒计时
     assert store.get(t_a.id) is not None  # 刷新
     time.sleep(2.2)

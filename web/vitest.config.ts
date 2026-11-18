@@ -13,6 +13,9 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // review medium：tsconfig 已声明 vitest/globals 类型——runtime 同步开启，
+    // 否则"忘了 import describe"的测试 tsc 通过、运行时炸
+    globals: true,
     include: ["src/**/*.test.{ts,tsx}"],
   },
 });

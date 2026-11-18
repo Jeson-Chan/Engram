@@ -46,23 +46,14 @@ function Shell() {
     }
   }, [state.sessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // URL 同步：跳过首帧（mount 时 currentSessionId 尚为 null，会把 ?s= 清掉）
-  const firstUrlSync = useRef(true);
+  // URL 同步（review medium：StrictMode 双调 mount 使"首帧跳过"守卫失效；
+  // 简化为永不删除参数——只在有选中会话时写入。已删会话的陈旧 ?s=
+  // 由恢复 effect 的存在性检查自然忽略。）
   useEffect(() => {
-    if (firstUrlSync.current) {
-      firstUrlSync.current = false;
-      // 首帧仍要同步（选中会话后正常写 URL），只是不清参数
-      if (state.currentSessionId) {
-        const url = new URL(window.location.href);
-        url.searchParams.set("s", state.currentSessionId);
-        window.history.replaceState(null, "", url);
-      }
-      return;
-    }
     const sid = state.currentSessionId;
+    if (!sid) return;
     const url = new URL(window.location.href);
-    if (sid) url.searchParams.set("s", sid);
-    else url.searchParams.delete("s");
+    url.searchParams.set("s", sid);
     window.history.replaceState(null, "", url);
   }, [state.currentSessionId]);
 

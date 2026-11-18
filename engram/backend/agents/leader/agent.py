@@ -28,6 +28,25 @@ def _last_ai_message(state: Any) -> str:
     return ""
 
 
+def _ambient_config_value(key: str) -> Any:
+    """读当前 LangGraph runnable config 的 configurable 值（不在 runnable
+    上下文时返 None）。与记忆中间件同款 get_config() 语义——subagent 从
+    ambient 继承 user_id 用。
+    """
+    try:
+        from langgraph.config import get_config
+
+        config = get_config()
+    except RuntimeError:
+        return None
+    except Exception:
+        return None
+    if not isinstance(config, dict):
+        return None
+    configurable = config.get("configurable") or {}
+    return configurable.get(key) if isinstance(configurable, dict) else None
+
+
 def _resolve_actual_model_name(registry: CapabilityRegistry) -> str:
     """取实际 researcher 模型的路由 provider 名（FallbackChatModel.provider_names）。
 
@@ -86,20 +105,29 @@ class LeaderAgent:
         两种调用上下文：
         - 无运行循环（同步工具在线程池执行器里被 ToolNode 调用）→
           asyncio.run(ainvoke)
-        - 已在事件循环内（嵌套调用防御）→ 独立线程跑新循环，避免
-          asyncio.run 嵌套 RuntimeError
+        - 已在事件循环内（review high）：不再"新线程 + .result() 阻塞"——
+          那会卡死事件循环整段 graph 时长，且 AsyncPostgresSaver 的池绑定
+          原循环会真死锁。嵌套循环是编程错误：快速抛 RuntimeError。
+
+        Config 归属（review high/medium）：
+        - 深拷贝 configurable（浅拷贝会改写调用方的 dict——跨调用共享了
+          第一个生成的 thread_id，污染会话状态）
+        - thread_id 缺省 → 每调用独立生成（隔离上下文）
+        - user_id 从 ambient runnable config 继承（get_config）；无则显式
+          "default"——绝不留 None：记忆隔离链（MemoryQuery.user_id=None =
+          不过滤）会把其它用户记忆泄进 subagent 上下文（跨用户泄漏）。
         """
         effective_config = dict(config or {})
-        # checkpointer 需要 configurable.thread_id；subagent 的隔离上下文
-        # 没有父 thread 信息——缺省时生成独立 thread_id（每调用独立会话状态）。
-        configurable = effective_config.get("configurable")
-        if not isinstance(configurable, dict):
-            configurable = dict(effective_config.get("configurable") or {})
-            effective_config["configurable"] = configurable
+        # 深拷贝 configurable：调用方的 dict 不被就地改写
+        configurable = dict(effective_config.get("configurable") or {})
+        effective_config["configurable"] = configurable
         if not configurable.get("thread_id"):
             import uuid
 
             configurable["thread_id"] = uuid.uuid4().hex
+        if not configurable.get("user_id"):
+            ambient_user = _ambient_config_value("user_id")
+            configurable["user_id"] = ambient_user or "default"
 
         async def _ainvoke() -> Any:
             return await self.graph.ainvoke(state, config=effective_config)
@@ -108,9 +136,11 @@ class LeaderAgent:
             asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(_ainvoke())
-        # 已在循环内：新线程 + 新循环（bootstrap 的 MCP load 同款 idiom）
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, _ainvoke()).result()
+        # 已在事件循环内（嵌套调用）：编程错误，快速失败（不阻塞循环等死锁）
+        raise RuntimeError(
+            "LeaderAgent.invoke called from a running event loop; "
+            "subagent delegation must run from a sync (tool-executor) context"
+        )
 
     def run(self, question: str, run_context: Any) -> AgentRunResult:
         initial = create_initial_thread_state(question)

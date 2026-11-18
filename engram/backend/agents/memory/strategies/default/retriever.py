@@ -101,10 +101,12 @@ class HybridRetriever:
         candidates = [t for t in self._store.list_all() if not t.metadata.get("forgotten")]
         if query.user_id is not None:
             # 只召回当前用户可见的记忆；旧 trace（metadata 无 user_id）
-            # 视为 "default" 用户，default 查询仍可读（数据兼容）。
+            # 视为 "default-user"（网关/registry 的默认用户——review medium：
+            # sentinel 统一，此前 "default" 与默认用户 "default-user" 不匹配，
+            # 默认用户查不到旧 trace）。
             candidates = [
                 t for t in candidates
-                if (t.metadata.get("user_id") or "default") == query.user_id
+                if (t.metadata.get("user_id") or "default-user") == query.user_id
             ]
         if query.thread_id is not None:
             candidates = [

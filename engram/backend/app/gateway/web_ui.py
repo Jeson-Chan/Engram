@@ -70,11 +70,14 @@ def mount_web_ui(app: FastAPI) -> bool:
     def web_fallback(full_path: str):
         """SPA history 路由回退：未知前端路由返回 index（JS 路由接管）。
 
-        有对应静态文件的路径直接回退 index 也没问题（资源已由上面的
-        assets mount 接管）；此处只兜前端路由。
+        安全（review critical）：full_path 来自 URL——先 resolve 再校验
+        落在 dist 根内（`..`/绝对路径/编码穿越一律拒绝），否则 dist 外的
+        任意文件（.env 密钥、gateway.db）可被读取。资源路径已由上面的
+        assets mount（StaticFiles，自带防穿越）接管；此处只兜前端路由。
         """
-        candidate = dist / full_path
-        if full_path and candidate.is_file():
+        dist_root = dist.resolve()
+        candidate = (dist_root / full_path.lstrip("/")).resolve()
+        if full_path and candidate.is_relative_to(dist_root) and candidate.is_file():
             return FileResponse(str(candidate))
         return FileResponse(str(index_html))
 

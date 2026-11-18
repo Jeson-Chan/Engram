@@ -84,12 +84,24 @@ function ThinkingRow({ text }: { text: string }) {
 }
 
 function HistoryMessage({ msg }: { msg: MessageView }) {
+  // review medium：tool 消息不渲染成裸气泡（原始输出很长、破坏回放视觉）——
+  // 折叠成工具卡摘要行，内容挂在 details 里
+  if (msg.role === "tool") {
+    return (
+      <div className="tool-card" data-testid="history-tool">
+        <details>
+          <summary>🔧 工具输出（{msg.content.length} 字符，点击展开）</summary>
+          <pre>{msg.content.slice(0, 2000)}</pre>
+        </details>
+      </div>
+    );
+  }
   return (
     <div className={`msg ${roleClass(msg.role)}`}>
       <div className="role">{msg.role}</div>
       <div className="body">
         <Markdown text={msg.content} />
-        {msg.tool_calls.map((tc, i) => (
+        {(msg.tool_calls ?? []).map((tc, i) => (
           <div className="tool-card" key={i}>
             <div className="head">
               <span className="name">{tc.name}</span>
@@ -126,7 +138,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
         <ThinkingRow text={turn.thinking} />
         <Markdown text={turn.content} />
         {turn.streaming && <span className="cursor" />}
-        {turn.toolCalls.map((tool, i) => (
+        {(turn.toolCalls ?? []).map((tool, i) => (
           <ToolCard key={i} tool={tool} />
         ))}
         {turn.budget && (

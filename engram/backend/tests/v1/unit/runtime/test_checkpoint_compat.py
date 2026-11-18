@@ -86,9 +86,14 @@ class TestAllowlistedRoundtrip:
         assert type(loaded_src) is Source
 
     def test_allowlist_covers_state_module_only(self):
+        """覆盖全部会进 ThreadState 的状态模块（review medium：multiagent.types
+        的 ArtifactRef 等也被冻结进 checkpoint）。"""
         classes = _engram_state_types()
         modules = {c.__module__ for c in classes}
-        assert modules == {"engram.backend.agents.state.types"}
+        assert modules == {
+            "engram.backend.agents.state.types",
+            "engram.backend.agents.multiagent.types",
+        }
         assert AgentError in classes
 
     def test_langchain_messages_still_safe(self, _fresh_warnings):

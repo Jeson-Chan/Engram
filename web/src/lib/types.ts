@@ -77,6 +77,9 @@ export interface StreamEvent {
   tool_args: Record<string, unknown> | null;
   tool_result: string | null;
   msg_id: string | null;
+  /** skill_active 事件实际携带的 skill 名列表（content 可能为空串——
+   * review medium：只解析 content 会恒得空列表）。 */
+  skills?: string[];
   budget?: {
     total: number;
     fraction: number;

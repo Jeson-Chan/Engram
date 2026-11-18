@@ -24,8 +24,8 @@ Web 工作台 5 分钟脚本（seed 的「上周的 LangGraph 记忆研究」会
 4. 现场流式研究：输入「分层记忆怎么实现？」→ token 级流式 + 工具卡片 + 召回提示展开。
 5. 刷新页面 → 会话/历史消息/最近 run 恢复（SQLite 会话映射 + checkpointer）；
    流中途断线 → 重连带 `Last-Event-ID` 补发，缺口超限显式提示。
-6. TUI 驾驶舱（另开终端 `engram`）：`Ctrl+K` 切会话 / `Ctrl+R` Run 时间线 /
-   `Ctrl+M` Memory / `Ctrl+J` Inspector / `Esc` 关闭任何弹层。
+6. TUI 驾驶舱（另开终端 `engram`）：`Ctrl+K` 切会话 / `Ctrl+O` Run 时间线 /
+   `Ctrl+G` Memory / `Ctrl+U` Inspector / `Esc` 关闭任何弹层。
 
 API 细节见 `docs/api.md`；SSE 事件语义见 `docs/event-semantics.md`。
 

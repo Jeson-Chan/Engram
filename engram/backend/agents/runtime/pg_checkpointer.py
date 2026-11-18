@@ -96,14 +96,19 @@ def _dict_row():
 
 
 def _engram_state_types() -> list[type]:
-    """checkpoint 允许清单：engram.backend.agents.state.types 模块内定义的类。
+    """checkpoint 允许清单：会进 ThreadState 的 Engram dataclass 模块。
 
-    只收集 __module__ 即本模块的类（排除 import 进来的外部类型），
-    保持"明确状态模块"边界。
+    review medium：不止 state.types——multiagent.types 的 ArtifactRef 等也
+    被冻结进 checkpoint（orchestration.specialist_artifacts），漏掉它们
+    就还是"未注册类型"告警/严格模式降级。
     """
+    import engram.backend.agents.multiagent.types as multiagent_types_mod
     import engram.backend.agents.state.types as state_types_mod
 
-    return [
-        cls for cls in vars(state_types_mod).values()
-        if isinstance(cls, type) and cls.__module__ == state_types_mod.__name__
-    ]
+    types: list[type] = []
+    for module in (state_types_mod, multiagent_types_mod):
+        types.extend(
+            cls for cls in vars(module).values()
+            if isinstance(cls, type) and cls.__module__ == module.__name__
+        )
+    return types

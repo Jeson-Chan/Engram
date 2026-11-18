@@ -6,7 +6,6 @@ import type {
   RunEventView,
   RunRecord,
   RuntimeStatus,
-  SessionSummary,
 } from "./types";
 
 export interface SessionRecord {
@@ -33,6 +32,8 @@ export class APIError extends Error {
 }
 
 export class EngramAPI {
+  // （review medium：summarizeSession 死代码已删——SessionRecord 直达 UI，
+  // 伪造 message_count/memory_count 占位数据反而误导。）
   constructor(private base = "") {}
 
   // ---- sessions ----
@@ -125,18 +126,4 @@ export class EngramAPI {
       jsonOrThrow<RuntimeStatus>(r, "load status failed"),
     );
   }
-}
-
-export function summarizeSession(record: SessionRecord): SessionSummary {
-  return {
-    session_id: record.session_id,
-    thread_id: record.thread_id,
-    title: String(record.metadata?.title || `Session ${record.session_id.slice(0, 8)}`),
-    user_id: record.user_id,
-    created_at: record.created_at,
-    updated_at: record.created_at,
-    message_count: 0,
-    memory_count: 0,
-    last_run_status: null,
-  };
 }

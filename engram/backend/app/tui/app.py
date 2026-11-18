@@ -411,11 +411,13 @@ class EngramTUI(App):
         Binding("ctrl+p", "toggle_command_palette", "Commands", show=False),
         Binding("ctrl+n", "toggle_mcp_panel", "MCP", show=True, priority=True),
         Binding("ctrl+b", "toggle_settings", "Settings", show=True, priority=True),
-        # 研究驾驶舱（tui-research-cockpit 任务 6.1/6.2/6.3）
+        # 研究驾驶舱（tui-research-cockpit 任务 6.1/6.2/6.3）。
+        # 键位（review medium）：避开 Ctrl+M/Ctrl+J——多数终端把它们透传为
+        # CR/LF（Textual 报成 enter），会变成"按 Memory 键发送消息"。
         Binding("ctrl+k", "session_switcher", "Sessions", show=True, priority=True),
-        Binding("ctrl+r", "run_timeline", "Run", show=True, priority=True),
-        Binding("ctrl+m", "memory_panel", "Memory", show=True, priority=True),
-        Binding("ctrl+j", "inspector", "Inspector", show=True, priority=True),
+        Binding("ctrl+o", "run_timeline", "Run", show=True, priority=True),
+        Binding("ctrl+g", "memory_panel", "Memory", show=True, priority=True),
+        Binding("ctrl+u", "inspector", "Inspector", show=True, priority=True),
     ]
 
     def __init__(self, runtime: Any, provider: str | None = None, model: str | None = None) -> None:
@@ -431,6 +433,7 @@ class EngramTUI(App):
         self._thread_count = 1
         self._gateway = GatewayClient()
         self._gateway_session_id: str | None = None
+        self._active_thread_dir = None  # 切换会话时重派生（review medium）
         self.cli_state: dict[str, Any] = {
             "pending_expert_mode": None,
             "pending_report": None,
@@ -641,6 +644,9 @@ class EngramTUI(App):
     def _on_session_picked(self, result: str | None) -> None:
         if result is None:
             return
+        # 切换前先退出欢迎态（review medium：welcome-mode 下 conv-body 隐藏，
+        # 否则 banner/历史回放写进不可见 log）
+        self._enter_conversation_mode()
         if result == "__new__":
             from engram.backend.app.bootstrap import _make_thread_id
 
@@ -648,6 +654,7 @@ class EngramTUI(App):
             self.active_thread_id = _make_thread_id()
             self.active_thread_title = f"会话 {self._thread_count}"
             self._gateway_session_id = None
+            self._active_thread_dir = None
             conv = self.query_one(ConversationLog)
             conv.clear()
             conv.write(Text(
@@ -656,20 +663,38 @@ class EngramTUI(App):
             ))
             self._focus_conv_input()
             return
-        # 切到网关已有会话：透传其 thread_id（共享 checkpointer 时可回放历史）
-        sessions = self._gateway.sessions() or []
-        for s in sessions:
-            if s.get("session_id") == result:
-                self.active_thread_id = s["thread_id"]
-                self.active_thread_title = str(
-                    (s.get("metadata") or {}).get("title") or f"会话 {result[:8]}",
-                )
-                self._gateway_session_id = result
-                self._load_thread_history()
-                return
+        # 切到网关已有会话：SessionSwitcher 直接 dismiss 记录（不再二次拉
+        # HTTP 列表——review medium：阻塞 + 无匹配时静默丢弃选择）
+        record = result if isinstance(result, dict) else None
+        if record is None:
+            return
+        self.active_thread_id = record["thread_id"]
+        self.active_thread_title = str(
+            (record.get("metadata") or {}).get("title") or f"会话 {record['session_id'][:8]}",
+        )
+        self._gateway_session_id = record["session_id"]
+        self._active_thread_dir = None
+        self._load_thread_history()
 
-    def _load_thread_history(self) -> None:
-        """复用 thread 加载历史：graph.aget_state(active_thread) → 对话区回放。"""
+    def _enter_conversation_mode(self) -> None:
+        """确保对话态（首次输入前的 Ctrl+K 切换也需要）。"""
+        if self._first_input:
+            self._first_input = False
+            self.remove_class("welcome-mode")
+            self.remove_class("draft-summary")
+            self.add_class("conversation-mode")
+            self.query_one("#input-info", Static).update(self._input_info())
+            self.query_one(StatusBar).update_state(self.cli_state)
+            self._refresh_side_panel()
+            self.call_after_refresh(self._focus_conv_input)
+
+    @work(exclusive=True, group="history")
+    async def _load_thread_history(self) -> None:
+        """复用 thread 加载历史：graph.aget_state(active_thread) → 对话区回放。
+
+        review high：必须在 worker 里 await（Textual 回调在事件循环内，
+        旧 asyncio.run 必抛 RuntimeError → except 吞成误导性"历史不可读"）。
+        """
         conv = self.query_one(ConversationLog)
         conv.clear()
         conv.write(Text(
@@ -677,12 +702,10 @@ class EngramTUI(App):
             style=theme.ACCENT_BRAND,
         ))
         try:
-            import asyncio
-
             graph = self.runtime.leader_agent.graph
-            snapshot = asyncio.run(graph.aget_state(
+            snapshot = await graph.aget_state(
                 {"configurable": {"thread_id": self.active_thread_id}},
-            ))
+            )
             values = getattr(snapshot, "values", None) or {}
             messages = values.get("messages", []) if isinstance(values, dict) else []
             conv.render_history(messages)
@@ -887,12 +910,23 @@ class EngramTUI(App):
         self._run_start_time = time.monotonic()
 
         try:
+            # thread_dir 按活跃 thread 派生（review medium：固定 runtime.thread_dir
+            # 会把切换后的 run 日志写进旧 thread 目录，事件/产物解析找不到）
+            active_thread_dir = getattr(self, "_active_thread_dir", None)
+            if active_thread_dir is None:
+                from pathlib import Path as _Path
+
+                active_thread_dir = (
+                    _Path(self.runtime.config.runtime.logs_root)
+                    / "threads" / self.active_thread_id
+                )
+                self._active_thread_dir = active_thread_dir
             ctx = self.runtime.run_manager.create_run(
                 thread_id=self.active_thread_id,
                 user_id="default-user",
                 run_id=None,
                 model_name=self.runtime.researcher_model_name,
-                thread_dir=self.runtime.thread_dir,
+                thread_dir=active_thread_dir,
             )
             self.runtime.run_manager.mark_running(ctx.run_id)
             config = self._build_stream_config(ctx)
