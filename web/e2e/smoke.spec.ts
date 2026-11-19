@@ -2,7 +2,7 @@
  * Playwright smoke — web-research-workbench 任务 5.7。
  *
  * 场景链：新建会话 → 流式回答 → 展开召回记忆 → 刷新恢复（会话/历史/最近 Run）。
- * 前置：scripts/demo.py 起的网关（含 seed 数据 + Web UI 开启）。
+ * 前置：先 `python -m engram.backend.app.demo.seed` 预置数据，再起网关（Web UI 开启）。
  * 运行：cd web && npx playwright test
  */
 

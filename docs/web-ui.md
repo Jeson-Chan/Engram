@@ -20,7 +20,7 @@ http://127.0.0.1:8000/app
 
 开发模式（热更新，代理到网关 8000）：`cd web && npm run dev` → `http://127.0.0.1:5173`。
 
-一键演示（含 seed）：`python scripts/demo.py`（见 `docs/demo.md`）。
+预置演示数据（幂等 seed）：`python -m engram.backend.app.demo.seed`。
 
 ## 界面速览
 
@@ -45,7 +45,8 @@ http://127.0.0.1:8000/app
 截图（放进 `docs/assets/`，README 引用）：
 
 ```bash
-python scripts/demo.py        # 起环境
+python -m engram.backend.app.demo.seed   # 预置演示数据
+ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
 # 浏览器打开 http://127.0.0.1:8000/app 依次截图：
 #  1. 三栏全貌（宽视口）——选 seed 会话「上周的 LangGraph 记忆研究」
 #  2. 流式研究一轮——工具卡片展开 + 召回提示展开
@@ -68,6 +69,6 @@ cd web
 npm run test      # Vitest：SSE 解析契约（直接解析 docs/event-semantics.md 的示例块）
                   #        + 三栏壳/响应式组件测试
 npm run build     # tsc -b + vite build（类型检查 + 产物）
-npm run e2e       # Playwright smoke（需先 python scripts/demo.py 起环境；
-                  # 用系统 Edge 通道，免下载浏览器二进制）
+npm run e2e       # Playwright smoke（需先 seed（python -m engram.backend.app.demo.seed）
+                  # 并按上文起网关；用系统 Edge 通道，免下载浏览器二进制）
 ```

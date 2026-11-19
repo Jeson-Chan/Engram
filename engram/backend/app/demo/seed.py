@@ -79,7 +79,7 @@ def _require_env() -> dict[str, str]:
         print(
             "✗ 演示 seed 需要持久层：缺 " + ", ".join(missing) +
             "\n  先 `docker compose up -d postgres redis`，"
-            "再按 docs/demo.md 的环境变量启动。",
+            "再按 .env.example 配置环境变量。",
             file=sys.stderr,
         )
         raise SystemExit(2)

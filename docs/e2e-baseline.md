@@ -47,7 +47,7 @@
 | 前端构建 | ✅ `tsc -b && vite build`（产物挂载 `/app` 验证 200） |
 | Playwright smoke（真实网关 + 真实 LLM） | ✅ 2/2（desktop 57.9s / narrow 1.2m：新建会话→流式回答→Memory 展开→刷新恢复会话/历史；用系统 Edge 通道） |
 | 演示叙事演练（任务 7.3，live） | ✅ 清 Redis 热层 → stats 显示 cold=5 兜底 → 一轮真实对话回答原文引用 seed 记忆（BM25 复合分、Ebbinghaus 衰减）→ 召回回填热层（hot 0→1）→ 重启网关 → 会话完整恢复（SQLite） |
-| 一键演示脚本 | ✅ `python scripts/demo.py` 全流程（compose 冲突自动回退 docker start → 幂等 seed → 网关 + Web UI → 5 分钟脚本横幅） |
+| 一键演示脚本 | ✅ `python scripts/demo.py` 全流程（compose 冲突自动回退 docker start → 幂等 seed → 网关 + Web UI → 5 分钟脚本横幅；该脚本已随 demo 板块移除，历史提交可查） |
 
 过程中现场复核的缺陷行为：中途刷新打断流 → run 记 `error(client disconnected)` 并进 PG 历史（缺陷 G 修复的活体验证）；`--clean` 只删 demo 标记数据（PG/Redis/SQLite/产物目录全清零，非 demo 数据不动）。
 
