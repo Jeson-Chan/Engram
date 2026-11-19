@@ -72,3 +72,36 @@ def test_make_lead_agent_default_mode_param() -> None:
     agent = make_lead_agent(expert_mode=False, capability_registry=registry)
     assert isinstance(agent, LeaderAgent)
     assert agent.graph is not None
+
+
+# ── subagent 事件循环 bug 回归（delegate_to_subagent 跨循环崩溃修复） ──
+
+def test_make_lead_agent_explicit_checkpointer_overrides_global() -> None:
+    """显式 checkpointer 参数覆盖全局单例（subagent 注入 InMemorySaver）。
+
+    回归背景：delegate_to_subagent 经 LeaderAgent.invoke 的 asyncio.run
+    在新循环跑子 graph；全局 AsyncPostgresSaver 的池/TTL Event 绑定主循环，
+    跨循环 await 崩溃。修复 = 子 agent factory 传独立 InMemorySaver。
+    这里锁行为契约：显式传了就编译成功（create_agent 用它），不传则回落
+    全局单例（现有调用方行为不变）。
+    """
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    from engram.backend.agents.runtime import checkpointer as cp_mod
+
+    # 全局槽位预装一个可识别的 saver（模拟 lifespan 预装 AsyncPostgresSaver）
+    cp_mod.set_checkpointer(InMemorySaver())
+    try:
+        # 显式传入 → 子 agent 路径（独立 saver，不触全局）
+        agent = make_lead_agent(
+            capability_registry=_registry(),
+            checkpointer=InMemorySaver(),
+        )
+        assert isinstance(agent, LeaderAgent)
+        assert agent.graph is not None
+        # 未传 → 回落全局单例（现有调用方行为不变）
+        agent_default = make_lead_agent(capability_registry=_registry())
+        assert isinstance(agent_default, LeaderAgent)
+        assert agent_default.graph is not None
+    finally:
+        cp_mod.reset_checkpointer()

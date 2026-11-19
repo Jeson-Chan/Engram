@@ -597,7 +597,17 @@ def bootstrap_runtime(
         - specialist_tools=None（leaf 看不到 delegate_to_* tool，不能再 spawn）
         - orchestration_middleware=None（leaf 不挂 OrchestrationMiddleware）
         这些限制让子 agent 无法递归 spawn（INVARIANT：max_spawn_depth=1 leaf-only MVP）。
+
+        事件循环 bug 修复：checkpointer=InMemorySaver()——子 agent graph 经
+        LeaderAgent.invoke 的 asyncio.run() 在新循环上跑；全局 AsyncPostgresSaver
+        单例（lifespan 在主循环上预装）的池/TTL Event 绑定主循环，跨循环 await
+        崩溃（SpecialistCrashError "bound to a different event loop"）。
+        子 agent isolated-context 跑完即弃，InMemorySaver 即可。
+        每次调用独立实例：InMemorySaver 跨循环复用同样不安全，且子 agent
+        状态本就无需跨次保留。
         """
+        from langgraph.checkpoint.memory import InMemorySaver
+
         return make_lead_agent(
             expert_mode=expert_mode,
             capability_registry=registry,
@@ -612,6 +622,7 @@ def bootstrap_runtime(
             memory_provider=memory_provider,
             memory_config=config.memory,
             memory_worker=get_memory_worker(),
+            checkpointer=InMemorySaver(),       # 跨循环安全（见 docstring）
         )
 
     ma_setup = setup_multiagent(
