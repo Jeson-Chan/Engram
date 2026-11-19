@@ -2,7 +2,15 @@
 
 展示：Context 用量 / 上下文窗口 / Compact 进度条 / MCP / 版本。
 终端足够宽（>= 阈值）时由 App 挂 ``wide`` class 显示，窄屏隐藏。
-配色统一从 ``theme`` 取值，明细行前缀用限定的语义强调色区分类别，避免杂乱。
+
+像素风词法（tui-pixel-flavor，2026-11-20）：
+- 分组标题：``▓▓▓ `` 青色点阵前缀（agent 管理的记忆结构取青侧）
+- 分组之间：``░`` 重复横格线替代空行留白（格律留白）
+- 明细行前缀按语义分层：``▓`` 数据（window/free/sandbox） / ``▒`` 配置
+  （model/mode）/ ``●``→状态位（MCP 健康度）——同一方块家族粗细即层级
+- 进度条：``▓`` 满格填充 + ``░`` 空段；>=80% 填充色转 WARN 橙
+  （阈值判定沿用 pct_color 单一判定点，_bar 只接受颜色参数）
+- 词法全部走 Text 手工字符拼接（D12 红线：不碰 Textual border 渲染）
 """
 
 from __future__ import annotations
@@ -24,13 +32,23 @@ def _format_tokens(tokens: int) -> str:
     return str(tokens)
 
 
-def _bar(fraction: float, width: int = 22) -> Text:
+def _bar(fraction: float, width: int = 22, fill_color: str | None = None) -> Text:
+    """块状进度条：▓ 满格填充 + ░ 空段。
+
+    fill_color 缺省紫（BAR_FILL）；>=80% 由调用方传 WARN 橙
+    （阈值判定单一在调用方 pct_color，bar 不重复判定）。
+    """
     fraction = max(0.0, min(1.0, fraction))
     filled = int(round(fraction * width))
     t = Text()
-    t.append("█" * filled, style=theme.BAR_FILL)
-    t.append("█" * (width - filled), style=theme.BAR_EMPTY)
+    t.append("▓" * filled, style=fill_color or theme.BAR_FILL)
+    t.append("░" * (width - filled), style=theme.BAR_EMPTY)
     return t
+
+
+def _gridline(width: int = 38) -> Text:
+    """分组间 ░ 横格线（格律留白，替代空行）。"""
+    return Text("░" * width, style=theme.BAR_EMPTY)
 
 
 class SidePanel(Static):
@@ -67,11 +85,16 @@ class SidePanel(Static):
         pct_color = theme.ACCENT_WARN if pct >= 80 else theme.MARK_WINDOW
 
         def header(text: str) -> Text:
-            return Text(text, style=f"bold {theme.ACCENT_BRAND}")
-
-        def mark_row(mark_color: str, label: str, value: str) -> Text:
             t = Text()
-            t.append("■ ", style=mark_color)
+            t.append("▓▓▓ ", style=theme.ACCENT_ASSISTANT)
+            t.append(text, style=f"bold {theme.ACCENT_BRAND}")
+            return t
+
+        def mark_row(mark_color: str, label: str, value: str,
+                     mark: str = "▓") -> Text:
+            """明细行：前缀字符按语义分层——▓ 数据 / ▒ 配置 / 状态字符。"""
+            t = Text()
+            t.append(f"{mark} ", style=mark_color)
             t.append(f"{label}: ", style=theme.TEXT_SECONDARY)
             t.append(value, style=theme.TEXT_PRIMARY)
             return t
@@ -84,21 +107,21 @@ class SidePanel(Static):
         ctx_line.append(f"{_format_tokens(tokens)} ", style=f"bold {theme.MARK_WINDOW}")
         ctx_line.append(f"({pct:.1f}%)", style=pct_color)
         lines.append(ctx_line)
-        lines.append(Text(""))
+        lines.append(_gridline())
 
         # Context Detail——每行前缀不同语义色方块，呼应参考设计但收敛色阶
         lines.append(header("Context Detail"))
-        lines.append(mark_row(theme.MARK_WINDOW, "Context window", f"{_format_tokens(window)} ({pct:.1f}%)"))
-        lines.append(mark_row(theme.MARK_MODEL, "Model", model))
-        lines.append(mark_row(theme.MARK_MODE, "Mode", mode))
-        lines.append(mark_row(theme.MARK_MCP, "MCP tools", str(mcp_count)))
+        lines.append(mark_row(theme.MARK_WINDOW, "Context window", f"{_format_tokens(window)} ({pct:.1f}%)", mark="▓"))
+        lines.append(mark_row(theme.MARK_MODEL, "Model", model, mark="▒"))
+        lines.append(mark_row(theme.MARK_MODE, "Mode", mode, mark="▒"))
+        lines.append(mark_row(theme.MARK_MCP, "MCP tools", str(mcp_count), mark="▒"))
         free = max(0.0, 1.0 - fraction) * 100.0
-        lines.append(mark_row(theme.MARK_FREE, "Free space", f"{free:.1f}%"))
-        lines.append(Text(""))
+        lines.append(mark_row(theme.MARK_FREE, "Free space", f"{free:.1f}%", mark="▓"))
+        lines.append(_gridline())
 
         # Compact 进度条
         lines.append(header("Compact"))
-        bar = _bar(fraction)
+        bar = _bar(fraction, fill_color=pct_color)
         bar.append(f"  {pct:.1f}%", style=pct_color)
         lines.append(bar)
         usable = window - tokens if window else 0
@@ -106,17 +129,17 @@ class SidePanel(Static):
             f"{_format_tokens(tokens)} usage · {_format_tokens(max(0, usable))} usable",
             style=theme.TEXT_DIM,
         ))
-        lines.append(Text(""))
+        lines.append(_gridline())
 
         # Sandbox——沙箱状态
         lines.append(header("Sandbox"))
         if sandbox_id:
-            lines.append(mark_row(theme.MARK_WINDOW, "Sandbox ID", sandbox_id))
-            lines.append(mark_row(theme.MARK_FREE, "Status", "active"))
+            lines.append(mark_row(theme.MARK_WINDOW, "Sandbox ID", sandbox_id, mark="▓"))
+            lines.append(mark_row(theme.MARK_FREE, "Status", "active", mark="░"))
         else:
-            lines.append(mark_row(theme.TEXT_DIM, "Sandbox ID", "—"))
-            lines.append(mark_row(theme.TEXT_DIM, "Status", "idle"))
-        lines.append(Text(""))
+            lines.append(mark_row(theme.TEXT_DIM, "Sandbox ID", "—", mark="░"))
+            lines.append(mark_row(theme.TEXT_DIM, "Status", "idle", mark="░"))
+        lines.append(_gridline())
 
         # MCP——已加载 server 列表
         lines.append(header("MCP"))
@@ -124,16 +147,16 @@ class SidePanel(Static):
             total_tools = sum(s.get("tool_count", 0) for s in mcp_servers)
             for s in mcp_servers:
                 mark = theme.MARK_FREE if s.get("health_state") == "healthy" else theme.ACCENT_WARN
-                status_dot = "●" if s.get("health_state") == "healthy" else "○"
+                status_dot = "▓" if s.get("health_state") == "healthy" else "░"
                 row = Text()
                 row.append("■ ", style=mark)
                 row.append(f"{s['name']}", style=theme.TEXT_PRIMARY)
                 row.append(f"  {s['transport']}  {status_dot}", style=theme.TEXT_DIM)
                 lines.append(row)
-            lines.append(mark_row(theme.MARK_MCP, "tools", f"{total_tools} loaded"))
+            lines.append(mark_row(theme.MARK_MCP, "tools", f"{total_tools} loaded", mark="▒"))
         else:
-            lines.append(mark_row(theme.TEXT_DIM, "servers", "none"))
-        lines.append(Text(""))
+            lines.append(mark_row(theme.TEXT_DIM, "servers", "none", mark="░"))
+        lines.append(_gridline())
 
         # 底部版本
         lines.append(Text("Engram v1.0.0", style=theme.TEXT_DIM))
