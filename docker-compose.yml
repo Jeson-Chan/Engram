@@ -1,7 +1,7 @@
 # Engram docker-compose — 一键启动深度研究 Agent
 #
 # 用法:
-#   docker compose up -d                       # 默认：网关(8000) + postgres + redis + 巩固 worker
+#   docker compose up -d                       # 默认：网关(8000，含 Web 工作台 /app) + postgres + redis + 巩固 worker
 #   docker compose run --rm agent              # TUI 交互（首次会启动配置向导）
 #   docker compose run --rm agent cli          # 传统 CLI 滚动模式
 #   docker compose run --rm agent run "问题"   # 单次研究
@@ -13,6 +13,11 @@
 # 数据持久化:
 #   .engram/ → /app/.engram（DB、日志、artifact、memory、MCP 配置）
 #   skills/  → /app/skills（用户上传 skill）
+#
+# Web 工作台:
+#   gateway 挂载宿主机 web/dist 并开启 ENGRAM_WEB_UI_ENABLED，打开 http://localhost:8000/app
+#   首次使用先构建前端: cd web && npm install && npm run build（产物 → web/dist）
+#   改动前端后重新 build 即可，无需重启网关（静态文件直接从宿主机读取）
 #
 # Sandbox:
 #   容器内默认 Local sandbox（ENGRAM_SANDBOX_EXECUTOR=local）。
@@ -75,6 +80,8 @@ services:
       - ENGRAM_MEMORY_USE=default
       - ENGRAM_MEMORY_PHASE2_ENABLED=true
       - ENGRAM_MULTIAGENT_ENABLED=true
+      # Web 工作台：开启 /app 静态挂载（需 web/dist 构建产物，见顶部说明）
+      - ENGRAM_WEB_UI_ENABLED=true
       # 会话状态持久层（issue 05）
       - ENGRAM_CHECKPOINT_DSN=postgresql://engram:engram@postgres:5432/engram
       # 记忆热层（issue 06）
@@ -89,6 +96,7 @@ services:
     volumes:
       - ./.engram:/app/.engram   # 运行时数据（checkpointer 外的 journal/artifacts/memory）
       - ./skills:/app/skills
+      - ./web/dist:/app/web/dist:ro   # Web 工作台构建产物（web_ui.py 按 /app/web/dist 查找）
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/openapi.json"]
       interval: 10s
