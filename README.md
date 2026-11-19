@@ -87,8 +87,7 @@ read from the host, so rebuilding needs no gateway restart.
 
 - The built-in `web_search` (DuckDuckGo) needs outbound network access to
   DuckDuckGo; on restricted networks it returns no results. Research flows do
-  not depend on it — they use the local sandbox and seeded memories (see
-  `docs/e2e-baseline.md`).
+  not depend on it — they use the local sandbox and seeded memories.
 - Docker-backed sandboxing is optional; without `agent-sandbox` installed the
   gateway uses `LocalSandboxProvider`.
 

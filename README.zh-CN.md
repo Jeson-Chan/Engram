@@ -86,7 +86,7 @@ install; npm run build`）——静态文件从宿主机读取，重新构建无
 
 ## 已知限制
 
-- 内置 `web_search`（DuckDuckGo）需要出网访问 DuckDuckGo；受限网络下返回空结果。研究链路不依赖它——使用本地沙箱与预置记忆（见 `docs/e2e-baseline.md`）。
+- 内置 `web_search`（DuckDuckGo）需要出网访问 DuckDuckGo；受限网络下返回空结果。研究链路不依赖它——使用本地沙箱与预置记忆。
 - Docker sandbox 为可选项；未安装 `agent-sandbox` 时网关使用 `LocalSandboxProvider`。
 
 ## 许可证

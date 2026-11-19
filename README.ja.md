@@ -85,7 +85,7 @@ Web ワークベンチは `http://localhost:8000/app`。フロントエンドを
 
 ## 既知の制限
 
-- 内蔵 `web_search`（DuckDuckGo）は DuckDuckGo へのアウトバウンド接続が必要で、制限されたネットワークでは結果が空になります。リサーチフローはこれに依存しません——ローカルサンドボックスとシード済みメモリを使います（`docs/e2e-baseline.md` 参照）。
+- 内蔵 `web_search`（DuckDuckGo）は DuckDuckGo へのアウトバウンド接続が必要で、制限されたネットワークでは結果が空になります。リサーチフローはこれに依存しません——ローカルサンドボックスとシード済みメモリを使います。
 - Docker サンドボックスは任意です。`agent-sandbox` 未インストール時は `LocalSandboxProvider` を使います。
 
 ## ライセンス

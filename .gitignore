@@ -87,3 +87,13 @@ opencode.json
 # === Node tooling (logo/ TS project) ===
 node_modules/
 dist/
+
+# === docs: remote keeps only USAGE translations + test/CI-required assets ===
+# api / e2e-baseline / web-ui / learning-guide stay local only (not linked
+# from CI or tests); event-semantics.md and assets/ must stay tracked
+# (vitest contract test + banner asset-sync test + README hero).
+/docs/*
+!/docs/usage.ja.md
+!/docs/usage.zh-CN.md
+!/docs/assets/
+!/docs/event-semantics.md
