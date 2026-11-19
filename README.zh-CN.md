@@ -45,9 +45,9 @@ cp .env.example .env
 
 ## 快速开始
 
-两种入口：全屏 **TUI 研究驾驶舱**（键盘优先）或 **Web 研究工作台**（浏览器三栏）——共用同一套会话、记忆与运行数据。
 
-### 1 · TUI（研究驾驶舱）
+
+### 1 · TUI
 
 ```powershell
 pip install -e ".[dev]"        # .env 里填好 API Key（见上文）
@@ -64,25 +64,16 @@ engram                          # 或 python -m engram.backend.app.cli.main
 | `Ctrl+U` | Inspector（模型/模式/能力 + Context 预算） |
 | `Esc` | 关闭任何弹层 |
 
-面板数据来自网关只读 API（`ENGRAM_GATEWAY_URL`，默认 `http://127.0.0.1:8000`）；
-网关没开时显示离线态——对话/研究本身不受影响。
 
-### 2 · Web（研究工作台）
+### 2 · Web
 
 ```powershell
 cd web; npm install; npm run build    # 一次性构建前端
 $env:ENGRAM_WEB_UI_ENABLED="true"; python -m engram.backend.app.gateway --port 8000
-# 打开 http://127.0.0.1:8000/app
 ```
 
-> Windows 下网关必须用 `python -m engram.backend.app.gateway` 启动（强制
-> `WindowsSelectorEventLoopPolicy`——异步 Postgres 驱动的要求；裸 `uvicorn
-> ...:app` 配 PG DSN 后启动失败）。
 
-三栏：会话 / 流式对话与研究 / Run Inspector（含 Memory Explorer）。刷新页面
-自动恢复会话、历史与最近 Run。全部接口见 `/docs`；完整走查：`docs/api.md`。
-
-### Docker（一条命令全起）
+### 3 · Docker（一条命令全起）
 
 ```bash
 cp .env.example .env    # 填入 DEEPSEEK_API_KEY

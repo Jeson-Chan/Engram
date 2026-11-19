@@ -45,10 +45,7 @@ cp .env.example .env
 
 ## クイックスタート
 
-2 つの入口：フルスクリーン **TUI リサーチコックピット**（キーボード優先）と
-**Web 研究ワークベンチ**（ブラウザ 3 ペイン）。セッション・メモリ・ラン履歴は両者で共有されます。
-
-### 1 · TUI（リサーチコックピット）
+### 1 · TUI
 
 ```bash
 pip install -e ".[dev]"        # .env に API Key を設定済み（上記参照）
@@ -65,27 +62,16 @@ engram                          # または python -m engram.backend.app.cli.mai
 | `Ctrl+U` | Inspector（モデル/モード/能力 + Context 予算） |
 | `Esc` | オーバーレイを閉じる |
 
-パネルはゲートウェイの読み取り専用 API を参照します（`ENGRAM_GATEWAY_URL`、
-デフォルト `http://127.0.0.1:8000`）。未起動ならオフライン表示——対話・
-リサーチ自体は常に動作します。
 
-### 2 · Web（研究ワークベンチ）
+### 2 · Web
 
 ```bash
 cd web && npm install && npm run build   # 一度だけ：フロントエンドをビルド
 ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
-# http://127.0.0.1:8000/app を開く
 ```
 
-> Windows では必ず `python -m engram.backend.app.gateway` で起動すること
-> （非同期 Postgres ドライバが要求する Selector ループを強制します。素の
-> `uvicorn ...:app` は PG DSN 設定時に起動失敗します）。
 
-3 ペイン：セッション / ストリーミング対話・リサーチ / Run インスペクタ +
-Memory エクスプローラ。リロードするとセッション・履歴・直近の Run が復元されます。
-全エンドポイントは `/docs`、完全なウォークスルーは `docs/api.md`。
-
-### Docker（コマンド一発）
+### 3 · Docker（コマンド一発）
 
 ```bash
 cp .env.example .env    # DEEPSEEK_API_KEY を記入

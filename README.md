@@ -45,11 +45,7 @@ Open `.env` and set `DEEPSEEK_API_KEY=sk-...`.
 
 ## Quick Start
 
-Two ways to run Engram — the full-screen **TUI** (keyboard-first research
-cockpit) or the **Web workbench** (three-pane browser UI). Both share the same
-sessions, memory, and runs.
-
-### 1 · TUI — the research cockpit
+### 1 · TUI
 
 ```bash
 pip install -e ".[dev]"        # after setting API keys in .env (see above)
@@ -66,27 +62,16 @@ That's it — ask anything. Inside the cockpit:
 | `Ctrl+U` | Inspector (model/mode/capabilities + context budget) |
 | `Esc` | close any overlay |
 
-Panels read the gateway's read-only API when one is running
-(`ENGRAM_GATEWAY_URL`, default `http://127.0.0.1:8000`) and show an offline
-state otherwise — chat/research itself always works.
 
-### 2 · Web — the research workbench
+### 2 · Web
 
 ```bash
 cd web && npm install && npm run build   # once: build the frontend
 ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
-# open http://127.0.0.1:8000/app
 ```
 
-> On Windows, always start the gateway with
-> `python -m engram.backend.app.gateway` — it forces the Selector event loop
-> async Postgres requires (plain `uvicorn ...:app` fails with a PG DSN).
 
-Three panes: sessions / streaming chat & research / Run Inspector with Memory
-Explorer. Refresh restores the session, history, and last run. All endpoints:
-`/docs`; the full walkthrough: `docs/api.md`.
-
-### Docker (everything in one command)
+### 3 · Docker (everything in one command)
 
 ```bash
 cp .env.example .env    # set DEEPSEEK_API_KEY
