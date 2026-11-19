@@ -180,6 +180,7 @@ def make_lead_agent(
     memory_provider: Any = None,
     memory_config: Any = None,
     memory_worker: Any = None,
+    checkpointer: Any = None,
 ) -> Any:
     """App-layer factory: expert_flag 参数化装配 graph。
 
@@ -188,6 +189,13 @@ def make_lead_agent(
     - system_prompt: apply_prompt_template(expert_mode, specialist_registry=...)
       — specialist_registry 非空时条件注入 <specialist_routing> 段（Bug B 修复）
     - checkpointer: get_checkpointer() 单例，thread_id 跨轮 + 跨模式保留 state
+      — 显式传 checkpointer 时覆盖之
+
+    subagent 事件循环 bug 修复：delegate_to_subagent 经 LeaderAgent.invoke
+    的 asyncio.run() 在新循环跑子 agent graph；全局单例 AsyncPostgresSaver
+    （网关 lifespan 在主循环上预装）的连接池/TTL Event 绑定主循环，
+    跨循环 await → "bound to a different event loop" SpecialistCrashError。
+    子 agent 本就 isolated-context 跑完即弃 → bootstrap 注入 InMemorySaver。
 
     Registry MUST store BaseChatModel / BaseTool instances directly.
     """
@@ -245,7 +253,7 @@ def make_lead_agent(
                 skills_enabled=skill_injection_middleware is not None,
             ),
             state_schema=ThreadState,
-            checkpointer=get_checkpointer(),
+            checkpointer=checkpointer if checkpointer is not None else get_checkpointer(),
         ),
         capability_registry=registry,
     )
