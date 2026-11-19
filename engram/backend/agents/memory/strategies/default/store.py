@@ -287,6 +287,58 @@ class MarkdownFileStore:
                 del self._traces[trace_id]
                 self._rewrite_file()
 
+    def remove_partition(
+        self, user_id: str, thread_id: str | None = None
+    ) -> list[str]:
+        """按分区批量删除（design.md 决策 2）：内存索引过滤 + 一次 _rewrite_file。
+
+        分区语义与 RedisMemoryStore._partition_of 一致（user 默认 "default-user"，
+        thread 取 metadata.thread_id 或 source "worker:{thread}" 前缀，缺省 "default"）。
+        幂等：不存在的分区静默返回 []。返回删除的 trace_id 列表。
+        """
+        with self._lock:
+            removed: list[str] = []
+            for trace_id, trace in list(self._traces.items()):
+                t_user, t_thread = self._partition_of(trace)
+                if t_user != user_id:
+                    continue
+                if thread_id is not None and t_thread != thread_id:
+                    continue
+                del self._traces[trace_id]
+                removed.append(trace_id)
+            if removed:
+                self._rewrite_file()
+                logger.info("removed %d traces from partition user=%s thread=%s",
+                            len(removed), user_id, thread_id)
+            return removed
+
+    def list_partition(
+        self, user_id: str, thread_id: str | None = None
+    ) -> list[str]:
+        """分区定位（预览/删除共用同一谓词，design.md 决策 4）。"""
+        with self._lock:
+            out: list[str] = []
+            for trace_id, trace in self._traces.items():
+                t_user, t_thread = self._partition_of(trace)
+                if t_user != user_id:
+                    continue
+                if thread_id is not None and t_thread != thread_id:
+                    continue
+                out.append(trace_id)
+            return out
+
+    def _partition_of(self, trace: MemoryTrace) -> tuple[str, str]:
+        """分区归属：与 RedisMemoryStore._partition_of 同语义。"""
+        user_id = str(trace.metadata.get("user_id", "default-user"))
+        thread_id = trace.metadata.get("thread_id")
+        if not thread_id:
+            source = trace.source or ""
+            if source.startswith("worker:"):
+                thread_id = source.split(":")[1]
+            else:
+                thread_id = "default"
+        return user_id, str(thread_id)
+
     def list_by_type(self, type: MemoryType) -> list[MemoryTrace]:
         """按类型列出。"""
         type_key = type.value if isinstance(type, MemoryType) else str(type)

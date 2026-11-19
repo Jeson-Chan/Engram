@@ -17,6 +17,20 @@ export interface SessionRecord {
   metadata: Record<string, unknown>;
 }
 
+/** DELETE /memory/traces 响应（specs/memory-clearance）。 */
+export interface MemoryClearResult {
+  grain: "trace" | "thread" | "user";
+  preview?: boolean;
+  /** preview=true 时的将删条数 */
+  count?: number;
+  /** 实际删除条数 */
+  deleted?: number;
+  trace_ids?: string[];
+  trace_id?: string;
+  user_id?: string;
+  thread_id?: string | null;
+}
+
 async function jsonOrThrow<T>(resp: Response, fallback: string): Promise<T> {
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
@@ -116,6 +130,25 @@ export class EngramAPI {
     search.set("limit", String(params.limit ?? 200));
     return fetch(`${this.base}/memory/traces?${search}`).then((r) =>
       jsonOrThrow<MemoryTraceView[]>(r, "load memory traces failed"),
+    );
+  }
+
+  /**
+   * 记忆清除（DELETE /memory/traces，memory-management-ui）。
+   * - 单条：{ traceId }；thread 粒度：{ userId, threadId }；user 粒度：{ userId }
+   * - preview=true 只返回将删计数（与删除同一谓词），不产生副作用
+   */
+  memoryClear(
+    params: { traceId?: string; userId?: string; threadId?: string },
+    preview = false,
+  ): Promise<MemoryClearResult> {
+    const search = new URLSearchParams();
+    if (params.traceId) search.set("trace_id", params.traceId);
+    if (params.userId) search.set("user_id", params.userId);
+    if (params.threadId) search.set("thread_id", params.threadId);
+    if (preview) search.set("preview", "true");
+    return fetch(`${this.base}/memory/traces?${search}`, { method: "DELETE" }).then(
+      (r) => jsonOrThrow<MemoryClearResult>(r, "memory clear failed"),
     );
   }
 

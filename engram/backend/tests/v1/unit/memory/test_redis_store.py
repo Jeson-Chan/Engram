@@ -82,6 +82,45 @@ def test_partition_isolation_between_users() -> None:
     assert [t.content for t in bob.list()] == ["bob mem"]
 
 
+# ── 分区批量删除（memory-management-ui 任务 1.2） ────────────
+
+def test_remove_partition_by_thread() -> None:
+    """thread 粒度：目标分区清空（ids + list_all），相邻分区完好。"""
+    store = RedisMemoryStore(_fakeredis_client())
+    a1 = _trace("t-aaa 1", source="worker:thread-aaa:1")
+    a2 = _trace("t-aaa 2", source="worker:thread-aaa:2")
+    b1 = _trace("t-bbb 1", source="worker:thread-bbb:1")
+    for t in (a1, a2, b1):
+        store.add(t)
+
+    removed = store.remove_partition("default-user", "thread-aaa")
+    assert sorted(removed) == sorted([a1.id, a2.id])
+    assert store._partition_ids("default-user", "thread-aaa") == []
+    assert store.partition("default-user", "thread-aaa").list() == []
+    # 相邻分区不受影响
+    assert [t.id for t in store.partition("default-user", "thread-bbb").list()] == [b1.id]
+    assert {t.id for t in store.list_all()} == {b1.id}
+
+
+def test_remove_partition_by_user_and_idempotent() -> None:
+    """user 粒度：该 user 全部 thread 清空；重复执行幂等不报错。"""
+    store = RedisMemoryStore(_fakeredis_client())
+    a1 = _trace("alice-1", source="worker:t1:1", metadata={"user_id": "alice"})
+    a2 = _trace("alice-2", source="worker:t2:1", metadata={"user_id": "alice"})
+    b1 = _trace("bob-1", source="worker:t1:1", metadata={"user_id": "bob"})
+    for t in (a1, a2, b1):
+        store.add(t)
+
+    removed = store.remove_partition("alice")
+    assert sorted(removed) == sorted([a1.id, a2.id])
+    assert {t.id for t in store.list_all()} == {b1.id}
+    # 幂等：再删一次静默返回 []
+    assert store.remove_partition("alice") == []
+    assert store.remove_partition("alice", "t1") == []
+    # idx 无残留：get 返 None 且不抛
+    assert store.get(a1.id) is None
+
+
 # ── TTL 语义 ─────────────────────────────────────────────────
 
 def test_ttl_expiry_key_vanishes() -> None:

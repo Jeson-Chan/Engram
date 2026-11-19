@@ -33,11 +33,11 @@ test("smoke: session -> streaming answer -> memory -> refresh restore", async ({
   await expect(page.getByTestId("send")).toHaveText("发送", { timeout: 180_000 });
   await expect(page.locator(".cursor")).toHaveCount(0);
 
-  // 3. Memory Explorer 展开记忆（窄屏走抽屉，宽屏走 Inspector tab）
+  // 3. 记忆管理页（memory-management-ui：rail 导航宽屏 / 状态栏按钮窄屏）
   if (isNarrow) {
     await page.getByText("Memory", { exact: true }).first().click();
   } else {
-    await page.getByText("Memory", { exact: true }).last().click();
+    await page.getByTestId("nav-memory").click();
   }
   const memoryExplorer = page.getByTestId("memory-explorer");
   await expect(memoryExplorer).toBeVisible();
@@ -50,4 +50,59 @@ test("smoke: session -> streaming answer -> memory -> refresh restore", async ({
   await expect(
     page.locator(".msg.human, .msg.user").first(),
   ).toBeVisible({ timeout: 30_000 });
+});
+
+test("smoke: memory management flow (tree filter -> multi-select delete -> thread clear confirm)", async ({ page }) => {
+  await page.goto("/app");
+
+  // 进入记忆管理页
+  const isNarrow = page.viewportSize() && page.viewportSize()!.width < 900;
+  if (isNarrow) {
+    await page.getByText("Memory", { exact: true }).first().click();
+  } else {
+    await page.getByTestId("nav-memory").click();
+  }
+  const memoryExplorer = page.getByTestId("memory-explorer");
+  await expect(memoryExplorer).toBeVisible();
+
+  // 分区树出现（seed 数据沉淀后至少有 user 节点）
+  await expect(page.getByTestId("tree-user")).toBeVisible();
+
+  // 等列表渲染；无记忆时跳过后续流程（seed 环境保证有数据，防御空环境）
+  const firstItem = page.locator("[data-testid^='memory-item-']").first();
+  if (!(await firstItem.isVisible().catch(() => false))) {
+    test.info().annotations.push({ type: "skip-reason", description: "no seeded memories" });
+    return;
+  }
+
+  // 分区筛选：点击第一个 thread 节点
+  const threadNode = page.locator("[data-testid^='tree-thread-']").first();
+  if (await threadNode.isVisible().catch(() => false)) {
+    await threadNode.click();
+    await page.waitForTimeout(300);
+  }
+
+  // 多选删除：全选 → 删除选中
+  const selectAll = page.getByTestId("memory-select-all");
+  if (await selectAll.isVisible().catch(() => false)) {
+    const checked = await selectAll.isChecked();
+    if (!checked) await selectAll.click();
+    const actionbar = page.getByTestId("memory-actionbar");
+    await expect(actionbar).toBeVisible();
+    await actionbar.getByText("删除选中").click();
+    // 删除后 actionbar 消失（列表清空或条数减少）
+    await expect(actionbar).toHaveCount(0, { timeout: 30_000 });
+  }
+
+  // thread 清除确认：打开确认框 → 取消（不真删）
+  const threadClear = page.locator("[data-testid^='tree-thread-clear-']").first();
+  if (await threadClear.isVisible().catch(() => false)) {
+    await threadClear.click();
+    const confirm = page.getByTestId("memory-confirm");
+    await expect(confirm).toBeVisible();
+    // 预览计数先出现（preview → 确认框展示将删条数）
+    await expect(confirm.getByTestId("confirm-count")).toBeVisible({ timeout: 30_000 });
+    await confirm.getByText("取消").click();
+    await expect(confirm).toHaveCount(0);
+  }
 });

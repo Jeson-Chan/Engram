@@ -125,6 +125,47 @@ class PostgresMemoryStore:
             conn.execute("DELETE FROM memory_traces WHERE trace_id = %s", (trace_id,))
         # idempotent: deleting an absent row is a no-op
 
+    def list_partition(
+        self, user_id: str, thread_id: str | None = None
+    ) -> list[str]:
+        """分区定位（预览/删除共用同一谓词，design.md 决策 4）。
+
+        返回该分区（user，或 user+thread）下的全部 trace_id，不产生副作用。
+        """
+        if thread_id is None:
+            sql = "SELECT trace_id FROM memory_traces WHERE user_id = %s"
+            params: tuple = (user_id,)
+        else:
+            sql = ("SELECT trace_id FROM memory_traces"
+                   " WHERE user_id = %s AND thread_id = %s")
+            params = (user_id, thread_id)
+        with self._pool.connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [row[0] for row in rows]
+
+    def remove_partition(
+        self, user_id: str, thread_id: str | None = None
+    ) -> list[str]:
+        """按分区批量硬删除（design.md 决策 2）：单语句 RETURNING，天然原子。
+
+        thread_id 为 None 时删除该 user 全部 thread 的记忆。
+        返回实际删除的 trace_id 列表。
+        """
+        if thread_id is None:
+            sql = ("DELETE FROM memory_traces WHERE user_id = %s"
+                   " RETURNING trace_id")
+            params: tuple = (user_id,)
+        else:
+            sql = ("DELETE FROM memory_traces WHERE user_id = %s"
+                   " AND thread_id = %s RETURNING trace_id")
+            params = (user_id, thread_id)
+        with self._pool.connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        if rows:
+            logger.info("removed %d traces from partition user=%s thread=%s",
+                        len(rows), user_id, thread_id)
+        return [row[0] for row in rows]
+
     def list_by_type(self, type: MemoryType) -> list[MemoryTrace]:
         return [t for t in self.list_all() if t.type == type]
 
@@ -165,7 +206,9 @@ class PostgresMemoryStore:
     # ---- internals ----
 
     def _partition_of(self, trace: MemoryTrace) -> tuple[str, str]:
-        user_id = str(trace.metadata.get("user_id", "default"))
+        # sentinel 对齐 "default-user"（与 RedisMemoryStore / 网关 _user_of 一致，
+        # 否则跨层分区删除/查询定位不一致）
+        user_id = str(trace.metadata.get("user_id", "default-user"))
         thread_id = trace.metadata.get("thread_id")
         if not thread_id:
             source = trace.source or ""

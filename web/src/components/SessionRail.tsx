@@ -9,6 +9,22 @@ export function SessionRail({ drawer = false }: { drawer?: boolean }) {
   const { state, actions } = useApp();
   return (
     <div className={`rail${drawer ? " drawer-rail" : ""}`} data-testid="session-rail">
+      <div className="nav-tabs" data-testid="rail-nav">
+        <button
+          className={state.mainView === "chat" ? "on" : ""}
+          onClick={() => actions.setMainView("chat")}
+          data-testid="nav-sessions"
+        >
+          会话
+        </button>
+        <button
+          className={state.mainView === "memory" ? "on" : ""}
+          onClick={() => actions.setMainView("memory")}
+          data-testid="nav-memory"
+        >
+          记忆
+        </button>
+      </div>
       <div className="panel-title">会话</div>
       <button className="new-session" onClick={() => actions.createSession()}>
         + 新建会话

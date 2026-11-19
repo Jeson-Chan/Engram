@@ -147,6 +147,39 @@ class RedisMemoryStore:
             self._client.srem(_IDS_KEY.format(user=user_id, thread=thread_id), trace_id)
         self._client.hdel(_IDX_KEY, trace_id)
 
+    def remove_partition(
+        self, user_id: str, thread_id: str | None = None
+    ) -> list:
+        """按分区批量删除（design.md 决策 2）：pipeline 一次往返。
+
+        定位：扫 idx hash 找该 user（或 user+thread）的全部分区键——
+        trace key 删除也走 idx（_key_of），所以先取 key 再 hdel。
+        幂等：不存在的分区/键静默。返回删除的 trace_id 列表。
+        """
+        targets: set = set()
+        partitions: set = set()
+        for raw_id, raw_partition in self._client.hgetall(_IDX_KEY).items():
+            trace_id = _text(raw_id)
+            p_user, p_thread = _text(raw_partition).split(":", 1)
+            if p_user != user_id:
+                continue
+            if thread_id is not None and p_thread != thread_id:
+                continue
+            targets.add(trace_id)
+            partitions.add((p_user, p_thread))
+        if not targets:
+            return []
+        pipe = self._client.pipeline()
+        for trace_id in targets:
+            pipe.delete(self._key_of(trace_id))
+            pipe.hdel(_IDX_KEY, trace_id)
+        for p_user, p_thread in partitions:
+            pipe.delete(_IDS_KEY.format(user=p_user, thread=p_thread))
+        pipe.execute()
+        logger.info("removed %d traces from partition user=%s thread=%s",
+                    len(targets), user_id, thread_id)
+        return sorted(targets)
+
     def list_by_type(self, type: MemoryType) -> list:
         return [t for t in self.list_all() if t.type == type]
 

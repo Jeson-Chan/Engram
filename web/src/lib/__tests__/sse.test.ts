@@ -22,9 +22,11 @@ const docText = readFileSync(
   "utf-8",
 );
 
-/** 提取文档全部 ```sse 示例块（与后端测试同构）。 */
+/** 提取文档全部 ```sse 示例块（与后端测试同构）。
+ * Windows 检出为 CRLF：```​sse 后允许 \r\n（与 LF 检出行为一致）。 */
 function extractDocBlocks(): string[] {
-  const blocks = [...docText.matchAll(/```sse\n(.*?)```/gs)].map((m) => m[1]);
+  const blocks = [...docText.matchAll(/```sse\r?\n(.*?)```/gs)]
+    .map((m) => m[1].replace(/\r\n/g, "\n"));
   expect(blocks.length).toBeGreaterThan(0);
   return blocks;
 }
