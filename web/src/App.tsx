@@ -69,16 +69,27 @@ function Shell() {
         >
           Run
         </button>
-        <button
-          className={state.inspectorTab === "memory" ? "on" : ""}
-          onClick={() => actions.setInspectorTab("memory")}
-        >
-          Memory
-        </button>
       </div>
-      {state.inspectorTab === "run" ? <RunInspector /> : <MemoryExplorer />}
+      <RunInspector />
     </div>
   );
+
+  // 记忆模式：主区整体切换（rail 保留，chat + inspector 暂离——design.md 决策 5）
+  if (state.mainView === "memory") {
+    if (narrow) {
+      return (
+        <div className="shell narrow">
+          <MemoryExplorer />
+        </div>
+      );
+    }
+    return (
+      <div className="shell" data-narrow={narrow ? "1" : "0"}>
+        <SessionRail />
+        <MemoryExplorer />
+      </div>
+    );
+  }
 
   if (narrow) {
     return (
@@ -100,8 +111,8 @@ function Shell() {
             <button
               className="drawer-toggle"
               onClick={() => {
-                setDrawer(drawer === "memory" ? null : "memory");
-                actions.setInspectorTab("memory");
+                setDrawer(null);
+                actions.setMainView("memory");
               }}
             >
               Memory
@@ -134,6 +145,20 @@ function Shell() {
           )}
           {state.status?.mcp && state.status.mcp.length > 0 && (
             <span className="badge">{state.status.mcp.length} MCP</span>
+          )}
+          {state.currentSessionId && (
+            <button
+              className="ghost-btn"
+              onClick={() => {
+                const session = state.sessions.find(
+                  (s) => s.session_id === state.currentSessionId,
+                );
+                if (session) actions.openMemoryForThread(session.thread_id);
+              }}
+              data-testid="session-memories"
+            >
+              本会话记忆
+            </button>
           )}
         </div>
         <Conversation />

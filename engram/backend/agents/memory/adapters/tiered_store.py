@@ -101,6 +101,61 @@ class TieredMemoryStore:
         self._cold.remove(trace_id)
         self._hot.remove(trace_id)  # idempotent per protocol
 
+    def remove_partition(
+        self, user_id: str, thread_id: str | None = None
+    ) -> list[str]:
+        """按分区批量删除：cold（真源）先删，hot 尽力而为。
+
+        容错方向与 list_all 一致：hot 失败不阻断（冷层为真源，剩余热键
+        随 TTL 消亡或 get 回源 miss）。cold 无分区原语时降级为
+        list_partition（同一谓词）+ 逐条 remove。返回 cold 实际删除的
+        id 列表。
+        """
+        removed: list[str] = []
+        remover = getattr(self._cold, "remove_partition", None)
+        if callable(remover):
+            removed = list(remover(user_id, thread_id))
+        else:
+            for tid in self.list_partition(user_id, thread_id):
+                self._cold.remove(tid)
+                removed.append(tid)
+        try:
+            hot_remover = getattr(self._hot, "remove_partition", None)
+            if callable(hot_remover):
+                hot_remover(user_id, thread_id)
+        except Exception:
+            logger.warning(
+                "hot tier partition removal failed (user=%s thread=%s);"
+                " cold is truth", user_id, thread_id, exc_info=True,
+            )
+        return removed
+
+    def list_partition(
+        self, user_id: str, thread_id: str | None = None
+    ) -> list[str]:
+        """分区定位（预览）：cold 为全量真源，定位只看 cold。"""
+        lister = getattr(self._cold, "list_partition", None)
+        if callable(lister):
+            return list(lister(user_id, thread_id))
+        # cold 无分区原语时按分区谓词过滤（与各 store _partition_of 同语义）
+        out: list[str] = []
+        for trace in self._cold.list_all():
+            metadata = getattr(trace, "metadata", None) or {}
+            t_user = str(metadata.get("user_id", "default-user"))
+            t_thread = metadata.get("thread_id")
+            if not t_thread:
+                source = trace.source or ""
+                t_thread = (
+                    source.split(":")[1]
+                    if source.startswith("worker:") else "default"
+                )
+            if t_user != user_id:
+                continue
+            if thread_id is not None and str(t_thread) != thread_id:
+                continue
+            out.append(trace.id)
+        return out
+
     def list_by_type(self, type: MemoryType) -> list[MemoryTrace]:
         return [t for t in self.list_all() if t.type == type]
 

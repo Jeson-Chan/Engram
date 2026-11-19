@@ -55,6 +55,18 @@ export interface RunTimelineEntry {
   created_at: string | null;
 }
 
+export interface MemFilters {
+  q: string;
+  type: string; // "" = 全部
+  layer: string; // "" = 全部
+  minStrength: number;
+}
+
+export interface MemPartition {
+  userId: string;
+  threadId: string | null; // null = 整个 user
+}
+
 export interface AppState {
   sessions: SessionRecord[];
   currentSessionId: string | null;
@@ -73,6 +85,16 @@ export interface AppState {
   statusError: string | null;
   inspectorTab: "run" | "memory";
   user_id: string;
+  /** 主区模式（memory-management-ui）：对话工作台 / 全宽记忆管理页 */
+  mainView: "chat" | "memory";
+  /** 记忆页筛选（切走再切回不丢） */
+  memFilters: MemFilters;
+  /** 记忆页分区选择（null = 不按分区过滤） */
+  memPartition: MemPartition | null;
+  /** 记忆列表多选（trace id 集合） */
+  memSelected: string[];
+  /** 记忆未配置（503）→ 空态，删除操作不可用 */
+  memoryUnavailable: boolean;
 }
 
 type Action =
@@ -91,8 +113,13 @@ type Action =
   | { type: "currentRun"; runId: string | null }
   | { type: "runEvents"; events: RunEventView[] }
   | { type: "memory"; traces: MemoryTraceView[]; stats: Record<string, number> | null }
+  | { type: "memoryUnavailable"; on: boolean }
   | { type: "status"; status: RuntimeStatus | null; error?: string | null }
   | { type: "inspectorTab"; tab: "run" | "memory" }
+  | { type: "mainView"; view: "chat" | "memory" }
+  | { type: "memFilters"; patch: Partial<MemFilters> }
+  | { type: "memPartition"; partition: MemPartition | null }
+  | { type: "memSelected"; ids: string[] }
   | { type: "resetTurns" }
   /** 流事件进 reducer 累积（批内不丢 delta、越界不崩——review high/medium） */
   | { type: "streamEvent"; index: number; event: StreamEvent };
@@ -114,6 +141,11 @@ const initialState: AppState = {
   statusError: null,
   inspectorTab: "run",
   user_id: "default-user",
+  mainView: "chat",
+  memFilters: { q: "", type: "", layer: "", minStrength: 0 },
+  memPartition: null,
+  memSelected: [],
+  memoryUnavailable: false,
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -182,6 +214,17 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, runEvents: action.events };
     case "memory":
       return { ...state, memoryTraces: action.traces, memoryStats: action.stats };
+    case "memoryUnavailable":
+      return { ...state, memoryUnavailable: action.on };
+    case "mainView":
+      return { ...state, mainView: action.view };
+    case "memFilters":
+      return { ...state, memFilters: { ...state.memFilters, ...action.patch } };
+    case "memPartition":
+      // 分区切换清空多选（选中集合属于旧分区视图）
+      return { ...state, memPartition: action.partition, memSelected: [] };
+    case "memSelected":
+      return { ...state, memSelected: action.ids };
     case "status":
       return { ...state, status: action.status, statusError: action.error ?? null };
     case "inspectorTab":
@@ -275,6 +318,16 @@ export interface AppActions {
   }): Promise<void>;
   refreshStatus(): Promise<void>;
   setInspectorTab(tab: "run" | "memory"): void;
+  setMainView(view: "chat" | "memory"): void;
+  setMemFilters(patch: Partial<MemFilters>): void;
+  setMemPartition(partition: MemPartition | null): void;
+  toggleMemSelected(traceId: string): void;
+  setMemSelected(ids: string[]): void;
+  deleteMemoryTrace(traceId: string): Promise<void>;
+  clearMemoryPartition(userId: string, threadId?: string): Promise<void>;
+  previewMemoryPartition(userId: string, threadId?: string): Promise<number>;
+  openMemoryForThread(threadId: string): void;
+  openSessionFromMemory(threadId: string | null): Promise<void>;
 }
 
 const AppContext = createContext<{ state: AppState; actions: AppActions } | null>(null);
@@ -356,16 +409,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "runEvents", events: data.events });
   }, []);
 
-  const refreshMemory = useCallback<AppActions["refreshMemory"]>(async (params) => {
-    const [traces, stats] = await Promise.all([
-      api.current
-        .memoryTraces({ ...params, userId: stateRef.current.user_id })
-        .catch(() => [] as MemoryTraceView[]),
-      api.current
-        .memoryStats(stateRef.current.user_id)
-        .catch(() => null as Record<string, number> | null),
-    ]);
-    dispatch({ type: "memory", traces, stats });
+  const refreshMemory = useCallback<AppActions["refreshMemory"]>(async () => {
+    // 全量拉取（不按筛选/分区过滤，树与列表都在前端聚合——design.md 决策 6）
+    try {
+      const [traces, stats] = await Promise.all([
+        api.current.memoryTraces({ userId: stateRef.current.user_id, limit: 500 }),
+        api.current.memoryStats(stateRef.current.user_id),
+      ]);
+      dispatch({ type: "memory", traces, stats });
+      dispatch({ type: "memoryUnavailable", on: false });
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 503) {
+        dispatch({ type: "memoryUnavailable", on: true });
+      } else {
+        dispatch({ type: "memory", traces: [], stats: null });
+      }
+    }
   }, []);
 
   const refreshStatus = useCallback(async () => {
@@ -467,13 +527,114 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "inspectorTab", tab });
   }, []);
 
+  // ---- 记忆管理页（memory-management-ui） ----
+
+  const setMainView = useCallback((view: "chat" | "memory") => {
+    dispatch({ type: "mainView", view });
+    if (view === "memory") refreshMemory().catch(() => undefined);
+  }, [refreshMemory]);
+
+  const setMemFilters = useCallback((patch: Partial<MemFilters>) => {
+    dispatch({ type: "memFilters", patch });
+  }, []);
+
+  const setMemPartition = useCallback((partition: MemPartition | null) => {
+    dispatch({ type: "memPartition", partition });
+  }, []);
+
+  const toggleMemSelected = useCallback((traceId: string) => {
+    const cur = stateRef.current.memSelected;
+    const ids = cur.includes(traceId)
+      ? cur.filter((id) => id !== traceId)
+      : [...cur, traceId];
+    dispatch({ type: "memSelected", ids });
+  }, []);
+
+  const setMemSelected = useCallback((ids: string[]) => {
+    dispatch({ type: "memSelected", ids });
+  }, []);
+
+  const deleteMemoryTrace = useCallback(async (traceId: string) => {
+    try {
+      await api.current.memoryClear({ traceId });
+    } catch (err) {
+      dispatch({ type: "dropped", notice: `删除失败：${(err as Error).message}` });
+      return;
+    }
+    dispatch({
+      type: "memSelected",
+      ids: stateRef.current.memSelected.filter((id) => id !== traceId),
+    });
+    await refreshMemory();
+  }, [refreshMemory]);
+
+  const clearMemoryPartition = useCallback(
+    async (userId: string, threadId?: string) => {
+      try {
+        await api.current.memoryClear({ userId, threadId });
+      } catch (err) {
+        dispatch({ type: "dropped", notice: `清除失败：${(err as Error).message}` });
+        return;
+      }
+      dispatch({ type: "memSelected", ids: [] });
+      await refreshMemory();
+    },
+    [refreshMemory],
+  );
+
+  const previewMemoryPartition = useCallback(
+    async (userId: string, threadId?: string): Promise<number> => {
+      try {
+        const result = await api.current.memoryClear({ userId, threadId }, true);
+        return result.count ?? 0;
+      } catch {
+        return -1; // 预览失败（调用方禁用确认按钮）
+      }
+    },
+    [],
+  );
+
+  /** 会话模式 → 记忆模式：定位到该会话的 thread 分区。 */
+  const openMemoryForThread = useCallback(
+    (threadId: string) => {
+      dispatch({
+        type: "memPartition",
+        partition: { userId: stateRef.current.user_id, threadId },
+      });
+      dispatch({ type: "mainView", view: "memory" });
+      refreshMemory().catch(() => undefined);
+    },
+    [refreshMemory],
+  );
+
+  /** 记忆模式 → 会话模式：按 thread 找会话并选中（找不到仅切回）。 */
+  const openSessionFromMemory = useCallback(
+    async (threadId: string | null) => {
+      dispatch({ type: "mainView", view: "chat" });
+      if (!threadId) return;
+      const session = stateRef.current.sessions.find((s) => s.thread_id === threadId);
+      if (session) {
+        await selectSession(session.session_id);
+      } else {
+        dispatch({ type: "dropped", notice: `未找到 thread ${threadId} 对应的会话` });
+      }
+    },
+    [selectSession],
+  );
+
   const actions = useMemo<AppActions>(
     () => ({
       refreshSessions, createSession, selectSession, deleteSession,
       send, refreshRuns, openRun, refreshMemory, refreshStatus, setInspectorTab,
+      setMainView, setMemFilters, setMemPartition, toggleMemSelected,
+      setMemSelected, deleteMemoryTrace, clearMemoryPartition,
+      previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
     }),
     [refreshSessions, createSession, selectSession, deleteSession, send,
-      refreshRuns, openRun, refreshMemory, refreshStatus, setInspectorTab],
+      refreshRuns, openRun, refreshMemory, refreshStatus, setInspectorTab,
+      setMainView, setMemFilters, setMemPartition, toggleMemSelected,
+      setMemSelected, deleteMemoryTrace, clearMemoryPartition,
+      previewMemoryPartition, openMemoryForThread, openSessionFromMemory],
   );
 
   return <AppContext.Provider value={{ state, actions }}>{children}</AppContext.Provider>;

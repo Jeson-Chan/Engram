@@ -223,3 +223,96 @@ body {
 .statusbar.err .dot { background: var(--error); }
 
 .empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+
+/* ---- 记忆管理页（memory-management-ui） ---- */
+
+.nav-tabs { display: flex; gap: 4px; padding: 10px 10px 0; }
+.nav-tabs button {
+  flex: 1; padding: 6px 0; border: 1px solid var(--border); border-radius: 6px;
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 13px;
+}
+.nav-tabs button.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+.memory-page {
+  grid-column: 2 / -1; display: flex; flex-direction: column;
+  min-width: 0; overflow-y: auto; padding: 12px 16px; gap: 10px;
+}
+.shell.narrow .memory-page { grid-column: 1; }
+.memory-page-head { display: flex; align-items: center; gap: 10px; }
+.memory-page-head .panel-title { margin: 0; }
+.memory-page-head .muted { color: var(--muted); font-size: 12px; }
+.memory-page-head .ghost-btn { margin-left: auto; }
+
+.memory-body { display: flex; gap: 12px; align-items: flex-start; flex: 1; min-height: 0; }
+.mem-tree {
+  width: 220px; flex-shrink: 0; border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px; background: var(--panel);
+}
+.tree-node { display: flex; align-items: center; gap: 4px; padding: 3px 4px; border-radius: 4px; }
+.tree-node:hover { background: var(--accent-soft); }
+.tree-label { flex: 1; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-label.on { color: var(--accent); font-weight: 600; }
+.tree-label small { color: var(--muted); }
+.tree-clear {
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 12px; padding: 2px 4px; border-radius: 4px; visibility: hidden;
+}
+.tree-node:hover .tree-clear { visibility: visible; }
+.tree-clear:hover { color: var(--error); }
+
+.mem-list-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.mem-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mem-controls input:not([type="checkbox"]) {
+  flex: 1; min-width: 140px; padding: 6px 8px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--panel); color: var(--text);
+}
+.mem-controls select {
+  padding: 6px 4px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel); color: var(--text);
+}
+.select-all { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+
+.mem-item {
+  display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; background: var(--panel);
+}
+.mem-item-main { flex: 1; min-width: 0; }
+.mem-item .row1 { display: flex; gap: 6px; align-items: center; }
+.mem-item .content { margin: 4px 0; word-break: break-word; }
+.mem-item .meta { display: flex; gap: 10px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+.source-link { color: var(--accent); cursor: pointer; text-decoration: underline dotted; }
+.mem-item .del {
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  border-radius: 6px; cursor: pointer; padding: 4px 8px; font-size: 12px; flex-shrink: 0;
+}
+.mem-item .del:hover { color: var(--error); border-color: var(--error); }
+
+.ghost-btn {
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+  border-radius: 6px; cursor: pointer; padding: 4px 10px; font-size: 12px;
+}
+.ghost-btn:hover { border-color: var(--accent); color: var(--accent); }
+.danger-btn {
+  border: 1px solid var(--error); background: var(--error-soft); color: var(--error);
+  border-radius: 6px; cursor: pointer; padding: 4px 12px; font-size: 12px;
+}
+.danger-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.mem-actionbar {
+  position: sticky; bottom: 0; display: flex; gap: 10px; align-items: center;
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+  background: var(--panel); box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.mem-dialog-mask {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+}
+.mem-dialog {
+  width: min(420px, 90vw); background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px;
+}
+.dialog-title { font-weight: 600; margin-bottom: 8px; }
+.dialog-body { color: var(--text); margin-bottom: 14px; }
+.dialog-body .muted { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }

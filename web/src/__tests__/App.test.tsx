@@ -57,6 +57,12 @@ function stubApi() {
         skills: [{ skill_id: "s" }], mcp: [], sandbox: {},
       });
     }
+    if (path.startsWith("/memory/traces")) {
+      return jsonResponse([]);
+    }
+    if (path.startsWith("/memory/stats")) {
+      return jsonResponse({ total: 0, hot: 0, cold: 0, forgotten: 0, consolidation: 0 });
+    }
     return jsonResponse([]);
   }) as unknown as typeof fetch;
 }
@@ -93,16 +99,23 @@ describe("App 三栏壳（宽视口）", () => {
     });
   });
 
-  it("记忆面板可切换（Inspector tab）", async () => {
+  it("rail 记忆导航切换主区为记忆管理页", async () => {
     stubApi();
     render(<App />);
     await waitFor(() => {
       expect(screen.getByTestId("run-inspector")).toBeTruthy();
     });
-    const memoryTab = screen.getByText("Memory");
-    memoryTab.click();
+    screen.getByTestId("nav-memory").click();
     await waitFor(() => {
       expect(screen.getByTestId("memory-explorer")).toBeTruthy();
+    });
+    // 主区整体切换：对话区与 inspector 暂离
+    expect(screen.queryByTestId("conversation")).toBeNull();
+    expect(screen.queryByTestId("inspector")).toBeNull();
+    // 切回会话模式
+    screen.getByTestId("nav-sessions").click();
+    await waitFor(() => {
+      expect(screen.getByTestId("conversation")).toBeTruthy();
     });
   });
 });

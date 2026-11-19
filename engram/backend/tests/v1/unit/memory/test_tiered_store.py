@@ -182,6 +182,85 @@ def test_remove_dual_delete() -> None:
     assert hot.get(t.id) is None and cold.get(t.id) is None
 
 
+# ── 分区批量删除（memory-management-ui 任务 1.4） ────────────
+
+class _PartitionedStore(_FakeStore):
+    """带分区原语的协议桩（与真 store 的 remove_partition/list_partition 同语义）。"""
+
+    def _partition_of(self, trace) -> tuple:
+        metadata = trace.metadata or {}
+        user_id = str(metadata.get("user_id", "default-user"))
+        thread_id = metadata.get("thread_id")
+        if not thread_id:
+            source = trace.source or ""
+            thread_id = source.split(":")[1] if source.startswith("worker:") else "default"
+        return user_id, str(thread_id)
+
+    def list_partition(self, user_id, thread_id=None):
+        out = []
+        for t in self.traces.values():
+            u, th = self._partition_of(t)
+            if u != user_id or (thread_id is not None and th != thread_id):
+                continue
+            out.append(t.id)
+        return out
+
+    def remove_partition(self, user_id, thread_id=None):
+        removed = self.list_partition(user_id, thread_id)
+        for tid in removed:
+            self.traces.pop(tid, None)
+        return removed
+
+
+def test_remove_partition_cold_then_hot() -> None:
+    """分区删除双删：cold（真源）与 hot 同步清空，返回 cold 删除列表。"""
+    hot, cold = _PartitionedStore(), _PartitionedStore()
+    tiered = TieredMemoryStore(hot, cold)
+    a1 = _trace("t-aaa 1", source="worker:thread-aaa:1")
+    a2 = _trace("t-aaa 2", source="worker:thread-aaa:2")
+    b1 = _trace("t-bbb 1", source="worker:thread-bbb:1")
+    for t in (a1, a2, b1):
+        tiered.add(t)
+
+    removed = tiered.remove_partition("default-user", "thread-aaa")
+    assert sorted(removed) == sorted([a1.id, a2.id])
+    assert cold.list_partition("default-user", "thread-aaa") == []
+    assert hot.list_partition("default-user", "thread-aaa") == []
+    assert [t.id for t in tiered.list_all()] == [b1.id]
+
+
+def test_remove_partition_hot_failure_tolerated() -> None:
+    """hot 分区删除抛异常不向上抛：cold 真源删除完成（list_all 容错同方向）。"""
+
+    class _ExplodingHot(_PartitionedStore):
+        def remove_partition(self, user_id, thread_id=None):
+            raise RuntimeError("hot tier down")
+
+    hot, cold = _ExplodingHot(), _PartitionedStore()
+    tiered = TieredMemoryStore(hot, cold)
+    a1 = _trace("t-aaa 1", source="worker:thread-aaa:1")
+    b1 = _trace("t-bbb 1", source="worker:thread-bbb:1")
+    for t in (a1, b1):
+        tiered.add(t)
+
+    removed = tiered.remove_partition("default-user", "thread-aaa")
+    assert removed == [a1.id]
+    assert cold.get(a1.id) is None
+    assert cold.get(b1.id) is not None
+
+
+def test_list_partition_falls_back_to_partition_predicate() -> None:
+    """cold 无 list_partition 原语时：按分区谓词过滤 list_all（容错降级）。"""
+    cold = _FakeStore()  # 无 list_partition
+    tiered = TieredMemoryStore(_FakeStore(), cold)
+    a1 = _trace("t-aaa 1", source="worker:thread-aaa:1")
+    b1 = _trace("t-bbb 1", source="worker:thread-bbb:1")
+    cold.add(a1)
+    cold.add(b1)
+    assert tiered.list_partition("default-user", "thread-aaa") == [a1.id]
+    assert sorted(tiered.list_partition("default-user")) == sorted([a1.id, b1.id])
+
+
 # ── live（docker PG + fakeredis 全链路） ──────────────────────
 
 @needs_pg
@@ -204,6 +283,36 @@ def test_live_pg_cold_tier_roundtrip() -> None:
         assert cold.get(t.id) is None
         # remove 幂等
         cold.remove(t.id)
+    finally:
+        cold.close()
+
+
+@needs_pg
+def test_live_pg_remove_partition() -> None:
+    """真 PG 分区删除（memory-management-ui 任务 1.1）：单语句 RETURNING，
+    thread/user 两档粒度，相邻分区完好，幂等。"""
+    from engram.backend.agents.memory.adapters.pg_store import PostgresMemoryStore
+
+    cold = PostgresMemoryStore(TEST_PG_DSN)
+    try:
+        a1 = _trace("pg-part-aaa-1", source="worker:thread-aaa:1")
+        a2 = _trace("pg-part-aaa-2", source="worker:thread-aaa:2")
+        b1 = _trace("pg-part-bbb-1", source="worker:thread-bbb:1")
+        for t in (a1, a2, b1):
+            cold.add(t)
+
+        # 预览定位与删除同一谓词
+        assert sorted(cold.list_partition("default-user", "thread-aaa")) == sorted([a1.id, a2.id])
+        removed = cold.remove_partition("default-user", "thread-aaa")
+        assert sorted(removed) == sorted([a1.id, a2.id])
+        assert cold.list_partition("default-user", "thread-aaa") == []
+        assert [t.id for t in cold.list_all()] == [b1.id]
+
+        # user 粒度 + 幂等
+        removed = cold.remove_partition("default-user")
+        assert removed == [b1.id]
+        assert cold.remove_partition("default-user") == []
+        assert cold.list_all() == []
     finally:
         cold.close()
 

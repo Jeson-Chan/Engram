@@ -365,3 +365,61 @@ class TestParseFaultTolerance:
         # 损坏的跳过，正常的加载
         assert store.get("aaaa1111aaaa1111") is None
         assert store.get("bbbb2222bbbb2222") is not None
+
+
+class TestRemovePartition:
+    """分区批量删除（memory-management-ui 任务 1.3）。
+
+    分区语义与 RedisMemoryStore._partition_of 一致：user 默认 "default-user"，
+    thread 取 metadata.thread_id 或 source "worker:{thread}" 前缀。
+    """
+
+    def test_remove_by_thread_rewrites_file(self, tmp_path: Path) -> None:
+        store = MarkdownFileStore(tmp_path)
+        a1 = _make_trace(id="aaaa1111aaaa1111", content="aaa one", source="worker:thread-aaa:1")
+        a2 = _make_trace(id="bbbb2222bbbb2222", content="aaa two", source="worker:thread-aaa:2")
+        b1 = _make_trace(id="cccc3333cccc3333", content="bbb one", source="worker:thread-bbb:1")
+        for t in (a1, a2, b1):
+            store.add(t)
+
+        removed = store.remove_partition("default-user", "thread-aaa")
+        assert sorted(removed) == ["aaaa1111aaaa1111", "bbbb2222bbbb2222"]
+        # 其余保留
+        assert store.get("cccc3333cccc3333") is not None
+        assert store.get("aaaa1111aaaa1111") is None
+
+        # 真源重载：重开 store，文件中不含被删 trace
+        reloaded = MarkdownFileStore(tmp_path)
+        assert reloaded.get("aaaa1111aaaa1111") is None
+        assert reloaded.get("bbbb2222bbbb2222") is None
+        assert reloaded.get("cccc3333cccc3333") is not None
+
+    def test_remove_by_user_and_idempotent(self, tmp_path: Path) -> None:
+        store = MarkdownFileStore(tmp_path)
+        a1 = _make_trace(id="aaaa1111aaaa1111", content="alice 1",
+                         source="worker:t1:1", metadata={"user_id": "alice"})
+        a2 = _make_trace(id="bbbb2222bbbb2222", content="alice 2",
+                         source="worker:t2:1", metadata={"user_id": "alice"})
+        b1 = _make_trace(id="cccc3333cccc3333", content="bob 1",
+                         source="worker:t1:1", metadata={"user_id": "bob"})
+        for t in (a1, a2, b1):
+            store.add(t)
+
+        removed = store.remove_partition("alice")
+        assert sorted(removed) == ["aaaa1111aaaa1111", "bbbb2222bbbb2222"]
+        assert store.get("cccc3333cccc3333") is not None
+        # 幂等：不存在的分区静默 []
+        assert store.remove_partition("alice") == []
+        assert store.list_partition("alice") == []
+
+    def test_list_partition_shared_predicate(self, tmp_path: Path) -> None:
+        """预览/删除同一谓词：list_partition 结果 == remove_partition 返回值。"""
+        store = MarkdownFileStore(tmp_path)
+        a1 = _make_trace(id="aaaa1111aaaa1111", content="aaa one", source="worker:thread-aaa:1")
+        b1 = _make_trace(id="cccc3333cccc3333", content="bbb one", source="worker:thread-bbb:1")
+        for t in (a1, b1):
+            store.add(t)
+
+        assert store.list_partition("default-user", "thread-aaa") == ["aaaa1111aaaa1111"]
+        removed = store.remove_partition("default-user", "thread-aaa")
+        assert removed == ["aaaa1111aaaa1111"]
