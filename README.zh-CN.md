@@ -73,22 +73,20 @@ $env:ENGRAM_WEB_UI_ENABLED="true"; python -m engram.backend.app.gateway --port 8
 ```
 
 
-### 3 · Docker（一条命令全起）
+### 3 · Docker
 
 ```bash
-cp .env.example .env    # 填入 DEEPSEEK_API_KEY
-docker compose up -d
+cp .env.example .env            # 填入 DEEPSEEK_API_KEY
+docker compose up -d            # 网关(8000) + postgres + redis + 巩固 worker
+docker compose run --rm agent   # 容器里跑 TUI
 ```
 
-### 一键演示
-
-`python scripts/demo.py`：起 compose + 预置「上周的 LangGraph 记忆研究」会话 +
-带 Web 的网关，并打印 5 分钟演示脚本。清理演示数据：`python scripts/demo.py
---clean`。详见 `docs/demo.md`。
+Web 工作台在 `http://localhost:8000/app`。先构建一次前端（`cd web; npm
+install; npm run build`）——静态文件从宿主机读取，重新构建无需重启网关。
 
 ## 已知限制
 
-- 内置 `web_search`（DuckDuckGo）需要出网访问 DuckDuckGo；受限网络下返回空结果。研究链路与演示脚本不依赖它——使用本地沙箱与预置记忆（见 `docs/e2e-baseline.md`）。
+- 内置 `web_search`（DuckDuckGo）需要出网访问 DuckDuckGo；受限网络下返回空结果。研究链路不依赖它——使用本地沙箱与预置记忆（见 `docs/e2e-baseline.md`）。
 - Docker sandbox 为可选项；未安装 `agent-sandbox` 时网关使用 `LocalSandboxProvider`。
 
 ## 许可证

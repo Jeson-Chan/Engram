@@ -71,23 +71,21 @@ ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
 ```
 
 
-### 3 · Docker（コマンド一発）
+### 3 · Docker
 
 ```bash
-cp .env.example .env    # DEEPSEEK_API_KEY を記入
-docker compose up -d
+cp .env.example .env            # DEEPSEEK_API_KEY を記入
+docker compose up -d            # ゲートウェイ(8000) + postgres + redis + コンソリデーションワーカー
+docker compose run --rm agent   # コンテナで TUI
 ```
 
-### ワンコマンドデモ
-
-`python scripts/demo.py`：compose + シード済みセッション（「先週の
-LangGraph メモリ研究」）+ Web 有効のゲートウェイを起動し、5 分デモスクリプト
-を表示。デモデータの片付けは `python scripts/demo.py --clean`。詳細は
-`docs/demo.md`。
+Web ワークベンチは `http://localhost:8000/app`。フロントエンドを一度ビルド
+（`cd web && npm install && npm run build`）——静的ファイルはホストから読まれる
+ため、再ビルドにゲートウェイの再起動は不要です。
 
 ## 既知の制限
 
-- 内蔵 `web_search`（DuckDuckGo）は DuckDuckGo へのアウトバウンド接続が必要で、制限されたネットワークでは結果が空になります。リサーチフローとデモスクリプトはこれに依存しません——ローカルサンドボックスとシード済みメモリを使います（`docs/e2e-baseline.md` 参照）。
+- 内蔵 `web_search`（DuckDuckGo）は DuckDuckGo へのアウトバウンド接続が必要で、制限されたネットワークでは結果が空になります。リサーチフローはこれに依存しません——ローカルサンドボックスとシード済みメモリを使います（`docs/e2e-baseline.md` 参照）。
 - Docker サンドボックスは任意です。`agent-sandbox` 未インストール時は `LocalSandboxProvider` を使います。
 
 ## ライセンス

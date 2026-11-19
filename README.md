@@ -71,25 +71,24 @@ ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
 ```
 
 
-### 3 · Docker (everything in one command)
+### 3 · Docker
 
 ```bash
-cp .env.example .env    # set DEEPSEEK_API_KEY
-docker compose up -d
+cp .env.example .env            # set DEEPSEEK_API_KEY
+docker compose up -d            # gateway(8000) + postgres + redis + consolidation worker
+docker compose run --rm agent   # TUI in a container
 ```
 
-### One-command demo
-
-`python scripts/demo.py` starts compose + a seeded session ("上周的 LangGraph
-记忆研究") + the gateway with the web UI, and prints a 5-minute script. Clean
-demo data with `python scripts/demo.py --clean`. Details: `docs/demo.md`.
+The web workbench is served at `http://localhost:8000/app`. Build the
+frontend once (`cd web && npm install && npm run build`) — static files are
+read from the host, so rebuilding needs no gateway restart.
 
 ## Known limitations
 
 - The built-in `web_search` (DuckDuckGo) needs outbound network access to
-  DuckDuckGo; on restricted networks it returns no results. Research flows and
-  the demo script do not depend on it — they use the local sandbox and seeded
-  memories (see `docs/e2e-baseline.md`).
+  DuckDuckGo; on restricted networks it returns no results. Research flows do
+  not depend on it — they use the local sandbox and seeded memories (see
+  `docs/e2e-baseline.md`).
 - Docker-backed sandboxing is optional; without `agent-sandbox` installed the
   gateway uses `LocalSandboxProvider`.
 
