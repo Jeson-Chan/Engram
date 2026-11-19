@@ -1,6 +1,6 @@
 <div align="center">
 
-<!-- IMAGE SLOT: hero banner -->
+<p><img src="docs/assets/engram-logo.gif" alt="ENGRAM" width="640" /></p>
 
 # Engram
 
