@@ -14,6 +14,22 @@ class ProviderConfigError(ValueError):
     """Raised when model provider config is missing or invalid."""
 
 
+def _request_timeout() -> float:
+    """单次 LLM HTTP 请求超时。防止 provider 卡住时 run/事件循环无限等待。"""
+    try:
+        return float(os.environ.get("ENGRAM_LLM_REQUEST_TIMEOUT", "120"))
+    except (TypeError, ValueError):
+        return 120.0
+
+
+def _max_retries() -> int:
+    """SDK 层重试次数。默认 1；超时后交给 FallbackChatModel 切下一个 provider。"""
+    try:
+        return max(0, int(os.environ.get("ENGRAM_LLM_MAX_RETRIES", "1")))
+    except (TypeError, ValueError):
+        return 1
+
+
 @dataclass(frozen=True)
 class ProviderConfig:
     provider: str
@@ -156,14 +172,24 @@ def build_chat_model(config: ProviderConfig):
     kind = profile.kind
     if kind == "deepseek":
         from langchain_deepseek import ChatDeepSeek
-        kwargs: dict = {"model": config.model, "api_key": config.api_key}
+        kwargs: dict = {
+            "model": config.model,
+            "api_key": config.api_key,
+            "request_timeout": _request_timeout(),
+            "max_retries": _max_retries(),
+        }
         if config.base_url:
             kwargs["api_base"] = config.base_url
         return ChatDeepSeek(**kwargs)
 
     if kind == "openai_compat":
         from langchain_openai import ChatOpenAI
-        kwargs = {"model": config.model, "api_key": config.api_key}
+        kwargs = {
+            "model": config.model,
+            "api_key": config.api_key,
+            "request_timeout": _request_timeout(),
+            "max_retries": _max_retries(),
+        }
         if config.base_url:
             kwargs["base_url"] = config.base_url
         return ChatOpenAI(**kwargs)

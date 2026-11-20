@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -240,7 +241,9 @@ class DefaultStrategy:
         return None
 
     async def abefore_model(self, ctx: GovernanceContext) -> GovernanceResult:
-        return self.before_model(ctx)
+        # before_model 可能调用 summarizer 的同步 LLM（P4）。放线程池执行，
+        # 否则会阻塞 Textual/gateway 的事件循环（ESC 与后续输入都无法处理）。
+        return await asyncio.to_thread(self.before_model, ctx)
 
     def after_model(self, ctx: GovernanceContext) -> GovernanceResult:
         messages = ctx.messages or []
@@ -331,7 +334,8 @@ class DefaultStrategy:
         return patch or None
 
     async def aafter_model(self, ctx: GovernanceContext) -> GovernanceResult:
-        return self.after_model(ctx)
+        # externalize/snapshot 会同步写盘；放线程池，避免阻塞事件循环。
+        return await asyncio.to_thread(self.after_model, ctx)
 
     def wrap_model_call(self, ctx: GovernanceContext) -> GovernanceResult:
         return GovernanceResult()

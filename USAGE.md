@@ -124,6 +124,14 @@ Engram is configured via a `.env` file in the project root. `.env.example` is th
 
 > Only search tools (`web_search`, `tavily`, `deep_search`) are budgeted; bash and file tools are never capped. Set `ENGRAM_LOOP_DETECTION_ENABLED=false` to disable the guard entirely.
 
+### LLM timeouts
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENGRAM_LLM_REQUEST_TIMEOUT` | Per-request HTTP timeout in seconds (a stalled provider must not hang the run) | `120` |
+| `ENGRAM_LLM_MAX_RETRIES` | SDK-level retries; on timeout the fallback chain switches provider | `1` |
+| `ENGRAM_INTERNAL_LLM_TIMEOUT` | Timeout for helper LLM calls (reflection sufficiency, compression summaries) | `60` |
+
 ### Sandbox
 
 | Variable | Description | Default |

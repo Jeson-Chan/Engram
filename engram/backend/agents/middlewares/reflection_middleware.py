@@ -8,6 +8,8 @@ ReflectionAction 契约预留 revise_plan/backtrack/rollback_to 供未来 L2/L3 
 
 from __future__ import annotations
 
+import asyncio
+import os
 import uuid
 from typing import Any, Protocol, TypedDict, override
 
@@ -52,6 +54,48 @@ def _field(item: Any, name: str) -> Any:
     return getattr(item, name, None)
 
 
+def _internal_timeout() -> float:
+    """内部 LLM 调用超时（reflection / summarizer）。防止 provider 卡住时挂死整个 run。"""
+    try:
+        return float(os.environ.get("ENGRAM_INTERNAL_LLM_TIMEOUT", "60"))
+    except (TypeError, ValueError):
+        return 60.0
+
+
+def _pass_action() -> ReflectionAction:
+    return ReflectionAction(verdict="pass", reflection_items=[], plan=None, guidance="", rollback_to="")
+
+
+def _continue_action(question: str, guidance: str) -> ReflectionAction:
+    item = ReflectionItem(
+        item_id=_make_reflection_id(), scope="run", kind="gap",
+        question=question,
+        related_refs=(),
+    )
+    return ReflectionAction(verdict="continue", reflection_items=[item], plan=None, guidance=guidance, rollback_to="")
+
+
+def _is_sufficient(content: str) -> bool:
+    """容错解析充分性 JSON；解析失败按"不充分"处理（回退规则逻辑）。"""
+    import json
+
+    start = content.find("{")
+    end = content.rfind("}") + 1
+    if start < 0 or end <= start:
+        return False
+    try:
+        return bool(json.loads(content[start:end]).get("sufficient", True))
+    except Exception:
+        return False
+
+
+_CONTINUE_GUIDANCE = (
+    "<system_reminder>\n"
+    "LLM 评估认为当前证据不足以充分支撑研究结论，请补充搜索/调研后再给出最终答案。\n"
+    "</system_reminder>"
+)
+
+
 class LightReflectionStrategy:
     """default 模式轻量策略：不 jump，直接 pass。
 
@@ -60,7 +104,10 @@ class LightReflectionStrategy:
     """
 
     def reflect(self, state: dict[str, Any], runtime: Runtime) -> ReflectionAction:
-        return ReflectionAction(verdict="pass", reflection_items=[], plan=None, guidance="", rollback_to="")
+        return _pass_action()
+
+    async def areflect(self, state: dict[str, Any], runtime: Runtime) -> ReflectionAction:
+        return _pass_action()
 
 
 class SufficiencyStrategy:
@@ -69,6 +116,9 @@ class SufficiencyStrategy:
     F7：覆盖度判断交 LLM 评估（若提供 model），否则保持"每步有无 observation"判断（MVP 过渡）。
     未完成 todo 交给 Todo Layer 2，Reflection 只在 todo 全完成时判实质充分。
     非研究类问题（personal）直接 pass + 提示，避免 reflection 死循环。
+
+    注意：async 图必须走 areflect（ainvoke + 超时）。旧实现 aafter_model 直接调同步
+    llm.invoke，会阻塞 Textual 事件循环（2026-11-21 TUI ESC 后无响应故障）。
     """
 
     _RESEARCH_KEYWORDS = frozenset({
@@ -91,10 +141,10 @@ class SufficiencyStrategy:
             return "research" if has_research_kw else "mixed"
         return "research" if has_research_kw else "personal"
 
-    def reflect(self, state: dict[str, Any], runtime: Runtime) -> ReflectionAction:
+    def _precheck(self, state: dict[str, Any]) -> ReflectionAction | None:
+        """无需 LLM 的短路判断；返回 None 表示需要继续（可能调 LLM）。"""
         # 非研究类问题直接 pass + 提示，避免 reflection 死循环
-        qtype = self._classify_question(state)
-        if qtype == "personal":
+        if self._classify_question(state) == "personal":
             return ReflectionAction(
                 verdict="pass", reflection_items=[], plan=None,
                 guidance=(
@@ -108,20 +158,36 @@ class SufficiencyStrategy:
 
         todos = state.get("todos") or []
         if todos and not all(t.get("status") == "completed" for t in todos):
-            return ReflectionAction(verdict="pass", reflection_items=[], plan=None, guidance="", rollback_to="")
+            return _pass_action()
 
         # F8.4：失败超阈放宽
         if _has_persistent_failures(state):
-            return ReflectionAction(verdict="pass", reflection_items=[], plan=None, guidance="", rollback_to="")
+            return _pass_action()
 
+        if not (state.get("observations") or []):
+            return _pass_action()
+
+        return None
+
+    def reflect(self, state: dict[str, Any], runtime: Runtime) -> ReflectionAction:
+        early = self._precheck(state)
+        if early is not None:
+            return early
+        todos = state.get("todos") or []
         observations = state.get("observations") or []
-        if not observations:
-            return ReflectionAction(verdict="pass", reflection_items=[], plan=None, guidance="", rollback_to="")
-
         # F7：有 LLM 则交模型评估充分性；否则保持每步覆盖度判断（MVP 过渡）
         if self._llm is not None:
             return self._llm_evaluate(state, todos, observations)
+        return self._rule_based_check(todos, observations)
 
+    async def areflect(self, state: dict[str, Any], runtime: Runtime) -> ReflectionAction:
+        early = self._precheck(state)
+        if early is not None:
+            return early
+        todos = state.get("todos") or []
+        observations = state.get("observations") or []
+        if self._llm is not None:
+            return await self._allm_evaluate(state, todos, observations)
         return self._rule_based_check(todos, observations)
 
     def _rule_based_check(self, todos: list, observations: list) -> ReflectionAction:
@@ -129,7 +195,7 @@ class SufficiencyStrategy:
         covered = {_step_id(o) for o in observations if _step_id(o)}
         missing = [f"todo-{i}" for i, _ in enumerate(todos) if f"todo-{i}" not in covered]
         if not missing:
-            return ReflectionAction(verdict="pass", reflection_items=[], plan=None, guidance="", rollback_to="")
+            return _pass_action()
         item = ReflectionItem(
             item_id=_make_reflection_id(), scope="run", kind="gap",
             question=f"以下步骤标记完成但缺少证据覆盖：{', '.join(missing)}",
@@ -143,44 +209,42 @@ class SufficiencyStrategy:
         )
         return ReflectionAction(verdict="continue", reflection_items=[item], plan=None, guidance=guidance, rollback_to="")
 
-    def _llm_evaluate(self, state: dict[str, Any], todos: list, observations: list) -> ReflectionAction:
-        """F7：LLM 评估充分性——简单问题不误判浅覆盖，复杂问题证据不足判 continue。"""
+    def _eval_prompt(self, state: dict[str, Any], todos: list, observations: list) -> str:
         question = state.get("research_question") or state.get("user_input") or ""
         todos_desc = "\n".join(f"- {t.get('content', '')}" for t in todos) if todos else "（无 todo）"
         obs_desc = "\n".join(
             f"- [{_step_id(o) or '-'}] {(_field(o, 'content') or '')[:200]}"
             for o in observations[:10]
         )
-        prompt = get_prompt_manager().load(
+        return get_prompt_manager().load(
             "reflection", "sufficiency",
             question=question, todos_desc=todos_desc, obs_desc=obs_desc,
         )
+
+    def _llm_evaluate(self, state: dict[str, Any], todos: list, observations: list) -> ReflectionAction:
+        """同步路径（CLI 的 sync graph）；async 图请走 _allm_evaluate。"""
+        prompt = self._eval_prompt(state, todos, observations)
         try:
-            from langchain_core.messages import HumanMessage
             resp = self._llm.invoke([HumanMessage(content=prompt)], config={"tags": ["internal_llm"]})
-            content = getattr(resp, "content", str(resp))
-            import json
-            # 容错解析 JSON
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start >= 0 and end > start:
-                data = json.loads(content[start:end])
-                if data.get("sufficient", True):
-                    return ReflectionAction(verdict="pass", reflection_items=[], plan=None, guidance="", rollback_to="")
+            if _is_sufficient(getattr(resp, "content", str(resp))):
+                return _pass_action()
         except Exception:
             pass  # LLM 评估失败则回退规则判断
-        # 判定为不充分或解析失败 → continue
-        item = ReflectionItem(
-            item_id=_make_reflection_id(), scope="run", kind="gap",
-            question="LLM 评估证据不足以支撑研究结论",
-            related_refs=(),
-        )
-        guidance = (
-            "<system_reminder>\n"
-            "LLM 评估认为当前证据不足以充分支撑研究结论，请补充搜索/调研后再给出最终答案。\n"
-            "</system_reminder>"
-        )
-        return ReflectionAction(verdict="continue", reflection_items=[item], plan=None, guidance=guidance, rollback_to="")
+        return _continue_action("LLM 评估证据不足以支撑研究结论", _CONTINUE_GUIDANCE)
+
+    async def _allm_evaluate(self, state: dict[str, Any], todos: list, observations: list) -> ReflectionAction:
+        """异步路径：ainvoke + 超时，不阻塞事件循环（TUI/gateway）。"""
+        prompt = self._eval_prompt(state, todos, observations)
+        try:
+            resp = await asyncio.wait_for(
+                self._llm.ainvoke([HumanMessage(content=prompt)], config={"tags": ["internal_llm"]}),
+                timeout=_internal_timeout(),
+            )
+            if _is_sufficient(getattr(resp, "content", str(resp))):
+                return _pass_action()
+        except Exception:
+            pass
+        return _continue_action("LLM 评估证据不足以支撑研究结论", _CONTINUE_GUIDANCE)
 
 
 class ReflectionMiddleware(AgentMiddleware):
@@ -198,15 +262,14 @@ class ReflectionMiddleware(AgentMiddleware):
         if journal is not None:
             journal.append(event_type, payload)
 
-    @hook_config(can_jump_to=["model"])
-    @override
-    def after_model(self, state: ThreadState, runtime: Runtime) -> dict[str, Any] | None:
+    def _should_gate(self, state: ThreadState) -> bool:
         messages = state.get("messages") or []
         last_ai = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
-        if not last_ai or _has_tool_call_intent(last_ai):
-            return None
+        return bool(last_ai and not _has_tool_call_intent(last_ai))
 
-        action = self._strategy.reflect(state if isinstance(state, dict) else dict(state), runtime)
+    def _apply_action(
+        self, action: ReflectionAction, runtime: Runtime,
+    ) -> dict[str, Any] | None:
         if action["verdict"] == "pass":
             return None
 
@@ -236,5 +299,22 @@ class ReflectionMiddleware(AgentMiddleware):
 
     @hook_config(can_jump_to=["model"])
     @override
+    def after_model(self, state: ThreadState, runtime: Runtime) -> dict[str, Any] | None:
+        if not self._should_gate(state):
+            return None
+        action = self._strategy.reflect(state if isinstance(state, dict) else dict(state), runtime)
+        return self._apply_action(action, runtime)
+
+    @hook_config(can_jump_to=["model"])
+    @override
     async def aafter_model(self, state: ThreadState, runtime: Runtime) -> dict[str, Any] | None:
-        return self.after_model(state, runtime)
+        if not self._should_gate(state):
+            return None
+        state_dict = state if isinstance(state, dict) else dict(state)
+        areflect = getattr(self._strategy, "areflect", None)
+        if callable(areflect):
+            action = await areflect(state_dict, runtime)
+        else:
+            # 自定义策略只有同步实现：丢线程池，不阻塞 TUI/gateway 事件循环。
+            action = await asyncio.to_thread(self._strategy.reflect, state_dict, runtime)
+        return self._apply_action(action, runtime)

@@ -573,7 +573,8 @@ class EngramTUI(App):
 
     def action_cancel_run(self) -> None:
         """Esc: single press = interrupt (resumable), double within 3s = rollback."""
-        if not self.cli_state.get("_running"):
+        worker = getattr(self, "_research_worker", None)
+        if not self.cli_state.get("_running") and not (worker is not None and worker.is_running):
             return
         now = time.monotonic()
         last_esc = getattr(self, "_last_esc_time", 0)
@@ -590,6 +591,11 @@ class EngramTUI(App):
         conv = self.query_one(ConversationLog)
         label = "interrupted" if action == "interrupt" else "abandoned"
         conv.write(Text(f"⏹ Run {label} by user.", style=theme.ACCENT_WARN))
+        # 真正取消后台 worker（旧实现只改 UI 状态，graph/LLM 请求仍在跑：
+        # ESC 后旧 run 继续占着模型连接，新请求排队 → “模型不回应”）。
+        worker = getattr(self, "_research_worker", None)
+        if worker is not None and worker.is_running:
+            worker.cancel()
         self.cli_state["_running"] = False
         self.remove_class("running")
         self.query_one(StatusBar).update_state(self.cli_state)
@@ -834,8 +840,24 @@ class EngramTUI(App):
         if intent_tree.detect_and_dispatch(text, self.runtime):
             return
 
-        # 研究流
-        self._run_research(text)
+        # 研究流：先等上一轮 worker 真正取消，避免两个 graph 并发跑同一 thread
+        await self._stop_previous_research()
+        self._research_worker = self._run_research(text)
+
+    async def _stop_previous_research(self) -> None:
+        """取消并等待上一轮 research worker 完全退出。
+
+        仅 cancel() 不够：旧 worker 可能还在 await 内，两个 graph 并发操作同一
+        thread/模型客户端会让新请求排队或互踩。等待退出后再启动新 run。
+        """
+        worker = getattr(self, "_research_worker", None)
+        if worker is None or not worker.is_running:
+            return
+        worker.cancel()
+        try:
+            await worker.wait()
+        except Exception:
+            pass
 
     def _handle_command(self, cmd: str) -> None:
         """处理 / 命令。"""
