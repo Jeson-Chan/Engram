@@ -123,7 +123,6 @@ body {
   text-transform: uppercase; color: var(--muted);
   padding: 12px 12px 8px;
 }
-.panel-title::before { content: "▓▓▓ "; color: var(--c-agent); }
 
 /* rail */
 .session-item {
@@ -387,11 +386,6 @@ body {
   padding: 8px 4px 6px;
   border-bottom: 2px solid var(--border);
   text-align: center;
-}
-.wordmark pre {
-  margin: 0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 5px; line-height: 1.25; letter-spacing: 0;
-  white-space: pre; user-select: none;
 }
 
 .crt-overlay {

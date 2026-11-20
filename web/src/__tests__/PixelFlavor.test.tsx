@@ -59,8 +59,9 @@ describe("wordmark(任务 2.2)", () => {
     render(<App />);
     await waitFor(() => screen.getByTestId("wordmark"));
     const wm = screen.getByTestId("wordmark");
-    expect(wm.textContent).toContain("▓▓▓");
-    expect(wm.querySelectorAll("span").length).toBe(7);
+    const svg = wm.querySelector("svg");
+    expect(svg).toBeTruthy();
+    expect(svg?.querySelectorAll("rect").length).toBeGreaterThan(50);
   });
 });
 
@@ -68,7 +69,7 @@ describe("像素图标(任务 2.1)", () => {
   it("图标为 8x8 viewBox SVG", () => {
     const { container } = render(<IconSession />);
     const svg = container.querySelector("svg");
-    expect(svg?.getAttribute("viewBox")).toBe("0 0 8 8");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 16 16");
     expect(svg?.getAttribute("shape-rendering")).toBe("crispEdges");
     const { container: c2 } = render(<IconMemory />);
     expect(c2.querySelector("svg")).toBeTruthy();

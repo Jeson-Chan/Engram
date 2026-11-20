@@ -142,7 +142,6 @@ export function MemoryExplorer() {
               onClick={() => actions.setMemPartition(null)}
               data-testid="tree-user"
             >
-              <span className="node-mark">▓▓</span>
               全部记忆 <small>({traces.length})</small>
             </span>
             <button
@@ -162,7 +161,6 @@ export function MemoryExplorer() {
                 onClick={() => actions.setMemPartition({ userId: state.user_id, threadId: thread })}
                 data-testid={`tree-thread-${thread}`}
               >
-                <span className="node-mark">▓</span>
                 {thread} <small>({count})</small>
               </span>
               <button

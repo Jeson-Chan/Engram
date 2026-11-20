@@ -16,15 +16,29 @@ const _WM_ROWS = [
 const _WM_COLORS = ["#a63fc0", "#9a4cc2", "#8d59c3", "#6f74c0", "#5a9cbe", "#4fb8bb", "#45c4b8"];
 
 export function PixelWordmark() {
+  const cell = 3;
+  const rects: Array<{ x: number; y: number; c: string }> = [];
+  _WM_ROWS.forEach((row, ry) => {
+    for (let cx = 0; cx < row.length; cx++) {
+      if (row[cx] === "▓") {
+        rects.push({ x: cx * cell, y: ry * cell, c: _WM_COLORS[ry] });
+      }
+    }
+  });
   return (
     <div className="wordmark" data-testid="wordmark">
-      <pre>
-        {_WM_ROWS.map((row, i) => (
-          <span key={i} style={{ color: _WM_COLORS[i], display: "block" }}>
-            {row}
-          </span>
+      <svg
+        width={74 * cell}
+        height={7 * cell}
+        viewBox={`0 0 ${74 * cell} ${7 * cell}`}
+        shapeRendering="crispEdges"
+        role="img"
+        aria-label="ENGRAM"
+      >
+        {rects.map((r, i) => (
+          <rect key={i} x={r.x} y={r.y} width={cell} height={cell} fill={r.c} />
         ))}
-      </pre>
+      </svg>
     </div>
   );
 }
