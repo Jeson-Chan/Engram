@@ -54,14 +54,18 @@ function jsonResponse(data: unknown): Response {
 }
 
 describe("wordmark(任务 2.2)", () => {
-  it("rail 顶部常驻双色 Geist 字母", async () => {
+  it("rail 顶部 = GitHub 仓库同款 logo GIF(与 README 展示一致)", async () => {
     stubApi();
     render(<App />);
     await waitFor(() => screen.getByTestId("wordmark"));
     const wm = screen.getByTestId("wordmark");
-    const svg = wm.querySelector("svg");
-    expect(svg).toBeTruthy();
-    expect(svg?.querySelectorAll("rect").length).toBeGreaterThan(50);
+    const img = wm.querySelector("img");
+    expect(img).toBeTruthy();
+    expect(img?.getAttribute("alt")).toBe("ENGRAM");
+    // GIF 资产经 vite 打包为 URL
+    expect(img?.getAttribute("src")).toBeTruthy();
+    // 像素锐利渲染(不模糊缩放)
+    expect(img?.style.imageRendering).toBe("pixelated");
   });
 });
 

@@ -91,7 +91,7 @@
 /* 像素字体:仅英文/数字位;中文按 font-family 顺序回退系统栈 */
 .pixel-font {
   font-family: "Press Start 2P", ui-monospace, monospace;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 /* ---- web-pixel-flavor-a:按压交互系统(全局形制) ---- */
@@ -161,7 +161,7 @@
 .px-panel-bar {
   background: var(--px-bar-bg);
   color: var(--px-bar-text);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
   padding: 6px 10px;
@@ -173,7 +173,7 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
-  font: 14px/1.55 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font: 15px/1.55 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   background: var(--bg);
   color: var(--text);
 }
@@ -228,7 +228,7 @@ body {
 .session-item:hover { background: var(--c-user-soft); }
 .session-item.active { background: var(--c-user-soft); border-left: 3px solid var(--c-user); }
 .session-item .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-item .meta { font-size: 11px; color: var(--muted); display: flex; gap: 8px; }
+.session-item .meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; }
 .new-session {
   width: calc(100% - 24px); margin: 12px; padding: 8px;
   border: 2px dashed var(--border-soft); background: none; color: var(--c-user);
@@ -357,10 +357,10 @@ body {
 .stat { background: var(--c-agent-soft); padding: 4px 8px; font-size: 12px; border: 1px solid var(--c-agent); }
 .stat b { color: var(--c-agent); }
 .mem-item { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
-.mem-item .row1 { font-size: 13px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mem-item .row1 { font-size: 14px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .mem-item .content { margin: 4px 0; }
 .mem-item .meta { color: var(--muted); font-size: 11px; }
-.tag { font-size: 12px; font-size: 10.5px; padding: 1px 6px; color: var(--c-agent); }
+.tag { font-size: 13px; font-size: 10.5px; padding: 1px 6px; color: var(--c-agent); }
 .tag.hot { color: var(--c-exec); }
 .tag.cold { color: var(--muted); }
 .tag.forgotten { color: var(--error); }

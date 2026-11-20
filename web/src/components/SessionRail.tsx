@@ -2,44 +2,20 @@ import { useApp } from "../store";
 import type { SessionRecord } from "../lib/api";
 import { IconSession, IconMemory } from "./pixel-icons";
 
-/** GitHub banner 同款 ▓ 点阵 wordmark(docs/assets/engram-banner.txt),
- *  逐行紫→青渐变着色;5px 字号适配 240px rail(无圆角方块)。 */
-const _WM_ROWS = [
-  "▓▓▓▓▓▓▓▓▓▓  ▓▓      ▓▓    ▓▓▓▓▓    ▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓    ▓▓      ▓▓",
-  "▓▓          ▓▓      ▓▓  ▓▓      ▓▓  ▓▓      ▓▓  ▓▓      ▓▓  ▓▓▓▓  ▓▓▓▓",
-  "▓▓          ▓▓▓▓    ▓▓  ▓▓          ▓▓      ▓▓  ▓▓      ▓▓  ▓▓  ▓▓  ▓▓",
-  "▓▓▓▓▓▓▓▓  ▓▓  ▓▓  ▓▓  ▓▓  ▓▓▓▓▓  ▓▓▓▓▓▓▓▓  ▓▓      ▓▓  ▓▓  ▓▓  ▓▓",
-  "▓▓          ▓▓    ▓▓▓▓  ▓▓      ▓▓  ▓▓  ▓▓      ▓▓      ▓▓  ▓▓      ▓▓",
-  "▓▓          ▓▓      ▓▓  ▓▓      ▓▓  ▓▓    ▓▓    ▓▓      ▓▓  ▓▓      ▓▓",
-  "▓▓▓▓▓▓▓▓▓  ▓▓      ▓▓    ▓▓▓▓▓    ▓▓      ▓▓  ▓▓      ▓▓  ▓▓      ▓▓",
-];
-const _WM_COLORS = ["#a63fc0", "#9a4cc2", "#8d59c3", "#6f74c0", "#5a9cbe", "#4fb8bb", "#45c4b8"];
+/** GitHub 仓库主页同款 logo(web-pixel-flavor-a 收口轮)。
+ *  直接内嵌 docs/assets/engram-logo.gif(1200x480,自带紫→青渐变 +
+ *  glint 扫光)——与 README/GitHub 展示完全一致,零失真。
+ *  宽度撑满 rail 内容区;image-rendering 保持像素锐利。 */
+import logoGif from "../assets/engram-logo.gif";
 
 export function PixelWordmark() {
-  // cell=2:74 列 × 2 = 148px,rail 可用宽 ~224px 内完整呈现,无挤压失真
-  const cell = 2;
-  const rects: Array<{ x: number; y: number; c: string }> = [];
-  _WM_ROWS.forEach((row, ry) => {
-    for (let cx = 0; cx < row.length; cx++) {
-      if (row[cx] === "▓") {
-        rects.push({ x: cx * cell, y: ry * cell, c: _WM_COLORS[ry] });
-      }
-    }
-  });
   return (
     <div className="wordmark" data-testid="wordmark">
-      <svg
-        width={74 * cell}
-        height={7 * cell}
-        viewBox={`0 0 ${74 * cell} ${7 * cell}`}
-        shapeRendering="crispEdges"
-        role="img"
-        aria-label="ENGRAM"
-      >
-        {rects.map((r, i) => (
-          <rect key={i} x={r.x} y={r.y} width={cell} height={cell} fill={r.c} />
-        ))}
-      </svg>
+      <img
+        src={logoGif}
+        alt="ENGRAM"
+        style={{ width: "100%", height: "auto", imageRendering: "pixelated", display: "block" }}
+      />
     </div>
   );
 }
@@ -60,7 +36,7 @@ export function SessionRail({ drawer = false }: { drawer?: boolean }) {
           data-testid="nav-sessions"
           data-nav="sessions"
         >
-          <IconSession size={12} /> 会话
+          <IconSession size={13} /> 会话
         </button>
         <button
           className={state.mainView === "memory" ? "on" : ""}
@@ -68,12 +44,12 @@ export function SessionRail({ drawer = false }: { drawer?: boolean }) {
           data-testid="nav-memory"
           data-nav="memory"
         >
-          <IconMemory size={12} /> 记忆
+          <IconMemory size={13} /> 记忆
         </button>
       </div>
       <div className="px-panel-bar">会话</div>
       <button className="px-btn" onClick={() => actions.createSession()}>
-        <IconSession size={10} /> 新建会话
+        <IconSession size={11} /> 新建会话
       </button>
       {state.sessions.length === 0 && (
         <div className="empty">还没有会话<br />点上方新建一个</div>

@@ -5,9 +5,9 @@ import { IconRun, IconMemory, IconClock, IconTimeline } from "./pixel-icons";
 import type { RunRecord, RunEventView } from "../lib/types";
 
 function iconOf(eventType: string): ReactNode {
-  if (eventType.startsWith("tool.")) return <IconRun size={10} color="var(--c-exec)" />;
-  if (eventType.startsWith("llm.")) return <IconMemory size={10} color="var(--c-agent)" />;
-  return <IconRun size={10} color="var(--muted)" />;
+  if (eventType.startsWith("tool.")) return <IconRun size={11} color="var(--c-exec)" />;
+  if (eventType.startsWith("llm.")) return <IconMemory size={11} color="var(--c-agent)" />;
+  return <IconRun size={11} color="var(--muted)" />;
 }
 
 function timelineLabel(event: RunEventView): string {
@@ -34,7 +34,7 @@ export function RunInspector() {
 
   return (
     <div data-testid="run-inspector">
-      <div className="px-panel-bar"><IconClock size={16} color="var(--c-agent)" /> 运行历史</div>
+      <div className="px-panel-bar"><IconClock size={17} color="var(--c-agent)" /> 运行历史</div>
       {state.runs.length === 0 && (
         <div className="empty">本会话还没有运行<br />发一条消息或研究一次</div>
       )}
@@ -63,12 +63,12 @@ export function RunInspector() {
           rel="noreferrer"
           data-testid="report-link"
         >
-          <IconRun size={10} color="var(--c-agent)" /> 预览 / 下载报告（Markdown）
+          <IconRun size={11} color="var(--c-agent)" /> 预览 / 下载报告（Markdown）
         </a>
       )}
 
       <div className="px-panel-bar">
-        <IconTimeline size={10} color="var(--c-agent)" /> 事件时间线 {state.runEvents.length > 0 ? `(${state.runEvents.length})` : ""}
+        <IconTimeline size={11} color="var(--c-agent)" /> 事件时间线 {state.runEvents.length > 0 ? `(${state.runEvents.length})` : ""}
       </div>
       <div style={{ fontSize: 11, color: "var(--muted)", padding: "0 12px 6px" }}>
         时间线中的工具节点可与对话区工具卡片互相定位（同一 run 的事实）。

@@ -128,9 +128,9 @@ export function MemoryExplorer() {
         <div className="px-panel-bar">记忆管理</div>
         <span className="badge">{state.user_id}</span>
         <span className="mem-stats" data-testid="memory-stats" style={{ display: "inline-flex", gap: 8 }}>
-        <span className="stat"><IconMemory size={10} /> 全部 <b>{state.memoryStats?.total ?? 0}</b></span>
-        <span className="stat"><IconHot size={10} color="var(--c-exec)" /> 热层 <b>{state.memoryStats?.hot ?? 0}</b></span>
-        <span className="stat"><IconCold size={10} /> 冷层 <b>{state.memoryStats?.cold ?? 0}</b></span>
+        <span className="stat"><IconMemory size={11} /> 全部 <b>{state.memoryStats?.total ?? 0}</b></span>
+        <span className="stat"><IconHot size={11} color="var(--c-exec)" /> 热层 <b>{state.memoryStats?.hot ?? 0}</b></span>
+        <span className="stat"><IconCold size={11} /> 冷层 <b>{state.memoryStats?.cold ?? 0}</b></span>
         </span>
         <button className="px-btn-secondary" onClick={() => actions.setMainView("chat")}>
           返回会话
@@ -154,7 +154,7 @@ export function MemoryExplorer() {
               onClick={() => openConfirm("user", state.user_id, null)}
               data-testid="tree-user-clear"
             >
-              <IconClear size={9} /> 清除
+              <IconClear size={10} /> 清除
             </button>
           </div>
           {tree.map(([thread, count]) => (
@@ -245,16 +245,16 @@ export function MemoryExplorer() {
               <div className="mem-item-main">
                 <div className="row1">
                   <span className="tag mem-cell-icon-slot">
-                    {m.type === "episodic" ? <IconEpisodic size={20} /> :
-                     m.type === "semantic" ? <IconSemantic size={20} /> :
-                     m.type === "procedural" ? <IconProcedural size={20} /> : null}
+                    {m.type === "episodic" ? <IconEpisodic size={24} /> :
+                     m.type === "semantic" ? <IconSemantic size={24} /> :
+                     m.type === "procedural" ? <IconProcedural size={24} /> : null}
                     <span className="tag-text">{m.type}</span>
                   </span>
                   {m.layer && (
                     <span className={`tag ${m.layer}`}>
                       {m.layer === "hot"
-                      ? <IconHot size={8} color="var(--c-exec)" />
-                      : <IconCold size={8} />} {m.layer === "hot" ? "热" : "冷"}
+                      ? <IconHot size={9} color="var(--c-exec)" />
+                      : <IconCold size={9} />} {m.layer === "hot" ? "热" : "冷"}
                     </span>
                   )}
                   {m.forgotten && <span className="tag forgotten">已遗忘</span>}
@@ -282,7 +282,7 @@ export function MemoryExplorer() {
                 onClick={() => actions.deleteMemoryTrace(m.id)}
                 data-testid={`memory-delete-${m.id}`}
               >
-                <IconDelete size={10} /> 删除
+                <IconDelete size={11} /> 删除
               </button>
             </div>
           ))}
@@ -293,7 +293,7 @@ export function MemoryExplorer() {
         <div className="mem-actionbar" data-testid="memory-actionbar">
           <span>已选 {memSelected.length} 条</span>
           <button className="px-btn danger" disabled={busy} onClick={doDeleteSelected}>
-            <IconDelete size={10} /> 删除选中
+            <IconDelete size={11} /> 删除选中
           </button>
           <button className="px-btn-secondary" onClick={() => actions.setMemSelected([])}>
             取消
@@ -331,7 +331,7 @@ export function MemoryExplorer() {
                 onClick={doClear}
                 data-testid="confirm-ok"
               >
-                <IconClear size={10} /> 确认清除
+                <IconClear size={11} /> 确认清除
               </button>
             </div>
           </div>

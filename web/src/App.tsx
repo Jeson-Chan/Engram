@@ -118,7 +118,7 @@ function Shell() {
           className={state.inspectorTab === "run" ? "on" : ""}
           onClick={() => actions.setInspectorTab("run")}
         >
-          <IconRun size={10} color="var(--c-agent)" /> Run
+          <IconRun size={11} color="var(--c-agent)" /> Run
         </button>
       </div>
       <RunInspector />
@@ -198,7 +198,7 @@ function Shell() {
             title={theme === "dark" ? "切换到浅色" : "切换到深色"}
             data-testid="theme-toggle"
           >
-            {theme === "dark" ? <IconSun size={12} /> : <IconMoon size={12} />}
+            {theme === "dark" ? <IconSun size={13} /> : <IconMoon size={13} />}
           </button>
           <button
             className={`crt-toggle${crtOn ? " on" : ""}`}
@@ -207,7 +207,7 @@ function Shell() {
             title={crtOn ? "关闭 CRT 效果" : "开启 CRT 效果"}
             data-testid="crt-toggle"
           >
-            <IconCrt size={12} /> CRT
+            <IconCrt size={13} /> CRT
           </button>
           {state.status?.skills && state.status.skills.length > 0 && (
             <span className="badge">{state.status.skills.length} skills</span>
