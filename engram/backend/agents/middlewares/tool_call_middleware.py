@@ -30,6 +30,10 @@ _SUMMARY_THRESHOLDS = (3, 6, 9)  # 失败摘要递进注入阈值
 # F5：业务失败特征正则
 _BLOCKED_RE = re.compile(r"blocked|forbidden|captcha|access denied|403", re.IGNORECASE)
 _EMPTY_RE = re.compile(r"no results? found|no results|empty result|nothing found|0 results", re.IGNORECASE)
+# 业务失败只扫头部；超过该长度的 payload 必须像错误信封才判失败，避免把
+# 成功结果正文里的 "blocked"/"403"/"No results found" 引用误判为工具失败。
+_BUSINESS_SCAN_CHARS = 500
+_BUSINESS_PAYLOAD_CHARS = 2000
 
 _REASON_MAP = {
     "network": "网络问题（超时/连接失败）",
@@ -64,6 +68,16 @@ def _tool_text(result: Any) -> str:
     return str(result)
 
 
+def _result_text(result: Any) -> str:
+    """取工具结果正文；EvidenceMiddleware 会包一层 Command(update={messages: [...]})，
+    直接 str(Command) 会把 observations/sources 的 repr 也当正文扫（误判来源）。"""
+    if isinstance(result, Command):
+        for msg in (result.update or {}).get("messages") or []:
+            if isinstance(msg, ToolMessage):
+                return _tool_text(msg)
+    return _tool_text(result)
+
+
 def _classify_exception(exc: Exception) -> str:
     """F5：按异常类型归基本错误分类。"""
     if isinstance(exc, (TimeoutError, ConnectionError)):
@@ -89,10 +103,20 @@ def _classify_exception(exc: Exception) -> str:
 
 
 def _classify_business_failure(text: str) -> str | None:
-    """F5：HTTP 200 但内容含业务失败特征。"""
-    if _BLOCKED_RE.search(text):
+    """F5：HTTP 200 但内容含业务失败特征。
+
+    只扫前 500 字 + 长 payload 白名单：搜索/抓取成功的长正文里出现
+    "blocked / 403 / No results found" 往往只是引用内容，不能算工具失败
+    （2026-11-20 线上一次 run 误判 5 次）。长 payload 仅当开头像
+    {"error": ...} 错误信封时才按失败处理。
+    """
+    head = text[:_BUSINESS_SCAN_CHARS]
+    is_error_payload = '"error"' in head.lower()
+    if len(text) > _BUSINESS_PAYLOAD_CHARS and not is_error_payload:
+        return None
+    if _BLOCKED_RE.search(head):
         return "blocked"
-    if _EMPTY_RE.search(text):
+    if _EMPTY_RE.search(head):
         return "empty"
     return None
 
@@ -115,12 +139,13 @@ def _is_failure(result: Any) -> tuple[str, str] | None:
             if et in text.lower():
                 return et, _reason_for(et)
         return "unknown", _reason_for("unknown")
-    text = _tool_text(result)
+    text = _result_text(result)
     biz = _classify_business_failure(text)
     if biz:
         return biz, _reason_for(biz)
-    # 检测工具返回的 error JSON（如 ddg {"error": "Search failed: ..."}）
-    if '"error"' in text and ('search failed' in text.lower() or 'not installed' in text.lower() or 'failed' in text.lower()):
+    # 检测工具返回的 error JSON（如 ddg {"error": "Search failed: ..."}），只看头部
+    head = text[:_BUSINESS_SCAN_CHARS]
+    if '"error"' in head and ('search failed' in head.lower() or 'not installed' in head.lower() or 'failed' in head.lower()):
         return "unknown", "工具返回错误"
     return None
 

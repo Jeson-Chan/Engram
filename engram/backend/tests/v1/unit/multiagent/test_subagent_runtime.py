@@ -80,7 +80,15 @@ def test_shared_sandbox_id():
 
 
 def test_max_steps_sets_recursion_limit():
-    """max_steps 限制：recursion_limit = max_steps * 2。"""
+    """max_steps 换算成 graph 节点预算（每步 ≈25 个 middleware hook 节点）。
+
+    回归：旧实现 ×2 只够半轮 ReAct（单轮≈20 节点），max_steps=10 的 subagent
+    连第一次模型调用都跑不完就抛 SubagentMaxStepsError。
+    """
+    from engram.backend.agents.multiagent.runtimes.subagent_runtime import (
+        _NODES_PER_STEP,
+    )
+
     mock_agent = MagicMock()
     mock_agent.invoke.return_value = {"messages": [MagicMock(content="ok")]}
 
@@ -88,7 +96,7 @@ def test_max_steps_sets_recursion_limit():
     rt.invoke(_make_request(max_steps=15))
 
     config = mock_agent.invoke.call_args[1]["config"]
-    assert config["recursion_limit"] == 30
+    assert config["recursion_limit"] == 15 * _NODES_PER_STEP
 
 
 def test_max_steps_exceeded_raises():

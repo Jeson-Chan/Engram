@@ -114,6 +114,16 @@ Engram is configured via a `.env` file in the project root. `.env.example` is th
 
 > At least one provider must be configured. DeepSeek is recommended as it serves as the fallback chain tail.
 
+### Search loop protection
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENGRAM_LOOP_DETECTION_ENABLED` | Enable the dead-loop / over-search breaker | `true` |
+| `ENGRAM_SEARCH_SOFT_LIMIT` | Search calls per run before injecting a "stop searching" reminder | `12` |
+| `ENGRAM_SEARCH_HARD_LIMIT` | Search calls per run before forcing a final answer | `20` |
+
+> Only search tools (`web_search`, `tavily`, `deep_search`) are budgeted; bash and file tools are never capped. Set `ENGRAM_LOOP_DETECTION_ENABLED=false` to disable the guard entirely.
+
 ### Sandbox
 
 | Variable | Description | Default |

@@ -76,6 +76,22 @@ def test_make_lead_agent_default_mode_param() -> None:
 
 # ── subagent 事件循环 bug 回归（delegate_to_subagent 跨循环崩溃修复） ──
 
+def test_loop_detection_env_toggle(monkeypatch) -> None:
+    """ENGRAM_LOOP_DETECTION_ENABLED / 阈值 env 可调（历史诉求：允许关停）。"""
+    from engram.backend.agents.leader.factory import _make_loop_detection_middleware
+
+    monkeypatch.setenv("ENGRAM_LOOP_DETECTION_ENABLED", "false")
+    assert _make_loop_detection_middleware()._config.enabled is False
+
+    monkeypatch.setenv("ENGRAM_LOOP_DETECTION_ENABLED", "true")
+    monkeypatch.setenv("ENGRAM_SEARCH_SOFT_LIMIT", "7")
+    monkeypatch.setenv("ENGRAM_SEARCH_HARD_LIMIT", "9")
+    config = _make_loop_detection_middleware()._config
+    assert config.enabled is True
+    assert config.per_tool_soft_limit == 7
+    assert config.per_tool_hard_limit == 9
+
+
 def test_make_lead_agent_explicit_checkpointer_overrides_global() -> None:
     """显式 checkpointer 参数覆盖全局单例（subagent 注入 InMemorySaver）。
 

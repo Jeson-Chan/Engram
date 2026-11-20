@@ -9,6 +9,10 @@ AttributeError: 'LeaderAgent' object has no attribute 'invoke'
 本测试用真实 make_lead_agent（FakeListChatModel + stub tool 编译的真实 graph），
 不用 MagicMock 假 agent——旧测试 test_bootstrap_fix.py 用 MagicMock 注入带 invoke
 的假 agent，正是漏掉本缺陷的原因。
+
+注意 recursion_limit 用 100：LangChain 1.x 把每个 middleware hook 编译成独立
+graph 节点，单轮 ≈20 节点，原来的 20 只是勉强够一次模型调用（多挂一个 middleware
+就会超）。
 """
 
 from __future__ import annotations
@@ -77,7 +81,7 @@ def test_real_leader_agent_invoke_is_callable_directly():
         "user_input": "hello",
         "research_question": "hello",
     }
-    final = leader.invoke(state, config={"recursion_limit": 20})
+    final = leader.invoke(state, config={"recursion_limit": 100})
     assert isinstance(final, dict)
     assert final.get("messages")
 
@@ -90,7 +94,7 @@ def test_real_leader_agent_invoke_inside_running_loop_fails_fast():
     state = {"messages": [], "user_input": "hi", "research_question": "hi"}
 
     async def _call_from_loop():
-        return leader.invoke(state, config={"recursion_limit": 20})
+        return leader.invoke(state, config={"recursion_limit": 100})
 
     with pytest.raises(RuntimeError, match="running event loop"):
         asyncio.run(_call_from_loop())
@@ -100,7 +104,7 @@ def test_real_leader_agent_invoke_deep_copies_caller_config():
     """invoke 不改写调用方的 config dict（浅拷贝会跨调用共享生成的
     thread_id，污染会话状态——review medium）。"""
     leader = _make_real_leader()
-    caller_config = {"configurable": {"user_id": "alice"}, "recursion_limit": 20}
+    caller_config = {"configurable": {"user_id": "alice"}, "recursion_limit": 100}
     state = {"messages": [], "user_input": "hi", "research_question": "hi"}
 
     leader.invoke(state, config=caller_config)
@@ -116,7 +120,7 @@ def test_real_leader_agent_invoke_defaults_user_id():
     leader = _make_real_leader()
     state = {"messages": [], "user_input": "hi", "research_question": "hi"}
 
-    final = leader.invoke(state, config={"recursion_limit": 20})
+    final = leader.invoke(state, config={"recursion_limit": 100})
     assert isinstance(final, dict)
 
 

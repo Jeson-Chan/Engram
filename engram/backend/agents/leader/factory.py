@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from langchain.agents import create_agent
@@ -17,6 +18,7 @@ from engram.backend.agents.middlewares.help_request_middleware import (
     HelpRequestMiddleware,
 )
 from engram.backend.agents.middlewares.loop_detection_middleware import (
+    LoopDetectionConfig,
     LoopDetectionMiddleware,
 )
 from engram.backend.agents.middlewares.stall_detection_middleware import (
@@ -35,6 +37,30 @@ from engram.backend.agents.middlewares.todo_middleware import TodoMiddleware
 from engram.backend.agents.middlewares.tool_call_middleware import ToolCallMiddleware
 from engram.backend.agents.runtime.checkpointer import get_checkpointer
 from engram.backend.agents.state.types import ThreadState
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, ""))
+    except (TypeError, ValueError):
+        return default
+
+
+def _make_loop_detection_middleware() -> LoopDetectionMiddleware:
+    """搜索过搜熔断开关（env 可调，兼顾"不要循环上限"的历史诉求）。
+
+    - ENGRAM_LOOP_DETECTION_ENABLED=false → 整体关闭
+    - ENGRAM_SEARCH_SOFT_LIMIT（默认 12）→ 注入停止搜索提醒
+    - ENGRAM_SEARCH_HARD_LIMIT（默认 20）→ 强制收尾
+    """
+    enabled = os.environ.get("ENGRAM_LOOP_DETECTION_ENABLED", "true").lower() not in {
+        "0", "false", "no", "off",
+    }
+    return LoopDetectionMiddleware(LoopDetectionConfig(
+        enabled=enabled,
+        per_tool_soft_limit=_env_int("ENGRAM_SEARCH_SOFT_LIMIT", 12),
+        per_tool_hard_limit=_env_int("ENGRAM_SEARCH_HARD_LIMIT", 20),
+    ))
 
 
 def _safe_get_specialist_registry(registry: Any) -> Any | None:
@@ -142,10 +168,10 @@ def _build_middlewares(
     middlewares.extend([
         HelpRequestMiddleware(),
         DanglingToolCallMiddleware(),
-        # LoopDetectionMiddleware 已移除——用户要求取消循环上限约束。
-        # 原配置：after_model 检测近 10 条消息同 (tool, args_hash) ≥3 → 清 tool_calls + jump model。
-        # 如需恢复，取消下行注释 + 确保 import 存在。
-        # LoopDetectionMiddleware(),
+        # 2026-11-20 恢复：线上出现 60 次 web_search 的深挖型死循环（每次查询词不同，
+        # 同参检测抓不到）。现为两层保护：同参重复 ≥3 + 搜索类工具单 run 过搜预算
+        # （soft=12 提醒 / hard=20 强制收尾）。只约束搜索工具，不动 bash 等长任务工具。
+        _make_loop_detection_middleware(),
         ToolCallMiddleware(),
     ])
     if orchestration_middleware is not None:

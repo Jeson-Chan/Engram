@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
+from langgraph.errors import GraphRecursionError
 
 from engram.backend.agents.capabilities.registry import CapabilityRegistry
 
@@ -165,14 +166,36 @@ class LeaderAgent:
         }
 
         # MCP tools are async-only StructuredTool; graph must run in async mode.
-        final_state = asyncio.run(self.graph.ainvoke(
-            {
-                "messages": [HumanMessage(content=question)],
-                "user_input": question,
-                "research_question": question,
-            },
-            config=config,
-        ))
+        async def _ainvoke_with_fallback() -> tuple[dict[str, Any], bool]:
+            try:
+                state = await self.graph.ainvoke(
+                    {
+                        "messages": [HumanMessage(content=question)],
+                        "user_input": question,
+                        "research_question": question,
+                    },
+                    config=config,
+                )
+                return state, False
+            except GraphRecursionError:
+                # 死循环兜底：循环上限耗尽时不再把异常抛给用户（表现为"不返回结果"），
+                # 尽量从 checkpointer 取回部分 state，用已收证据合成报告。
+                try:
+                    snapshot = await self.graph.aget_state(config)
+                    return dict(snapshot.values or {}), True
+                except Exception:
+                    return {
+                        "messages": [],
+                        "research_question": question,
+                        "user_input": question,
+                    }, True
+
+        final_state, recursion_hit = asyncio.run(_ainvoke_with_fallback())
+        if recursion_hit:
+            run_context.journal.append(
+                "agent.recursion_limit",
+                {"run_id": run_context.run_id, "question": question[:200]},
+            )
 
         expert_mode = run_context.config.runtime.expert_mode
         artifact_path = None
@@ -205,6 +228,25 @@ class LeaderAgent:
         else:
             # default 模式：不自动报告，输出 last AIMessage；不保存 artifact（靠 /report 触发）
             final_report = _last_ai_message(final_state) or ""
+            if recursion_hit and not final_report:
+                # 循环上限耗尽且模型没留下答案 → 用 observations 渲染结构化兜底
+                try:
+                    final_report = self.capability_registry.get_reporter().generate_report(
+                        final_state, run_context,
+                    ).final_report
+                except Exception:
+                    final_report = ""
+                if not final_report:
+                    final_report = f"# {question}\n\n研究因达到循环上限而中断，未收集到可用证据。"
+            elif recursion_hit and "No answer collected." in final_report:
+                final_report = f"# {question}\n\n研究因达到循环上限而中断，未收集到可用证据。"
+
+        if recursion_hit:
+            final_report = (
+                f"{final_report}\n\n"
+                "> 注意：本次运行达到循环上限被终止，以上内容基于已收集证据生成，可能不完整。"
+                "可以缩小问题范围后重新提问。"
+            )
 
         return AgentRunResult(
             run_id=run_context.run_id,

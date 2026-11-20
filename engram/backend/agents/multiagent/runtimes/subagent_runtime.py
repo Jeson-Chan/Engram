@@ -23,6 +23,12 @@ from engram.backend.agents.multiagent.types import (
     SpecialistRequest,
 )
 
+# LangChain 1.x 把每个 middleware hook 编译成独立 graph 节点：一轮 ReAct
+# （before_agent/before_model/after_model/after_agent 全链 + model）实测 ≈20 个
+# 节点。recursion_limit 是「节点数」不是「步数」，×2 连一轮都跑不完；
+# 用 25 留余量，让 max_steps=10 真的对应 ~10 轮模型调用。
+_NODES_PER_STEP = 25
+
 
 class SubagentRuntime:
     """进程内调用 lead factory runtime（Engram self-copy subagent）。
@@ -48,7 +54,7 @@ class SubagentRuntime:
         try:
             result = agent.invoke(
                 state,
-                config={"recursion_limit": request.max_steps * 2},
+                config={"recursion_limit": request.max_steps * _NODES_PER_STEP},
             )
         except RecursionError:
             from engram.backend.agents.multiagent.exceptions import (

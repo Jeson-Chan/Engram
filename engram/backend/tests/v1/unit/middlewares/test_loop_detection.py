@@ -1,4 +1,6 @@
-from langchain_core.messages import AIMessage, HumanMessage
+from types import SimpleNamespace
+
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from engram.backend.agents.middlewares.loop_detection_middleware import (
     LoopDetectionConfig,
@@ -137,3 +139,127 @@ def test_middleware_no_tool_calls_on_last_ai_returns_none() -> None:
         ]
     }
     assert mw.after_model(state, runtime=None) is None
+
+
+# ── 单工具过搜预算（2026-11-20 线上 60 次 web_search 深挖型循环回归） ──────
+
+
+def _runtime(tid: str = "t1", rid: str = "r1") -> SimpleNamespace:
+    return SimpleNamespace(context={"thread_id": tid, "run_id": rid})
+
+
+def _request(name: str = "web_search", call_id: str = "tc1") -> SimpleNamespace:
+    return SimpleNamespace(
+        tool_call={"name": name, "id": call_id, "args": {"query": call_id}},
+        runtime=_runtime(),
+        state={"messages": [], "errors": []},
+    )
+
+
+def _ok_result(call_id: str = "tc1", name: str = "web_search") -> ToolMessage:
+    return ToolMessage(content='{"results": []}', tool_call_id=call_id, name=name)
+
+
+def test_search_soft_limit_queues_stop_guidance() -> None:
+    mw = LoopDetectionMiddleware(LoopDetectionConfig(per_tool_soft_limit=2, per_tool_hard_limit=5))
+    for i in range(2):
+        req = _request(call_id=f"tc{i}")
+        mw.wrap_tool_call(req, lambda r: _ok_result(r.tool_call["id"]))
+
+    result = mw.before_model({}, _runtime())
+    assert result is not None
+    msg = result["messages"][0]
+    assert isinstance(msg, HumanMessage)
+    assert msg.name == "loop_detection"
+    assert "web_search" in msg.content
+    # 只提醒一次（队列 drain 后为空）
+    assert mw.before_model({}, _runtime()) is None
+
+
+def test_search_hard_limit_clears_tool_calls_and_jumps_model() -> None:
+    mw = LoopDetectionMiddleware(LoopDetectionConfig(per_tool_soft_limit=99, per_tool_hard_limit=2))
+    for i in range(2):
+        req = _request(call_id=f"tc{i}")
+        mw.wrap_tool_call(req, lambda r: _ok_result(r.tool_call["id"]))
+
+    last_ai = AIMessage(
+        id="ai-hard",
+        content="",
+        tool_calls=[{"name": "web_search", "args": {"query": "new"}, "id": "tcz", "type": "tool_call"}],
+    )
+    result = mw.after_model({"messages": [last_ai]}, _runtime())
+    assert result is not None
+    assert result["jump_to"] == "model"
+    cleared = result["messages"][0]
+    assert isinstance(cleared, AIMessage)
+    assert cleared.tool_calls == []
+    assert cleared.additional_kwargs.get("loop_detected") == "web_search"
+    assert "上限" in result["messages"][1].content
+
+
+def test_search_calls_beyond_hard_limit_are_blocked() -> None:
+    mw = LoopDetectionMiddleware(LoopDetectionConfig(per_tool_soft_limit=99, per_tool_hard_limit=1))
+    mw.wrap_tool_call(_request(call_id="tc1"), lambda r: _ok_result("tc1"))
+
+    executed = False
+
+    def handler(request):
+        nonlocal executed
+        executed = True
+        return _ok_result("tc2")
+
+    result = mw.wrap_tool_call(_request(call_id="tc2"), handler)
+    assert executed is False
+    assert result is not None
+    assert result.update["messages"][0].status == "error"
+
+
+def test_search_hard_limit_forces_final_answer_when_model_ignores_twice() -> None:
+    mw = LoopDetectionMiddleware(LoopDetectionConfig(
+        per_tool_soft_limit=99, per_tool_hard_limit=1, max_forced_finalizations=1,
+    ))
+    mw.wrap_tool_call(_request(call_id="tc1"), lambda r: _ok_result("tc1"))
+    ai = AIMessage(
+        id="ai-ignore",
+        content="",
+        tool_calls=[{"name": "web_search", "args": {"query": "again"}, "id": "tc9", "type": "tool_call"}],
+    )
+    state = {"messages": [ai], "sources": [{"url": "https://example.com/a"}]}
+
+    first = mw.after_model(state, _runtime())
+    assert first is not None and first["jump_to"] == "model"
+
+    second = mw.after_model(state, _runtime())
+    assert second is not None
+    assert second["jump_to"] == "end"
+    final = second["messages"][0]
+    assert isinstance(final, AIMessage)
+    assert "达到循环保护上限" in final.content
+    assert "https://example.com/a" in final.content
+
+
+def test_before_agent_resets_counts_for_new_invocation() -> None:
+    """同一 thread 的新一轮 invocation 从 0 计数（run_id 缺失也不会跨轮累计）。"""
+    mw = LoopDetectionMiddleware(LoopDetectionConfig(per_tool_soft_limit=99, per_tool_hard_limit=2))
+    mw.wrap_tool_call(_request(call_id="tc1"), lambda r: _ok_result("tc1"))
+    mw.wrap_tool_call(_request(call_id="tc2"), lambda r: _ok_result("tc2"))
+    assert mw._saturated_tool(_runtime()) == ("web_search", 2)
+
+    mw.before_agent({}, _runtime())
+    assert mw._saturated_tool(_runtime()) is None
+
+
+def test_non_search_tools_are_not_budgeted() -> None:
+    mw = LoopDetectionMiddleware(LoopDetectionConfig(per_tool_soft_limit=1, per_tool_hard_limit=1))
+    calls = 0
+
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        return ToolMessage(content="ok", tool_call_id=request.tool_call["id"], name="bash")
+
+    for i in range(3):
+        mw.wrap_tool_call(_request(name="bash", call_id=f"b{i}"), handler)
+
+    assert calls == 3
+    assert mw.before_model({}, _runtime()) is None
