@@ -66,11 +66,12 @@ describe("wordmark(任务 2.2)", () => {
 });
 
 describe("像素图标(任务 2.1)", () => {
-  it("图标为 8x8 viewBox SVG", () => {
+  it("图标为 24x24 库 viewBox SVG(pixel-icon-library,crispEdges)", () => {
     const { container } = render(<IconSession />);
     const svg = container.querySelector("svg");
-    expect(svg?.getAttribute("viewBox")).toBe("0 0 16 16");
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
     expect(svg?.getAttribute("shape-rendering")).toBe("crispEdges");
+    expect(svg?.getAttribute("fill")).toBe("currentColor");
     const { container: c2 } = render(<IconMemory />);
     expect(c2.querySelector("svg")).toBeTruthy();
   });
