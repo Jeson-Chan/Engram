@@ -63,7 +63,7 @@ export function RunInspector() {
           rel="noreferrer"
           data-testid="report-link"
         >
-          预览 / 下载报告（Markdown）
+          <IconRun size={10} color="var(--c-agent)" /> 预览 / 下载报告（Markdown）
         </a>
       )}
 

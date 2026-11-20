@@ -4,7 +4,7 @@ import { SessionRail } from "./components/SessionRail";
 import { Conversation } from "./components/Conversation";
 import { RunInspector } from "./components/RunInspector";
 import { MemoryExplorer } from "./components/MemoryExplorer";
-import { IconCrt } from "./components/pixel-icons";
+import { IconCrt, IconRun } from "./components/pixel-icons";
 import "./styles.css";
 
 /** CRT overlay 偏好(localStorage 持久化;reduced-motion/低核自动关)。 */
@@ -94,7 +94,7 @@ function Shell() {
           className={state.inspectorTab === "run" ? "on" : ""}
           onClick={() => actions.setInspectorTab("run")}
         >
-          Run
+          <IconRun size={10} color="var(--c-agent)" /> Run
         </button>
       </div>
       <RunInspector />

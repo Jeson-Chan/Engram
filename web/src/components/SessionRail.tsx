@@ -66,7 +66,7 @@ export function SessionRail({ drawer = false }: { drawer?: boolean }) {
       </div>
       <div className="panel-title">会话</div>
       <button className="new-session" onClick={() => actions.createSession()}>
-        + 新建会话
+        <IconSession size={10} /> 新建会话
       </button>
       {state.sessions.length === 0 && (
         <div className="empty">还没有会话<br />点上方新建一个</div>

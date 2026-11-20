@@ -9,6 +9,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../store";
 import type { MemoryTraceView } from "../lib/types";
+import { IconMemory, IconHot, IconCold, IconDelete, IconClear } from "./pixel-icons";
 
 /** 从 source 推导归属 thread（与后端 _thread_of / store _partition_of 同语义）。 */
 export function threadOf(trace: MemoryTraceView): string {
@@ -120,9 +121,9 @@ export function MemoryExplorer() {
       <div className="memory-page-head">
         <div className="panel-title">记忆管理</div>
         <span className="badge">{state.user_id}</span>
-        <span className="muted">
-          {state.memoryStats ? `共 ${state.memoryStats.total ?? 0} 条` : ""}
-        </span>
+        <span className="stat"><IconMemory size={10} /> 全部 <b>{state.memoryStats?.total ?? 0}</b></span>
+        <span className="stat"><IconHot size={10} color="var(--c-exec)" /> 热层 <b>{state.memoryStats?.hot ?? 0}</b></span>
+        <span className="stat"><IconCold size={10} /> 冷层 <b>{state.memoryStats?.cold ?? 0}</b></span>
         <button className="ghost-btn" onClick={() => actions.setMainView("chat")}>
           返回会话
         </button>
@@ -146,7 +147,7 @@ export function MemoryExplorer() {
               onClick={() => openConfirm("user", state.user_id, null)}
               data-testid="tree-user-clear"
             >
-              清除
+              <IconClear size={9} /> 清除
             </button>
           </div>
           {tree.map(([thread, count]) => (
@@ -240,7 +241,9 @@ export function MemoryExplorer() {
                   <span className="tag">{m.type}</span>
                   {m.layer && (
                     <span className={`tag ${m.layer}`}>
-                      {m.layer === "hot" ? "热" : "冷"}
+                      {m.layer === "hot"
+                      ? <IconHot size={8} color="var(--c-exec)" />
+                      : <IconCold size={8} />} {m.layer === "hot" ? "热" : "冷"}
                     </span>
                   )}
                   {m.forgotten && <span className="tag forgotten">已遗忘</span>}
@@ -268,7 +271,7 @@ export function MemoryExplorer() {
                 onClick={() => actions.deleteMemoryTrace(m.id)}
                 data-testid={`memory-delete-${m.id}`}
               >
-                删除
+                <IconDelete size={10} /> 删除
               </button>
             </div>
           ))}
@@ -279,7 +282,7 @@ export function MemoryExplorer() {
         <div className="mem-actionbar" data-testid="memory-actionbar">
           <span>已选 {memSelected.length} 条</span>
           <button className="danger-btn" disabled={busy} onClick={doDeleteSelected}>
-            删除选中
+            <IconDelete size={10} /> 删除选中
           </button>
           <button className="ghost-btn" onClick={() => actions.setMemSelected([])}>
             取消
@@ -317,7 +320,7 @@ export function MemoryExplorer() {
                 onClick={doClear}
                 data-testid="confirm-ok"
               >
-                确认清除
+                <IconClear size={10} /> 确认清除
               </button>
             </div>
           </div>
