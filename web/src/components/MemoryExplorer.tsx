@@ -25,6 +25,18 @@ interface ConfirmState {
   count: number | null;
 }
 
+/** 像素强度条:▓ 填充 + ░ 空段,按 strength 比例(10 格,stepped 无插值)。 */
+export function PixelStrength({ strength }: { strength: number }) {
+  const total = 10;
+  const filled = Math.round(Math.max(0, Math.min(1, strength)) * total);
+  return (
+    <span className="strength-px" data-testid={`strength-${strength}`}>
+      <span className="fill">{"▓".repeat(filled)}</span>
+      <span className="empty">{"░".repeat(total - filled)}</span>
+    </span>
+  );
+}
+
 export function MemoryExplorer() {
   const { state, actions } = useApp();
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -124,6 +136,7 @@ export function MemoryExplorer() {
               onClick={() => actions.setMemPartition(null)}
               data-testid="tree-user"
             >
+              <span className="node-mark">▓▓</span>
               全部记忆 <small>({traces.length})</small>
             </span>
             <button
@@ -143,6 +156,7 @@ export function MemoryExplorer() {
                 onClick={() => actions.setMemPartition({ userId: state.user_id, threadId: thread })}
                 data-testid={`tree-thread-${thread}`}
               >
+                <span className="node-mark">▓</span>
                 {thread} <small>({count})</small>
               </span>
               <button
@@ -230,9 +244,7 @@ export function MemoryExplorer() {
                     </span>
                   )}
                   {m.forgotten && <span className="tag forgotten">已遗忘</span>}
-                  <span className="strength-bar" title={`strength ${m.strength}`}>
-                    <div style={{ width: `${Math.round(m.strength * 100)}%` }} />
-                  </span>
+                  <PixelStrength strength={m.strength} />
                 </div>
                 <div className="content">{m.content}</div>
                 <div className="meta">

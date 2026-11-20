@@ -4,7 +4,33 @@ import { SessionRail } from "./components/SessionRail";
 import { Conversation } from "./components/Conversation";
 import { RunInspector } from "./components/RunInspector";
 import { MemoryExplorer } from "./components/MemoryExplorer";
+import { IconCrt } from "./components/pixel-icons";
 import "./styles.css";
+
+/** CRT overlay 偏好(localStorage 持久化;reduced-motion/低核自动关)。 */
+function useCrtEnabled(): [boolean, (on: boolean) => void, boolean] {
+  const [forcedOff] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const lowEnd = (navigator.hardwareConcurrency ?? 8) < 4;
+    return reduced || lowEnd;
+  });
+  const [off, setOff] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return localStorage.getItem("engram-crt-off") !== "1" && !forcedOff;
+    } catch {
+      return !forcedOff;
+    }
+  });
+  const set = (on: boolean) => {
+    setOff(on);
+    try {
+      localStorage.setItem("engram-crt-off", on ? "0" : "1");
+    } catch { /* 私有模式等:偏好不持久化,可接受 */ }
+  };
+  return [off, set, forcedOff];
+}
 
 /** 响应式三栏壳：窄屏（<900px）收起 Inspector 与会话栏（可开抽屉）。 */
 function useNarrow(): boolean {
@@ -24,6 +50,7 @@ function Shell() {
   const { state, actions } = useApp();
   const narrow = useNarrow();
   const [drawer, setDrawer] = useState<"sessions" | "run" | "memory" | null>(null);
+  const [crtOn, setCrtOn, crtForcedOff] = useCrtEnabled();
 
   // 刷新恢复（任务 5.7）：mount 时刻缓存 URL 里的 ?s=——URL-clear effect
   // 在 currentSessionId 仍为 null 的首帧就会删参数，晚读就丢了
@@ -87,6 +114,7 @@ function Shell() {
       <div className="shell" data-narrow={narrow ? "1" : "0"}>
         <SessionRail />
         <MemoryExplorer />
+        {crtOn && <div className="crt-overlay" data-testid="crt-overlay" />}
       </div>
     );
   }
@@ -140,6 +168,15 @@ function Shell() {
             {state.status ? state.status.model : state.statusError ? "网关不可用" : "…"}
           </span>
           {state.status?.mode && <span className="badge">{state.status.mode}</span>}
+          <button
+            className={`crt-toggle${crtOn ? " on" : ""}`}
+            onClick={() => setCrtOn(!crtOn)}
+            disabled={crtForcedOff}
+            title={crtOn ? "关闭 CRT 效果" : "开启 CRT 效果"}
+            data-testid="crt-toggle"
+          >
+            <IconCrt size={12} /> CRT
+          </button>
           {state.status?.skills && state.status.skills.length > 0 && (
             <span className="badge">{state.status.skills.length} skills</span>
           )}
@@ -164,6 +201,7 @@ function Shell() {
         <Conversation />
       </div>
       {inspector()}
+      {crtOn && <div className="crt-overlay" data-testid="crt-overlay" />}
     </div>
   );
 }

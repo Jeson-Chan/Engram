@@ -144,7 +144,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
         {turn.budget && (
           <div className="budget">
             上下文预算 {Math.round(turn.budget.fraction * 100)}%（窗口 {turn.budget.window}）
-            <div className="bar">
+            <div className={`bar${turn.budget.fraction >= 0.8 ? " high" : ""}`}>
               <div style={{ width: `${Math.min(100, turn.budget.fraction * 100)}%` }} />
             </div>
           </div>

@@ -1,14 +1,13 @@
 import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { useApp } from "../store";
+import { IconRun, IconMemory } from "./pixel-icons";
 import type { RunRecord, RunEventView } from "../lib/types";
 
-function iconOf(eventType: string): string {
-  if (eventType.startsWith("tool.")) return "🔧";
-  if (eventType.startsWith("llm")) return "🧠";
-  if (eventType.startsWith("memory")) return "🗂";
-  if (eventType.startsWith("run")) return "▶";
-  if (eventType.startsWith("report")) return "📄";
-  return "·";
+function iconOf(eventType: string): ReactNode {
+  if (eventType.startsWith("tool.")) return <IconRun size={10} color="var(--c-exec)" />;
+  if (eventType.startsWith("llm.")) return <IconMemory size={10} color="var(--c-agent)" />;
+  return <IconRun size={10} color="var(--muted)" />;
 }
 
 function timelineLabel(event: RunEventView): string {
