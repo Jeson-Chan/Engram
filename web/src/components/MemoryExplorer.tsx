@@ -121,9 +121,11 @@ export function MemoryExplorer() {
       <div className="memory-page-head">
         <div className="panel-title">记忆管理</div>
         <span className="badge">{state.user_id}</span>
+        <span className="mem-stats" data-testid="memory-stats" style={{ display: "inline-flex", gap: 8 }}>
         <span className="stat"><IconMemory size={10} /> 全部 <b>{state.memoryStats?.total ?? 0}</b></span>
         <span className="stat"><IconHot size={10} color="var(--c-exec)" /> 热层 <b>{state.memoryStats?.hot ?? 0}</b></span>
         <span className="stat"><IconCold size={10} /> 冷层 <b>{state.memoryStats?.cold ?? 0}</b></span>
+        </span>
         <button className="ghost-btn" onClick={() => actions.setMainView("chat")}>
           返回会话
         </button>

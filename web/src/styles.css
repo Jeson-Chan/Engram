@@ -405,13 +405,13 @@ body {
     repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0 1px, transparent 1px 3px),
     radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.12) 100%);
 }
-.crt-toggle {
+.crt-toggle, .theme-toggle {
   margin-left: auto; border: 1px solid var(--border-soft); background: none;
   color: var(--muted); cursor: pointer; padding: 2px 4px; display: inline-flex;
   align-items: center; gap: 4px;
 }
-.crt-toggle.on { color: var(--c-agent); border-color: var(--c-agent); }
-.crt-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.crt-toggle.on, .theme-toggle.on { color: var(--c-agent); border-color: var(--c-agent); }
+.crt-toggle:disabled, .theme-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* 像素强度条:组件渲染 ▓ 填充 + ▐ 空段文字 */
 .strength-px {

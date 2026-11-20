@@ -4,8 +4,27 @@ import { SessionRail } from "./components/SessionRail";
 import { Conversation } from "./components/Conversation";
 import { RunInspector } from "./components/RunInspector";
 import { MemoryExplorer } from "./components/MemoryExplorer";
-import { IconCrt, IconRun } from "./components/pixel-icons";
+import { IconCrt, IconRun, IconSun, IconMoon } from "./components/pixel-icons";
 import "./styles.css";
+
+/** 深/浅主题切换:盖章 documentElement.dataset.theme + localStorage 持久化。 */
+function useTheme(): [string, () => void] {
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("engram-theme") || "dark";
+    } catch {
+      return "dark";
+    }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("engram-theme", theme);
+    } catch { /* 忽略 */ }
+  }, [theme]);
+  const toggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+  return [theme, toggle];
+}
 
 /** CRT overlay 偏好(localStorage 持久化;reduced-motion/低核自动关)。 */
 function useCrtEnabled(): [boolean, (on: boolean) => void, boolean] {
@@ -51,6 +70,7 @@ function Shell() {
   const narrow = useNarrow();
   const [drawer, setDrawer] = useState<"sessions" | "run" | "memory" | null>(null);
   const [crtOn, setCrtOn, crtForcedOff] = useCrtEnabled();
+  const [theme, toggleTheme] = useTheme();
 
   // 刷新恢复（任务 5.7）：mount 时刻缓存 URL 里的 ?s=——URL-clear effect
   // 在 currentSessionId 仍为 null 的首帧就会删参数，晚读就丢了
@@ -168,6 +188,14 @@ function Shell() {
             {state.status ? state.status.model : state.statusError ? "网关不可用" : "…"}
           </span>
           {state.status?.mode && <span className="badge">{state.status.mode}</span>}
+          <button
+            className="crt-toggle"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "切换到浅色" : "切换到深色"}
+            data-testid="theme-toggle"
+          >
+            {theme === "dark" ? <IconSun size={12} /> : <IconMoon size={12} />}
+          </button>
           <button
             className={`crt-toggle${crtOn ? " on" : ""}`}
             onClick={() => setCrtOn(!crtOn)}

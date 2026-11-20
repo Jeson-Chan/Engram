@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
+import { IconCoinStack } from "./pixel-icons";
 import { Markdown } from "./Markdown";
 import type { ChatTurn, ToolCallState } from "../store";
 import type { MessageView } from "../lib/types";
@@ -143,7 +144,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
         ))}
         {turn.budget && (
           <div className="budget">
-            上下文预算 {Math.round(turn.budget.fraction * 100)}%（窗口 {turn.budget.window}）
+            <IconCoinStack size={10} color="var(--c-user)" /> 上下文预算 {Math.round(turn.budget.fraction * 100)}%（窗口 {turn.budget.window}）
             <div className={`bar${turn.budget.fraction >= 0.8 ? " high" : ""}`}>
               <div style={{ width: `${Math.min(100, turn.budget.fraction * 100)}%` }} />
             </div>

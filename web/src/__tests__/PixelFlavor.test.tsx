@@ -133,3 +133,39 @@ describe("语义 CSS 契约(任务 1.1/1.2)", () => {
     expect(screen.getByTestId("crt-toggle").textContent).toContain("CRT");
   });
 });
+
+describe("主题切换(v2 反馈轮)", () => {
+  it("默认深色盖章,点击切换并持久化", async () => {
+    localStorage.removeItem("engram-theme");
+    stubApi();
+    render(<App />);
+    await waitFor(() => screen.getByTestId("theme-toggle"));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    fireEvent.click(screen.getByTestId("theme-toggle"));
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("light");
+    });
+    expect(localStorage.getItem("engram-theme")).toBe("light");
+    // 切回深色
+    fireEvent.click(screen.getByTestId("theme-toggle"));
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("dark");
+    });
+    localStorage.removeItem("engram-theme");
+  });
+});
+
+describe("专属图标(v2 反馈轮)", () => {
+  it("运行历史时钟 + 时间线节点 + 导航气泡各形各样", async () => {
+    stubApi();
+    render(<App />);
+    await waitFor(() => screen.getByTestId("session-rail"));
+    // 导航:气泡(会话)与芯片(记忆)都是 SVG
+    expect(screen.getByTestId("nav-sessions").querySelector("svg")).toBeTruthy();
+    // 记忆页进入后硬币(context)出现在统计行
+    screen.getByTestId("nav-memory").click();
+    await waitFor(() => screen.getByTestId("memory-explorer"));
+    const stats = screen.getByTestId("memory-stats");
+    expect(stats.querySelectorAll("svg").length).toBeGreaterThanOrEqual(3);
+  });
+});

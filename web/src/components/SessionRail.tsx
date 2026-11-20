@@ -11,10 +11,6 @@ export function PixelWordmark() {
         <span className="g1">ENG</span>
         <span className="g2">RAM</span>
       </div>
-      <div className="wm-sub">
-        <span className="pixel-font" style={{ color: "var(--c-exec)" }}>v1.0.0</span>
-        <span>记忆工作台</span>
-      </div>
     </div>
   );
 }
