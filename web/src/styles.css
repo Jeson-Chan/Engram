@@ -20,6 +20,13 @@
   --warn: #8a6100;
   --shadow-hard: 4px 4px 0 rgba(28, 28, 26, 0.18);
   --dot-grid: rgba(28, 28, 26, 0.05);
+  /* ---- web-pixel-flavor-a 基础变量 ---- */
+  --px-shadow: 4px 4px 0 rgba(28, 28, 26, 0.55);
+  --px-shadow-pressed: 2px 2px 0 rgba(28, 28, 26, 0.55);
+  --px-press-shift: translate(2px, 2px);
+  --px-transition: all 0s steps(1);
+  --px-bar-bg: #23211c;             /* 栏条实心块(浅色=墨块) */
+  --px-bar-text: #faf6ea;            /* 栏条反白文字 */
 }
 /* 显式深色盖章(预留主题切换;当前仅系统偏好驱动) */
 :root[data-theme="dark"] {
@@ -42,6 +49,13 @@
   --shadow-hard: 4px 4px 0 rgba(0, 0, 0, 0.4);
   --dot-grid: rgba(232, 232, 227, 0.04);
   --glow: rgba(255, 140, 66, 0.14);
+  /* ---- web-pixel-flavor-a 基础变量(深色) ---- */
+  --px-shadow: 4px 4px 0 rgba(0, 0, 0, 0.85);
+  --px-shadow-pressed: 2px 2px 0 rgba(0, 0, 0, 0.85);
+  --px-press-shift: translate(2px, 2px);
+  --px-transition: all 0s steps(1);
+  --px-bar-bg: #1d1f23;
+  --px-bar-text: #e8e8e3;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -64,6 +78,13 @@
     --warn: #e6c15c;
     --shadow-hard: 4px 4px 0 rgba(0, 0, 0, 0.4);
     --dot-grid: rgba(232, 232, 227, 0.04);
+    /* ---- web-pixel-flavor-a 基础变量(系统跟随深色) ---- */
+    --px-shadow: 4px 4px 0 rgba(0, 0, 0, 0.85);
+    --px-shadow-pressed: 2px 2px 0 rgba(0, 0, 0, 0.85);
+    --px-press-shift: translate(2px, 2px);
+    --px-transition: all 0s steps(1);
+    --px-bar-bg: #1d1f23;
+    --px-bar-text: #e8e8e3;
   }
 }
 
@@ -72,6 +93,82 @@
   font-family: "Press Start 2P", ui-monospace, monospace;
   font-size: 10px;
 }
+
+/* ---- web-pixel-flavor-a:按压交互系统(全局形制) ---- */
+.px-btn, .px-btn-secondary, .px-card {
+  transition: var(--px-transition);
+  user-select: none;
+}
+.px-btn {
+  background: var(--c-user);
+  color: #fff;
+  border: 2px solid var(--px-bar-bg);
+  box-shadow: var(--px-shadow);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.px-btn-secondary {
+  background: var(--panel);
+  color: var(--c-agent);
+  border: 2px solid var(--c-agent);
+  box-shadow: var(--px-shadow);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.px-btn.send { background: var(--c-agent); }
+.px-btn.danger, .px-btn-secondary.danger {
+  background: var(--c-exec);
+  color: #fff;
+  border-color: var(--px-bar-bg);
+}
+.px-card {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  box-shadow: var(--px-shadow);
+  cursor: pointer;
+}
+.px-btn:active, .px-btn-secondary:active, .px-card:active {
+  transform: var(--px-press-shift);
+  box-shadow: var(--px-shadow-pressed);
+}
+.px-btn:hover, .px-btn-secondary:hover { border-color: var(--c-agent); }
+.px-btn:focus-visible, .px-btn-secondary:focus-visible, .px-card:focus-visible {
+  outline: 2px solid var(--c-agent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .px-btn, .px-btn-secondary, .px-card, .px-btn:active, .px-btn-secondary:active, .px-card:active {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* 方块滚动条:8px 直角滑轨 */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border: none; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-agent); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* 块状面板栏条:16-bit 窗口式标题栏 */
+.px-panel {
+  border: 2px solid var(--border);
+  box-shadow: var(--px-shadow);
+  background: var(--panel);
+}
+.px-panel-bar {
+  background: var(--px-bar-bg);
+  color: var(--px-bar-text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 6px 10px;
+  min-height: 24px;
+  text-transform: uppercase;
+}
+
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -429,4 +526,32 @@ body {
 .nav-tabs button.on[data-nav="memory"] {
   border-color: var(--c-agent); color: var(--c-agent); background: var(--c-agent-soft);
   box-shadow: var(--shadow-hard);
+}
+
+/* ---- web-pixel-flavor-a:两帧 spinner / 细胞卡 / 弹入 ---- */
+.px-spinner .px-spin-a { animation: px-spin-a 0.5s steps(1) infinite; }
+.px-spinner .px-spin-a { animation: px-spin-a 0.5s steps(1) infinite; }
+@keyframes px-spin-a { 0%, 49.9% { visibility: visible; } 50%, 100% { visibility: hidden; } }
+@keyframes px-spin-b { 0%, 49.9% { visibility: hidden; } 50%, 100% { visibility: visible; } }
+@media (prefers-reduced-motion: reduce) {
+  .px-spinner .px-spin-a, .px-spinner .px-spin-b { animation: none; }
+  .px-spinner .px-spin-b { visibility: hidden; }
+}
+
+/* 记忆细胞卡(A 级):16×16 类型图标 + 按压 + hover 换边 */
+.mem-cell-icon { margin-right: 2px; }
+.mem-item.px-card:hover { border-color: var(--c-agent); }
+
+/* toast/notice 一次性弹入(steps,无缓动) */
+@keyframes px-pop { from { transform: translate(-8px, 0); } to { transform: translate(0, 0); } }
+.px-pop { animation: px-pop 0.15s steps(2); }
+@media (prefers-reduced-motion: reduce) { .px-pop { animation: none; } }
+
+/* ---- web-pixel-flavor-a:分组 ░ 格线推广 + 全局帧化 ---- */
+.px-gridline { color: var(--border-soft); letter-spacing: 2px; overflow: hidden; white-space: nowrap; font-size: 12px; }
+.px-gridline::before { content: "9191919191919191919191919191919191919191919191919191919191919191"; }
+
+/* 全局交互元素帧化(steps 二态,无平滑) */
+button, .session-item, .tree-node, .tabbar button, .nav-tabs button, .drawer-toggle {
+  transition: var(--px-transition);
 }

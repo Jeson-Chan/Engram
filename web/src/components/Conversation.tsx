@@ -224,7 +224,7 @@ export function Conversation() {
           }}
           data-testid="composer"
         />
-        <button onClick={send} disabled={state.streaming || !draft.trim()} data-testid="send">
+        <button className="px-btn send" onClick={send} disabled={state.streaming || !draft.trim()} data-testid="send">
           {state.streaming ? "流式…" : "发送"}
         </button>
       </div>

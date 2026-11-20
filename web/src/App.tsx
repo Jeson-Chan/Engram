@@ -217,7 +217,7 @@ function Shell() {
           )}
           {state.currentSessionId && (
             <button
-              className="ghost-btn"
+              className="px-btn-secondary"
               onClick={() => {
                 const session = state.sessions.find(
                   (s) => s.session_id === state.currentSessionId,

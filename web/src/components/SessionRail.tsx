@@ -70,8 +70,8 @@ export function SessionRail({ drawer = false }: { drawer?: boolean }) {
           <IconMemory size={12} /> 记忆
         </button>
       </div>
-      <div className="panel-title">会话</div>
-      <button className="new-session" onClick={() => actions.createSession()}>
+      <div className="px-panel-bar">会话</div>
+      <button className="px-btn" onClick={() => actions.createSession()}>
         <IconSession size={10} /> 新建会话
       </button>
       {state.sessions.length === 0 && (

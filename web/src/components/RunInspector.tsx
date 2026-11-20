@@ -34,7 +34,7 @@ export function RunInspector() {
 
   return (
     <div data-testid="run-inspector">
-      <div className="panel-title"><IconClock size={10} color="var(--c-agent)" /> 运行历史</div>
+      <div className="px-panel-bar"><IconClock size={10} color="var(--c-agent)" /> 运行历史</div>
       {state.runs.length === 0 && (
         <div className="empty">本会话还没有运行<br />发一条消息或研究一次</div>
       )}
@@ -67,7 +67,7 @@ export function RunInspector() {
         </a>
       )}
 
-      <div className="panel-title">
+      <div className="px-panel-bar">
         <IconTimeline size={10} color="var(--c-agent)" /> 事件时间线 {state.runEvents.length > 0 ? `(${state.runEvents.length})` : ""}
       </div>
       <div style={{ fontSize: 11, color: "var(--muted)", padding: "0 12px 6px" }}>

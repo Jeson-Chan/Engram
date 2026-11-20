@@ -5,6 +5,9 @@
  * 16×16 网格(1px 细节),每枚独立造型:
  * 会话=气泡 · 记忆=芯片 · context=硬币叠 · 历史=时钟 ·
  * 时间线=节点轴 · 热=火焰 · 冷=雪花 · 主题=日/月。
+ *
+ * v4(web-pixel-flavor-a):记忆类型三徽章(episodic 日记本/
+ * semantic 字典/procedural 齿轮)+ 两帧 PixelSpinner(steps 切换)。
  */
 
 interface PixelIconProps {
@@ -185,5 +188,67 @@ export function IconMoon(props: PixelIconProps) {
       6, 13, 5, 1,
       4, 3, 2, 8,
     )} />
+  );
+}
+
+/** 记忆类型:episodic(日记本:双竖环 + 页) */
+export function IconEpisodic(props: PixelIconProps) {
+  return (
+    <PixelSvg {...props} title={props.title ?? "episodic"} rects={R(
+      2, 1, 2, 14, 12, 1, 2, 14,
+      4, 3, 8, 1, 4, 5, 8, 1, 4, 7, 8, 1, 4, 9, 8, 1, 4, 11, 8, 1,
+      5, 13, 6, 1,
+    )} />
+  );
+}
+
+/** 记忆类型:semantic(字典:厚书 + 书签) */
+export function IconSemantic(props: PixelIconProps) {
+  return (
+    <PixelSvg {...props} title={props.title ?? "semantic"} rects={R(
+      2, 2, 12, 2, 2, 12, 12, 2,
+      4, 5, 8, 1, 4, 7, 5, 1, 4, 9, 8, 1,
+      10, 4, 2, 5,
+      4, 14, 12, 1,
+    )} />
+  );
+}
+
+/** 记忆类型:procedural(齿轮:方块齿 + 芯) */
+export function IconProcedural(props: PixelIconProps) {
+  return (
+    <PixelSvg {...props} title={props.title ?? "procedural"} rects={R(
+      6, 1, 4, 2, 2, 4, 3, 1, 11, 4, 3, 1, 2, 11, 3, 1, 11, 11, 3, 1,
+      4, 5, 8, 6,
+      6, 7, 4, 2,
+    )} />
+  );
+}
+
+/** 执行态:两帧方块 spinner(步进交替,CSS 类切 frame) */
+export function PixelSpinner({ size = 16, color }: { size?: number; color?: string }) {
+  const frame = (x: number, y: number, w: number, h: number) => ({ x, y, width: w, height: h });
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      shapeRendering="crispEdges"
+      fill={color ?? "currentColor"}
+      className="px-spinner"
+      aria-label="loading"
+      style={{ display: "inline-block", verticalAlign: "-2px" }}
+    >
+      {/* 两帧:实心方块 / 四角方块,由 CSS steps 切换 visibility */}
+      <g className="px-spin-a">
+        <rect {...frame(4, 4, 8, 8)} />
+      </g>
+      <g className="px-spin-b">
+        <rect {...frame(2, 2, 4, 4)} />
+        <rect {...frame(10, 2, 4, 4)} />
+        <rect {...frame(2, 10, 4, 4)} />
+        <rect {...frame(10, 10, 4, 4)} />
+      </g>
+    </svg>
   );
 }

@@ -8,6 +8,7 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "../store";
+import { IconEpisodic, IconSemantic, IconProcedural } from "./pixel-icons";
 import type { MemoryTraceView } from "../lib/types";
 import { IconMemory, IconHot, IconCold, IconDelete, IconClear } from "./pixel-icons";
 
@@ -81,7 +82,7 @@ export function MemoryExplorer() {
     return (
       <div className="memory-page" data-testid="memory-explorer">
         <div className="memory-page-head">
-          <div className="panel-title">记忆管理</div>
+          <div className="px-panel-bar">记忆管理</div>
         </div>
         <div className="empty" data-testid="memory-unavailable">
           记忆未配置
@@ -124,20 +125,20 @@ export function MemoryExplorer() {
   return (
     <div className="memory-page" data-testid="memory-explorer">
       <div className="memory-page-head">
-        <div className="panel-title">记忆管理</div>
+        <div className="px-panel-bar">记忆管理</div>
         <span className="badge">{state.user_id}</span>
         <span className="mem-stats" data-testid="memory-stats" style={{ display: "inline-flex", gap: 8 }}>
         <span className="stat"><IconMemory size={10} /> 全部 <b>{state.memoryStats?.total ?? 0}</b></span>
         <span className="stat"><IconHot size={10} color="var(--c-exec)" /> 热层 <b>{state.memoryStats?.hot ?? 0}</b></span>
         <span className="stat"><IconCold size={10} /> 冷层 <b>{state.memoryStats?.cold ?? 0}</b></span>
         </span>
-        <button className="ghost-btn" onClick={() => actions.setMainView("chat")}>
+        <button className="px-btn-secondary" onClick={() => actions.setMainView("chat")}>
           返回会话
         </button>
       </div>
 
       <div className="memory-body">
-        <div className="mem-tree" data-testid="memory-tree">
+        <div className="mem-tree px-panel" data-testid="memory-tree">
           <div className="tree-node">
             <span
               className={`tree-label${memPartition === null ? " on" : ""}`}
@@ -234,7 +235,7 @@ export function MemoryExplorer() {
           )}
 
           {visible.map((m) => (
-            <div className="mem-item" key={m.id} data-testid={`memory-item-${m.id}`}>
+            <div className="mem-item px-card" key={m.id} data-testid={`memory-item-${m.id}`}>
               <input
                 type="checkbox"
                 checked={memSelected.includes(m.id)}
@@ -243,7 +244,12 @@ export function MemoryExplorer() {
               />
               <div className="mem-item-main">
                 <div className="row1">
-                  <span className="tag">{m.type}</span>
+                  <span className="tag mem-cell-icon-slot">
+                    {m.type === "episodic" ? <IconEpisodic size={12} /> :
+                     m.type === "semantic" ? <IconSemantic size={12} /> :
+                     m.type === "procedural" ? <IconProcedural size={12} /> : null}
+                    <span className="tag-text">{m.type}</span>
+                  </span>
                   {m.layer && (
                     <span className={`tag ${m.layer}`}>
                       {m.layer === "hot"
@@ -286,10 +292,10 @@ export function MemoryExplorer() {
       {memSelected.length > 0 && (
         <div className="mem-actionbar" data-testid="memory-actionbar">
           <span>已选 {memSelected.length} 条</span>
-          <button className="danger-btn" disabled={busy} onClick={doDeleteSelected}>
+          <button className="px-btn danger" disabled={busy} onClick={doDeleteSelected}>
             <IconDelete size={10} /> 删除选中
           </button>
-          <button className="ghost-btn" onClick={() => actions.setMemSelected([])}>
+          <button className="px-btn-secondary" onClick={() => actions.setMemSelected([])}>
             取消
           </button>
         </div>
@@ -316,11 +322,11 @@ export function MemoryExplorer() {
               )}
             </div>
             <div className="dialog-actions">
-              <button className="ghost-btn" onClick={() => setConfirm(null)}>
+              <button className="px-btn-secondary" onClick={() => setConfirm(null)}>
                 取消
               </button>
               <button
-                className="danger-btn"
+                className="px-btn-secondary danger"
                 disabled={busy || confirm.count === null || confirm.count <= 0}
                 onClick={doClear}
                 data-testid="confirm-ok"
