@@ -2,15 +2,29 @@ import { useApp } from "../store";
 import type { SessionRecord } from "../lib/api";
 import { IconSession, IconMemory } from "./pixel-icons";
 
-/** 地牢像素 wordmark:Geist Pixel 双色字母(紫=秘法/青=法力),
- *  火把橙版本号。替代点阵 pre(74 字符宽溢出 rail 的遮挡问题)。 */
+/** GitHub banner 同款 ▓ 点阵 wordmark(docs/assets/engram-banner.txt),
+ *  逐行紫→青渐变着色;5px 字号适配 240px rail(无圆角方块)。 */
+const _WM_ROWS = [
+  "▓▓▓▓▓▓▓▓▓▓  ▓▓      ▓▓    ▓▓▓▓▓    ▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓    ▓▓      ▓▓",
+  "▓▓          ▓▓      ▓▓  ▓▓      ▓▓  ▓▓      ▓▓  ▓▓      ▓▓  ▓▓▓▓  ▓▓▓▓",
+  "▓▓          ▓▓▓▓    ▓▓  ▓▓          ▓▓      ▓▓  ▓▓      ▓▓  ▓▓  ▓▓  ▓▓",
+  "▓▓▓▓▓▓▓▓  ▓▓  ▓▓  ▓▓  ▓▓  ▓▓▓▓▓  ▓▓▓▓▓▓▓▓  ▓▓      ▓▓  ▓▓  ▓▓  ▓▓",
+  "▓▓          ▓▓    ▓▓▓▓  ▓▓      ▓▓  ▓▓  ▓▓      ▓▓      ▓▓  ▓▓      ▓▓",
+  "▓▓          ▓▓      ▓▓  ▓▓      ▓▓  ▓▓    ▓▓    ▓▓      ▓▓  ▓▓      ▓▓",
+  "▓▓▓▓▓▓▓▓▓  ▓▓      ▓▓    ▓▓▓▓▓    ▓▓      ▓▓  ▓▓      ▓▓  ▓▓      ▓▓",
+];
+const _WM_COLORS = ["#a63fc0", "#9a4cc2", "#8d59c3", "#6f74c0", "#5a9cbe", "#4fb8bb", "#45c4b8"];
+
 export function PixelWordmark() {
   return (
     <div className="wordmark" data-testid="wordmark">
-      <div className="glyph">
-        <span className="g1">ENG</span>
-        <span className="g2">RAM</span>
-      </div>
+      <pre>
+        {_WM_ROWS.map((row, i) => (
+          <span key={i} style={{ color: _WM_COLORS[i], display: "block" }}>
+            {row}
+          </span>
+        ))}
+      </pre>
     </div>
   );
 }

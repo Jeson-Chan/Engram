@@ -59,10 +59,8 @@ describe("wordmark(任务 2.2)", () => {
     render(<App />);
     await waitFor(() => screen.getByTestId("wordmark"));
     const wm = screen.getByTestId("wordmark");
-    expect(wm.textContent).toContain("ENG");
-    expect(wm.textContent).toContain("RAM");
-    expect(wm.querySelector(".g1")).toBeTruthy();
-    expect(wm.querySelector(".g2")).toBeTruthy();
+    expect(wm.textContent).toContain("▓▓▓");
+    expect(wm.querySelectorAll("span").length).toBe(7);
   });
 });
 
@@ -107,17 +105,15 @@ describe("CRT 开关(任务 2.5)", () => {
 describe("像素强度条(任务 2.4)", () => {
   it("按 strength 比例渲染 ▓ 填充 + ▐ 空段", () => {
     const { container } = render(<PixelStrength strength={0.6} />);
-    const fill = container.querySelector(".fill");
-    const empty = container.querySelector(".empty");
-    expect(fill?.textContent).toBe("▓".repeat(6));
-    expect(empty?.textContent).toBe("░".repeat(4));
+    expect((container.querySelector(".stripe-bar > span") as HTMLElement).style.width).toBe("60%");
+
   });
 
   it("边界:0 = 全空,1 = 满格", () => {
     const { container: c0 } = render(<PixelStrength strength={0} />);
-    expect(c0.querySelector(".fill")?.textContent).toBe("");
+    expect((c0.querySelector(".stripe-bar > span") as HTMLElement).style.width).toBe("0%");
     const { container: c1 } = render(<PixelStrength strength={1} />);
-    expect(c1.querySelector(".fill")?.textContent).toBe("▓".repeat(10));
+    expect((c1.querySelector(".stripe-bar > span") as HTMLElement).style.width).toBe("100%");
   });
 });
 
