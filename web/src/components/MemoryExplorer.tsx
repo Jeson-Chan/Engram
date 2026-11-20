@@ -26,17 +26,19 @@ interface ConfirmState {
   count: number | null;
 }
 
-/** 斜纹强度条:45deg 条纹填充(宽度 = strength 比例),青色 currentColor。 */
+/** 像素格强度条:▓ 满格填充 + ░ 半格空段(10 格,stepped 无平滑)。 */
 export function PixelStrength({ strength }: { strength: number }) {
-  const pct = Math.round(Math.max(0, Math.min(1, strength)) * 100);
+  const CELLS = 10;
+  const filled = Math.round(Math.max(0, Math.min(1, strength)) * CELLS);
   return (
     <span
-      className="stripe-bar"
-      style={{ width: 64, color: "var(--c-agent)", display: "inline-block" }}
+      className="pixel-strength"
       data-testid={`strength-${strength}`}
       title={`strength ${strength}`}
+      style={{ color: "var(--c-agent)", letterSpacing: 1 }}
     >
-      <span style={{ display: "block", width: `${pct}%` }} />
+      {"▓".repeat(filled)}
+      <span style={{ opacity: 0.45 }}>{"░".repeat(CELLS - filled)}</span>
     </span>
   );
 }

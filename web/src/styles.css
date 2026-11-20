@@ -2,17 +2,17 @@
   color-scheme: light dark;
   /* 三语义(浅色纸感:同色相加深保证对比) */
   --c-user: #9a3ab8;
-  --c-agent: #0f9488;
-  --c-exec: #d96a1e;
+  --c-agent: #0c766c;
+  --c-exec: #a04d0c;
   --c-user-soft: rgba(154, 58, 184, 0.08);
-  --c-agent-soft: rgba(15, 148, 136, 0.08);
-  --c-exec-soft: rgba(217, 106, 30, 0.10);
+  --c-agent-soft: rgba(12, 118, 108, 0.08);
+  --c-exec-soft: rgba(160, 77, 12, 0.10);
   --bg: #f2eddf;
   --panel: #faf6ea;
   --panel2: #f0ead8;
   --border: #23211c;
   --border-soft: #d8d0ba;
-  --glow: rgba(217, 106, 30, 0.12);
+  --glow: rgba(160, 77, 12, 0.12);
   --text: #1c1c1a;
   --muted: #6e6e66;
   --error: #b3261e;
@@ -69,7 +69,7 @@
 
 /* 像素字体:仅英文/数字位;中文按 font-family 顺序回退系统栈 */
 .pixel-font {
-  font-family: "Geist Pixel", "Press Start 2P", ui-monospace, monospace;
+  font-family: "Press Start 2P", ui-monospace, monospace;
   font-size: 10px;
 }
 
@@ -411,6 +411,7 @@ body {
 .strength-px .empty { color: var(--border-soft); }
 
 /* 斜纹进度条(像素游戏经典 barber-stripe):预算/强度共用 */
+.pixel-strength { font-family: "VT323", ui-monospace, monospace; font-size: 15px; }
 .stripe-bar {
   height: 8px; background: var(--border-soft);
   background-image: repeating-linear-gradient(45deg, var(--dot-grid) 0 4px, transparent 4px 8px);

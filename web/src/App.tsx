@@ -7,14 +7,18 @@ import { MemoryExplorer } from "./components/MemoryExplorer";
 import { IconCrt, IconRun, IconSun, IconMoon } from "./components/pixel-icons";
 import "./styles.css";
 
-/** 深/浅主题切换:盖章 documentElement.dataset.theme + localStorage 持久化。 */
+/** 深/浅主题切换:盖章 documentElement.dataset.theme + localStorage 持久化;无记录跟随系统。 */
 function useTheme(): [string, () => void] {
   const [theme, setTheme] = useState(() => {
+    // 无存储记录 → 跟随系统(spec:首次访问跟随 prefers-color-scheme)
     try {
-      return localStorage.getItem("engram-theme") || "dark";
-    } catch {
+      const stored = localStorage.getItem("engram-theme");
+      if (stored === "light" || stored === "dark") return stored;
+    } catch { /* 隐私模式 */ }
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
       return "dark";
     }
+    return "light";
   });
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

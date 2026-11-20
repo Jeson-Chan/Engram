@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Engram 研究工作台</title>
+    <script>
+      // 首帧前主题应用(防 FOUC):镜像 useTheme 钩子语义——
+      // localStorage 有记录用记录,无记录跟随系统(matchMedia)。
+      // try/catch:隐私模式 localStorage/matchMedia 可能抛错 → 交给 React 首帧兜底。
+      (function () {
+        try {
+          var t = localStorage.getItem("engram-theme");
+          if (t !== "light" && t !== "dark") {
+            t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark" : "light";
+          }
+          document.documentElement.dataset.theme = t;
+        } catch (e) { /* 隐私模式:跳过,React 挂载后盖章 */ }
+      })();
+    </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist+Pixel:wght@400&family=Press+Start+2P&display=swap" rel="stylesheet" />

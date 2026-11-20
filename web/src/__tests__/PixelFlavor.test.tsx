@@ -104,17 +104,17 @@ describe("CRT 开关(任务 2.5)", () => {
 });
 
 describe("像素强度条(任务 2.4)", () => {
-  it("按 strength 比例渲染 ▓ 填充 + ▐ 空段", () => {
+  it("按 strength 比例渲染 ▓ 填充 + ░ 空段(10 格)", () => {
     const { container } = render(<PixelStrength strength={0.6} />);
-    expect((container.querySelector(".stripe-bar > span") as HTMLElement).style.width).toBe("60%");
-
+    const el = container.querySelector(".pixel-strength") as HTMLElement;
+    expect(el.textContent).toBe("▓".repeat(6) + "░".repeat(4));
   });
 
   it("边界:0 = 全空,1 = 满格", () => {
     const { container: c0 } = render(<PixelStrength strength={0} />);
-    expect((c0.querySelector(".stripe-bar > span") as HTMLElement).style.width).toBe("0%");
+    expect(((c0.querySelector(".pixel-strength") as HTMLElement).textContent || "").match(/░/g)).toHaveLength(10);
     const { container: c1 } = render(<PixelStrength strength={1} />);
-    expect((c1.querySelector(".stripe-bar > span") as HTMLElement).style.width).toBe("100%");
+    expect(((c1.querySelector(".pixel-strength") as HTMLElement).textContent || "").match(/▓/g)).toHaveLength(10);
   });
 });
 
@@ -131,23 +131,33 @@ describe("语义 CSS 契约(任务 1.1/1.2)", () => {
   });
 });
 
-describe("主题切换(v2 反馈轮)", () => {
-  it("默认深色盖章,点击切换并持久化", async () => {
+describe("主题切换(web-pixel-flavor)", () => {
+  it("无存储 → 跟随系统(jsdom 默认 light),点击切换并持久化", async () => {
     localStorage.removeItem("engram-theme");
     stubApi();
     render(<App />);
     await waitFor(() => screen.getByTestId("theme-toggle"));
-    expect(document.documentElement.dataset.theme).toBe("dark");
-    fireEvent.click(screen.getByTestId("theme-toggle"));
-    await waitFor(() => {
-      expect(document.documentElement.dataset.theme).toBe("light");
-    });
-    expect(localStorage.getItem("engram-theme")).toBe("light");
-    // 切回深色
+    // jsdom 的 matchMedia 默认不匹配 dark → 系统跟随结果为 light
+    expect(document.documentElement.dataset.theme).toBe("light");
     fireEvent.click(screen.getByTestId("theme-toggle"));
     await waitFor(() => {
       expect(document.documentElement.dataset.theme).toBe("dark");
     });
+    expect(localStorage.getItem("engram-theme")).toBe("dark");
+    // 切回浅色
+    fireEvent.click(screen.getByTestId("theme-toggle"));
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("light");
+    });
+    localStorage.removeItem("engram-theme");
+  });
+
+  it("有存储 → 恢复所选项(不跟随系统)", async () => {
+    localStorage.setItem("engram-theme", "dark");
+    stubApi();
+    render(<App />);
+    await waitFor(() => screen.getByTestId("theme-toggle"));
+    expect(document.documentElement.dataset.theme).toBe("dark");
     localStorage.removeItem("engram-theme");
   });
 });
