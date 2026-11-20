@@ -34,7 +34,7 @@ export function RunInspector() {
 
   return (
     <div data-testid="run-inspector">
-      <div className="px-panel-bar"><IconClock size={10} color="var(--c-agent)" /> 运行历史</div>
+      <div className="px-panel-bar"><IconClock size={16} color="var(--c-agent)" /> 运行历史</div>
       {state.runs.length === 0 && (
         <div className="empty">本会话还没有运行<br />发一条消息或研究一次</div>
       )}

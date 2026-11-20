@@ -16,7 +16,8 @@ const _WM_ROWS = [
 const _WM_COLORS = ["#a63fc0", "#9a4cc2", "#8d59c3", "#6f74c0", "#5a9cbe", "#4fb8bb", "#45c4b8"];
 
 export function PixelWordmark() {
-  const cell = 3;
+  // cell=2:74 列 × 2 = 148px,rail 可用宽 ~224px 内完整呈现,无挤压失真
+  const cell = 2;
   const rects: Array<{ x: number; y: number; c: string }> = [];
   _WM_ROWS.forEach((row, ry) => {
     for (let cx = 0; cx < row.length; cx++) {

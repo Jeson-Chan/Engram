@@ -245,9 +245,9 @@ export function MemoryExplorer() {
               <div className="mem-item-main">
                 <div className="row1">
                   <span className="tag mem-cell-icon-slot">
-                    {m.type === "episodic" ? <IconEpisodic size={12} /> :
-                     m.type === "semantic" ? <IconSemantic size={12} /> :
-                     m.type === "procedural" ? <IconProcedural size={12} /> : null}
+                    {m.type === "episodic" ? <IconEpisodic size={20} /> :
+                     m.type === "semantic" ? <IconSemantic size={20} /> :
+                     m.type === "procedural" ? <IconProcedural size={20} /> : null}
                     <span className="tag-text">{m.type}</span>
                   </span>
                   {m.layer && (
