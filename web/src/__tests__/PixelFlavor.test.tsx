@@ -53,14 +53,16 @@ function jsonResponse(data: unknown): Response {
   return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
 }
 
-describe("点阵 wordmark(任务 2.2)", () => {
-  it("rail 顶部常驻 7 行点阵 + glint 动画类", async () => {
+describe("wordmark(任务 2.2)", () => {
+  it("rail 顶部常驻双色 Geist 字母", async () => {
     stubApi();
     render(<App />);
     await waitFor(() => screen.getByTestId("wordmark"));
     const wm = screen.getByTestId("wordmark");
-    expect(wm.textContent).toContain("▓");
-    expect(wm.querySelectorAll(".wm-glint").length).toBe(7);
+    expect(wm.textContent).toContain("ENG");
+    expect(wm.textContent).toContain("RAM");
+    expect(wm.querySelector(".g1")).toBeTruthy();
+    expect(wm.querySelector(".g2")).toBeTruthy();
   });
 });
 

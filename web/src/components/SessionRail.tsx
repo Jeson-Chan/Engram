@@ -2,35 +2,17 @@ import { useApp } from "../store";
 import type { SessionRecord } from "../lib/api";
 import { IconSession, IconMemory } from "./pixel-icons";
 
-/** 点阵 ENGRAM wordmark——docs/assets/engram-banner.txt 同款 6 行 ▓ 点阵,
- *  逐行紫→青渐变着色 + 6 格 stepped 扫光(wm-glint,recall 叙事)。 */
-const _WM_ROWS = [
-  "▓▓▓▓▓▓▓▓▓▓  ▓▓      ▓▓    ▓▓▓▓▓▓    ▓▓▓▓▓▓▓▓      ▓▓▓▓▓▓    ▓▓      ▓▓",
-  "▓▓          ▓▓      ▓▓  ▓▓      ▓▓  ▓▓      ▓▓  ▓▓      ▓▓  ▓▓▓▓  ▓▓▓▓",
-  "▓▓          ▓▓▓▓    ▓▓  ▓▓          ▓▓      ▓▓  ▓▓      ▓▓  ▓▓  ▓▓  ▓▓",
-  "▓▓▓▓▓▓▓▓    ▓▓  ▓▓  ▓▓  ▓▓  ▓▓▓▓▓▓  ▓▓▓▓▓▓▓▓    ▓▓▓▓▓▓▓▓▓▓  ▓▓  ▓▓  ▓▓",
-  "▓▓          ▓▓    ▓▓▓▓  ▓▓      ▓▓  ▓▓  ▓▓      ▓▓      ▓▓  ▓▓      ▓▓",
-  "▓▓          ▓▓      ▓▓  ▓▓      ▓▓  ▓▓    ▓▓    ▓▓      ▓▓  ▓▓      ▓▓",
-  "▓▓▓▓▓▓▓▓▓▓  ▓▓      ▓▓    ▓▓▓▓▓▓    ▓▓      ▓▓  ▓▓      ▓▓  ▓▓      ▓▓",
-];
-const _WM_COLORS = ["#a63fc0", "#9a4cc2", "#8d59c3", "#6f74c0", "#5a9cbe", "#4fb8bb", "#45c4b8"];
-
+/** 地牢像素 wordmark:Geist Pixel 双色字母(紫=秘法/青=法力),
+ *  火把橙版本号。替代点阵 pre(74 字符宽溢出 rail 的遮挡问题)。 */
 export function PixelWordmark() {
   return (
     <div className="wordmark" data-testid="wordmark">
-      <pre>
-        {_WM_ROWS.map((row, i) => (
-          <span
-            key={i}
-            className="wm-row wm-glint"
-            style={{ color: _WM_COLORS[i % _WM_COLORS.length], animationDelay: `${i * 0.3}s` }}
-          >
-            {row}
-          </span>
-        ))}
-      </pre>
+      <div className="glyph">
+        <span className="g1">ENG</span>
+        <span className="g2">RAM</span>
+      </div>
       <div className="wm-sub">
-        <span className="pixel-font">ENGRAM</span>
+        <span className="pixel-font" style={{ color: "var(--c-exec)" }}>v1.0.0</span>
         <span>记忆工作台</span>
       </div>
     </div>
