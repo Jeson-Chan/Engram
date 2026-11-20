@@ -4,7 +4,7 @@ import { SessionRail } from "./components/SessionRail";
 import { Conversation } from "./components/Conversation";
 import { RunInspector } from "./components/RunInspector";
 import { MemoryExplorer } from "./components/MemoryExplorer";
-import { IconCrt, IconRun, IconSun, IconMoon } from "./components/pixel-icons";
+import { IconRun, IconSun, IconMoon } from "./components/pixel-icons";
 import "./styles.css";
 
 /** 深/浅主题切换:盖章 documentElement.dataset.theme + localStorage 持久化;无记录跟随系统。 */
@@ -30,31 +30,6 @@ function useTheme(): [string, () => void] {
   return [theme, toggle];
 }
 
-/** CRT overlay 偏好(localStorage 持久化;reduced-motion/低核自动关)。 */
-function useCrtEnabled(): [boolean, (on: boolean) => void, boolean] {
-  const [forcedOff] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const lowEnd = (navigator.hardwareConcurrency ?? 8) < 4;
-    return reduced || lowEnd;
-  });
-  const [off, setOff] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      return localStorage.getItem("engram-crt-off") !== "1" && !forcedOff;
-    } catch {
-      return !forcedOff;
-    }
-  });
-  const set = (on: boolean) => {
-    setOff(on);
-    try {
-      localStorage.setItem("engram-crt-off", on ? "0" : "1");
-    } catch { /* 私有模式等:偏好不持久化,可接受 */ }
-  };
-  return [off, set, forcedOff];
-}
-
 /** 响应式三栏壳：窄屏（<900px）收起 Inspector 与会话栏（可开抽屉）。 */
 function useNarrow(): boolean {
   const [narrow, setNarrow] = useState(
@@ -73,7 +48,6 @@ function Shell() {
   const { state, actions } = useApp();
   const narrow = useNarrow();
   const [drawer, setDrawer] = useState<"sessions" | "run" | "memory" | null>(null);
-  const [crtOn, setCrtOn, crtForcedOff] = useCrtEnabled();
   const [theme, toggleTheme] = useTheme();
 
   // 刷新恢复（任务 5.7）：mount 时刻缓存 URL 里的 ?s=——URL-clear effect
@@ -138,7 +112,6 @@ function Shell() {
       <div className="shell" data-narrow={narrow ? "1" : "0"}>
         <SessionRail />
         <MemoryExplorer />
-        {crtOn && <div className="crt-overlay" data-testid="crt-overlay" />}
       </div>
     );
   }
@@ -193,21 +166,12 @@ function Shell() {
           </span>
           {state.status?.mode && <span className="badge">{state.status.mode}</span>}
           <button
-            className="crt-toggle"
+            className="theme-toggle"
             onClick={toggleTheme}
             title={theme === "dark" ? "切换到浅色" : "切换到深色"}
             data-testid="theme-toggle"
           >
             {theme === "dark" ? <IconSun size={13} /> : <IconMoon size={13} />}
-          </button>
-          <button
-            className={`crt-toggle${crtOn ? " on" : ""}`}
-            onClick={() => setCrtOn(!crtOn)}
-            disabled={crtForcedOff}
-            title={crtOn ? "关闭 CRT 效果" : "开启 CRT 效果"}
-            data-testid="crt-toggle"
-          >
-            <IconCrt size={13} /> CRT
           </button>
           {state.status?.skills && state.status.skills.length > 0 && (
             <span className="badge">{state.status.skills.length} skills</span>
@@ -233,7 +197,6 @@ function Shell() {
         <Conversation />
       </div>
       {inspector()}
-      {crtOn && <div className="crt-overlay" data-testid="crt-overlay" />}
     </div>
   );
 }

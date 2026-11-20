@@ -25,7 +25,6 @@ import rawSun from "../assets/icons/sun.svg?raw";
 import rawMoon from "../assets/icons/moon.svg?raw";
 import rawBudget from "../assets/icons/budget.svg?raw";
 import rawTimeline from "../assets/icons/timeline.svg?raw";
-import rawCrt from "../assets/icons/crt.svg?raw";
 
 interface IconProps {
   size?: number;
@@ -113,10 +112,6 @@ export function IconSun(props: IconProps) {
 /** 主题:月亮(切深色;库:moon-solid) */
 export function IconMoon(props: IconProps) {
   return <PixelIcon {...props} raw={rawMoon} label="moon" />;
-}
-/** CRT 开关(库:window-restore-solid) */
-export function IconCrt(props: IconProps) {
-  return <PixelIcon {...props} raw={rawCrt} label="crt" />;
 }
 /** 事件时间线(库:analytics-solid) */
 export function IconTimeline(props: IconProps) {

@@ -1,10 +1,10 @@
-/** web-pixel-flavor 回归测试——wordmark/CRT/像素强度条/图标/语义类名。 */
+/** web-pixel-flavor 回归测试——wordmark/像素强度条/图标/语义类名(CRT 已删)。 */
 
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import App from "../App";
 import { PixelStrength } from "../components/MemoryExplorer";
-import { IconSession, IconMemory, IconCrt } from "../components/pixel-icons";
+import { IconSession, IconMemory } from "../components/pixel-icons";
 
 afterEach(() => cleanup());
 
@@ -89,25 +89,6 @@ describe("像素图标(任务 2.1)", () => {
   });
 });
 
-describe("CRT 开关(任务 2.5)", () => {
-  it("默认开启,点击切换并持久化 localStorage", async () => {
-    stubApi();
-    render(<App />);
-    await waitFor(() => screen.getByTestId("statusbar"));
-    expect(screen.getByTestId("crt-overlay")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("crt-toggle"));
-    await waitFor(() => {
-      expect(screen.queryByTestId("crt-overlay")).toBeNull();
-    });
-    expect(localStorage.getItem("engram-crt-off")).toBe("1");
-    // 再开
-    fireEvent.click(screen.getByTestId("crt-toggle"));
-    await waitFor(() => screen.getByTestId("crt-overlay"));
-    expect(localStorage.getItem("engram-crt-off")).toBe("0");
-    localStorage.clear();
-  });
-});
-
 describe("像素强度条(任务 2.4)", () => {
   it("按 strength 比例渲染 ▓ 填充 + ░ 空段(10 格)", () => {
     const { container } = render(<PixelStrength strength={0.6} />);
@@ -124,15 +105,16 @@ describe("像素强度条(任务 2.4)", () => {
 });
 
 describe("语义 CSS 契约(任务 1.1/1.2)", () => {
-  it("样式表无旧蓝、无非零圆角、三语义 token 存在", async () => {
-    // vitest 环境不走 vite 静态服务;断言关键交互元素在渲染层
-    const { container } = render(<IconCrt />);
+  it("像素图标渲染 + statusbar 主题切换按钮存在(CRT 已移除)", async () => {
+    const { container } = render(<IconSession />);
     expect(container.querySelector("svg")).toBeTruthy();
-    // 页面渲染后 statusbar 含 CRT 按钮
     stubApi();
     render(<App />);
-    await waitFor(() => screen.getByTestId("crt-toggle"));
-    expect(screen.getByTestId("crt-toggle").textContent).toContain("CRT");
+    await waitFor(() => screen.getByTestId("theme-toggle"));
+    expect(screen.getByTestId("theme-toggle").querySelector("svg")).toBeTruthy();
+    // CRT 功能已删除:开关与 overlay 不存在
+    expect(screen.queryByTestId("crt-toggle")).toBeNull();
+    expect(screen.queryByTestId("crt-overlay")).toBeNull();
   });
 });
 
