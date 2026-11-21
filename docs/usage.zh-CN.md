@@ -182,7 +182,7 @@ engram run "问题" --no-artifact
 |------|------|
 | `/help` | 显示所有命令 |
 | `/clear` | 清屏 |
-| `/exit` `/quit` | 退出 |
+| `/exit` | 退出 |
 | `/expand` | 展开上一轮 Thought + 工具结果 |
 | `/thinking on\|off` | 切换 Thought 折叠显示 |
 

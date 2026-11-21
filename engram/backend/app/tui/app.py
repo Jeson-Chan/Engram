@@ -163,7 +163,8 @@ class ConversationInput(TextArea):
     """最大可见行数——超过此行数后 TextArea 内部滚动，避免撑高容器。"""
 
     BINDINGS = [
-        Binding("ctrl+c", "copy", "Copy", show=False, priority=True),
+        # ctrl+c 不在输入框层绑定：复制走终端原生选区（Shift+拖动），
+        # Ctrl+C 让给 App 级 quit（与提示条文案一致）。
         Binding("ctrl+z", "undo", "Undo", show=False, priority=True),
         Binding("ctrl+y", "redo", "Redo", show=False, priority=True),
     ]
@@ -654,7 +655,11 @@ class EngramTUI(App):
         else:
             user_id = "default-user"
             self.push_screen(
-                SessionSwitcher(self._gateway, user_id), self._on_session_picked,
+                SessionSwitcher(
+                    self._gateway, user_id,
+                    active_session_id=self._gateway_session_id,
+                ),
+                self._on_session_picked,
             )
 
     def _on_session_picked(self, result: str | None) -> None:

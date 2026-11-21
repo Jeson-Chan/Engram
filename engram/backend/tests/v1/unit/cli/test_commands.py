@@ -52,9 +52,10 @@ def test_exit_returns_true() -> None:
     assert handle_command("/exit", _make_console(), None, state, runtime=None) is True
 
 
-def test_quit_returns_true() -> None:
+def test_quit_alias_removed() -> None:
+    """`/quit` 已弃用（tui-interactive-fixes）：只剩 `/exit` 一个退出命令。"""
     state = _make_state()
-    assert handle_command("/quit", _make_console(), None, state, runtime=None) is True
+    assert handle_command("/quit", _make_console(), None, state, runtime=None) is False
 
 
 def test_unknown_command_returns_false() -> None:

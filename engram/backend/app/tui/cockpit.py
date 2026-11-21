@@ -26,6 +26,7 @@ from typing import Any
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual import events
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Label, ListItem, ListView, Static
@@ -95,6 +96,22 @@ class GatewayClient:
     def status(self) -> dict | None:
         return self._get("/status")
 
+    def delete_session(self, session_id: str) -> bool:
+        """DELETE /sessions/{id}：204 → True；404/网络失败 → False。
+
+        网关端点删除注册表记录并 drop SSE 缓冲；这里只做薄封装。
+        """
+        try:
+            req = urllib.request.Request(
+                self.base + f"/sessions/{session_id}",
+                headers={"Accept": "application/json"},
+                method="DELETE",
+            )
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return resp.status == 204
+        except (urllib.error.URLError, OSError, ValueError):
+            return False
+
 
 _OFFLINE = "网关离线（ENGRAM_GATEWAY_URL）——面板数据不可用，对话流不受影响"
 
@@ -125,7 +142,7 @@ class CockpitPanel(ModalScreen):
 
 
 class SessionSwitcher(ModalScreen):
-    """会话切换器（Ctrl+K）：网关会话列表 + 新建（↑↓ + Enter）。"""
+    """会话切换器（Ctrl+K）：网关会话列表 + 新建 + 删除（↑↓ Enter / d）。"""
 
     BINDINGS = [Binding("escape", "dismiss_panel", "Close", show=False, priority=True)]
 
@@ -137,16 +154,24 @@ class SessionSwitcher(ModalScreen):
     }
     """
 
-    def __init__(self, gateway: GatewayClient, user_id: str) -> None:
+    def __init__(
+        self, gateway: GatewayClient, user_id: str,
+        active_session_id: str | None = None,
+    ) -> None:
         super().__init__()
         self._gateway = gateway
         self._user_id = user_id
+        self._active_session_id = active_session_id  # 删活跃会话时回落新建
         self._sessions: list[dict] = []
+        self._pending_delete: int | None = None  # 行内确认态：待删列表索引
         self.offline_text = ""  # worker 完成前测试可读（空态）
 
     def compose(self) -> ComposeResult:
         with Vertical(id="panel-box"):
-            yield Static("会话切换 · ↑↓ 选择 · Enter 确认 · Esc 取消", id="switcher-title")
+            yield Static(
+                "会话切换 · ↑↓ 选择 · Enter 确认 · d 删除 · Esc 取消",
+                id="switcher-title",
+            )
             yield Static("加载中…", id="switcher-offline")
             yield ListView(id="switcher-list")
 
@@ -185,6 +210,10 @@ class SessionSwitcher(ModalScreen):
             pass
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
+        # 确认态下 Enter 不触发切换（只认 y/N；Enter 视作取消，见 on_key）
+        if self._pending_delete is not None:
+            event.stop()
+            return
         index = event.list_view.index if event.list_view.index is not None else -1
         if index is None or index < 0:
             return
@@ -194,6 +223,105 @@ class SessionSwitcher(ModalScreen):
             # dismiss 完整记录（session_id/thread_id/title 一次带回——
             # 调用方不再二次 HTTP 拉列表，review medium）
             self.dismiss(self._sessions[index])
+
+    async def on_key(self, event: events.Key) -> None:
+        """d 发起删除；确认态 y 确认、其余任意键取消（Enter 也取消）。"""
+        if event.key == "escape":
+            return  # 走 BINDINGS 的 dismiss_panel
+        if self._pending_delete is None:
+            if event.key == "d":
+                index = self._list_index()
+                if index is not None and 0 <= index < len(self._sessions):
+                    self._pending_delete = index
+                    self._set_item_label(index, "确认删除？y 确认 / 其他键取消")
+                    self._note(Text("删除将不可恢复（含会话映射；网关侧历史独立保留）", style="yellow"))
+                event.stop()  # 不落入 ListView 的键处理
+            return
+        # 确认态
+        if event.key == "y":
+            index = self._pending_delete
+            self._pending_delete = None
+            self._confirm_delete(index)
+        else:
+            self._cancel_delete()
+        event.stop()
+
+    def _list_index(self) -> int | None:
+        try:
+            lv = self.query_one("#switcher-list", ListView)
+            return lv.index
+        except Exception:
+            return None
+
+    def _set_item_label(self, index: int, text: str) -> None:
+        try:
+            item = self.query_one("#switcher-list", ListView).children[index]
+            label = item.query_one(Label)
+            label.update(text)
+        except Exception:
+            pass
+
+    def _note(self, text: Text) -> None:
+        try:
+            self.query_one("#switcher-offline", Static).update(text)
+        except Exception:
+            pass
+
+    def _confirm_delete(self, index: int) -> None:
+        if index >= len(self._sessions):
+            self._cancel_delete()
+            return
+        record = self._sessions[index]
+        session_id = record["session_id"]
+
+        def _done(deleted: bool) -> None:
+            if deleted:
+                self._sessions.pop(index)
+                self._remove_item(index)
+                self._note(Text(f"已删除会话 {session_id[:12]}", style="green"))
+                # 删除的是当前活跃会话 → 回落新建空会话（复用 __new__ dismiss）
+                if session_id == self._active_session_id:
+                    self.dismiss("__new__")
+                    return
+                if not self._sessions:
+                    self._note(Text("全部会话已删除", style="dim"))
+            else:
+                # 失败：恢复行文案，提示重试；列表不变
+                self._restore_item_label(index)
+                self._note(Text("删除失败（网关不可达或 404）——列表未变", style="red"))
+
+        # 阻塞 HTTP 挪 thread worker（review medium 同款模式）
+        def _run() -> None:
+            deleted = self._gateway.delete_session(session_id)
+            self.app.call_from_thread(_done, deleted)
+
+        self.run_worker(_run, thread=True, exclusive=True)
+
+    def _cancel_delete(self) -> None:
+        if self._pending_delete is not None:
+            self._restore_item_label(self._pending_delete)
+            self._pending_delete = None
+            self._note(Text("已取消", style="dim"))
+
+    def _remove_item(self, index: int) -> None:
+        try:
+            lv = self.query_one("#switcher-list", ListView)
+            # children 与会话列表一一对应（会话行 + 新建行）；DOM 节点用 remove()
+            if 0 <= index < len(lv.children):
+                lv.children[index].remove()
+            # 保持高亮在合法范围
+            if lv.index is not None and lv.index >= len(lv.children):
+                lv.index = max(0, len(lv.children) - 1)
+        except Exception:
+            pass
+
+    def _restore_item_label(self, index: int) -> None:
+        if index < len(self._sessions):
+            s = self._sessions[index]
+            self._set_item_label(index, (
+                f"{str((s.get('metadata') or {}).get('title') or s['session_id'][:8])}"
+                f"  ·  {s.get('user_id', '')}  ·  {s['session_id'][:12]}"
+            ))
 
     def action_dismiss_panel(self) -> None:
         self.dismiss(None)

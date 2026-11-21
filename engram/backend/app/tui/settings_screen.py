@@ -158,7 +158,17 @@ class SettingsScreen(Screen):
                 yield Button("Save (Ctrl+S)", id="save-btn", variant="primary")
 
     def on_mount(self) -> None:
-        self.query_one("#settings-box", Container).focus()
+        """挂载即聚焦第一个可编辑控件（Container 不可聚焦，focus 是 no-op——
+        修复此前面板打开后键盘无响应：AUTO_FOCUS 默认空 + Container no-op）。
+
+        无 provider 输入框时回退聚焦第一个功能开关，保证面板永不零焦点。
+        """
+        for widget in self._fields.values():
+            widget.focus()
+            return
+        for widget in self._toggles.values():
+            widget.focus()
+            return
 
     def on_click(self, event: events.Click) -> None:
         if event.widget is self:

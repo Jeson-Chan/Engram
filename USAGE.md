@@ -211,7 +211,7 @@ Type `/` in TUI or CLI for command completion.
 |---------|-------------|
 | `/help` | Show all commands |
 | `/clear` | Clear screen |
-| `/exit` `/quit` | Exit |
+| `/exit` | Exit |
 | `/expand` | Expand last round's Thought + tool results |
 | `/thinking on\|off` | Toggle Thought fold display |
 
