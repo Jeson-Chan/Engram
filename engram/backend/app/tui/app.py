@@ -573,6 +573,16 @@ class EngramTUI(App):
 
     def action_cancel_run(self) -> None:
         """Esc: single press = interrupt (resumable), double within 3s = rollback."""
+        # App 级 escape 是 priority 绑定：弹层自己的 priority escape 会被它抢先，
+        # 导致 Ctrl+P/K/G/U/O/N/B 面板按 Esc 关不掉。有弹层时优先关弹层。
+        if isinstance(self.screen, ModalScreen):
+            self.screen.dismiss(None)
+            return
+        # SettingsScreen 等普通 Screen 用 push_screen 叠在 base 之上——
+        # 同样要能被 Esc 关闭，否则后续按键都会被它吞掉。
+        if len(getattr(self, "screen_stack", [])) > 1:
+            self.pop_screen()
+            return
         worker = getattr(self, "_research_worker", None)
         if not self.cli_state.get("_running") and not (worker is not None and worker.is_running):
             return
