@@ -174,14 +174,21 @@ def _build_env_content(
 
     # 逐行替换：找到 KEY= 行，用 override 值替换
     result: list[str] = []
+    replaced: set[str] = set()
     for line in lines:
         stripped = line.strip()
         if stripped and not stripped.startswith("#") and "=" in stripped:
             key = stripped.split("=", 1)[0].strip()
             if key in overrides:
                 result.append(f"{key}={overrides[key]}")
+                replaced.add(key)
                 continue
         result.append(line)
+    # 模板收敛后（simplify-configuration）可能不再包含向导选项的键；
+    # 追加缺失项，保证向导选择仍然生效。
+    for key, value in overrides.items():
+        if key not in replaced:
+            result.append(f"{key}={value}")
     return "\n".join(result) + "\n"
 
 

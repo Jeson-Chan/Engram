@@ -32,16 +32,22 @@ from engram.backend.agents.prompts import get_prompt_manager
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    # 首次启动配置向导：.env 不存在时引导用户配置
-    from engram.backend.app.cli.setup_wizard import ensure_config
-    if not ensure_config(_PROJECT_ROOT):
-        return 1
-    load_dotenv(_PROJECT_ROOT / ".env", override=True)
-
     parser = argparse.ArgumentParser(prog="engram")
     parser.add_argument("--provider", default=None)
     parser.add_argument("--model", default=None)
     subparsers = parser.add_subparsers(dest="command")
+
+    init_parser = subparsers.add_parser(
+        "init", help="探测本机环境并生成显式 .env（密钥 + 授权开关）",
+    )
+    init_parser.add_argument(
+        "--force", action="store_true", help="重新生成已有 .env（先备份为 .env.bak）",
+    )
+
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="能力三态矩阵 + 连通性检查（on / off / broken）",
+    )
+    doctor_parser.add_argument("--json", action="store_true", help="输出 JSON（CI/脚本用）")
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("question")
@@ -55,6 +61,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     subparsers.add_parser("cli", help="traditional scrolling CLI (prompt_toolkit + rich)")
 
     args = parser.parse_args(argv)
+
+    # init/doctor 是宿主机维护命令：不触发首启向导，.env 缺失也能运行
+    if args.command == "init":
+        from engram.backend.app.cli.init_cmd import run_init
+        return run_init(_PROJECT_ROOT, force=args.force)
+
+    if args.command == "doctor":
+        from engram.backend.app.cli.doctor import run_doctor
+        return run_doctor(_PROJECT_ROOT, as_json=args.json)
+
+    # 首次启动配置向导：.env 不存在时引导用户配置（仅对话/研究入口）
+    from engram.backend.app.cli.setup_wizard import ensure_config
+    if not ensure_config(_PROJECT_ROOT):
+        return 1
+    load_dotenv(_PROJECT_ROOT / ".env", override=True)
 
     if args.command is None:
         return run_chat(provider=args.provider, model=args.model, legacy=False)

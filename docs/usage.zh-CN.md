@@ -99,41 +99,28 @@ engram
 
 ## 配置详解
 
-Engram 通过项目根目录的 `.env` 文件配置。`.env.example` 是完整模板。
+完整、始终与代码一致的变量清单（变量名、默认值、读取模块、用途）由扫描器生成：
+**[configuration.md](configuration.md)**。文档或 `.env.example` 与代码漂移时 CI 失败。
 
-### LLM Provider
+```bash
+engram init     # 探测本机环境，问密钥 + MCP/沙箱授权，写出显式 .env
+engram doctor   # 能力三态矩阵（on / off / broken）+ 连通性检查
+```
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（默认 provider，链尾兜底） | — |
-| `DEEPSEEK_BASE_URL` | DeepSeek 端点 | `https://api.deepseek.com` |
-| `OPENAI_API_KEY` | OpenAI API 密钥 | — |
-| `OPENAI_BASE_URL` | OpenAI 端点（代理/中转时填写） | 官方默认 |
-| `QWEN_API_KEY` | 通义千问 API 密钥 | — |
-| `QWEN_BASE_URL` | Qwen 端点 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+`engram init` 会问一把 LLM 密钥、一把可选 Tavily 密钥，以及两个权力授予问题
+（MCP、沙箱）——未明确同意时两者保持**关闭**。只读类功能（记忆、Skill、Web）
+按探测结论启用。Docker compose 会注入全部 DSN（`ENGRAM_CHECKPOINT_DSN`、
+`ENGRAM_REDIS_URL`、`ENGRAM_MEMORY_PG_DSN`）与 `ENGRAM_WEB_UI_ENABLED`，
+不要把它们写进 `.env`。
 
-> 至少配置一个 provider。推荐至少配置 DeepSeek 作为降级兜底。
+### 启用沙箱（权力授予）
 
-### Sandbox 沙箱
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `ENGRAM_SANDBOX_USE` | 沙箱 provider 路径（留空=禁用） | 留空 |
-| `ENGRAM_SANDBOX_IMAGE` | Docker 镜像名 | `all-in-one-sandbox:latest` |
-| `ENGRAM_SANDBOX_PORT` | 容器起始端口（占用时自动递增） | `18000` |
-| `ENGRAM_SANDBOX_EXECUTOR` | Docker 执行环境（`local` / `wsl`） | `local` |
-| `ENGRAM_SANDBOX_WSL_DISTRO` | WSL 发行版名 | `Ubuntu` |
-| `ENGRAM_SANDBOX_WSL_USER` | WSL 内执行用户 | 默认用户 |
-| `ENGRAM_SANDBOX_CONTAINER_PREFIX` | 容器名前缀 | `engram-sandbox` |
-| `ENGRAM_SANDBOX_IDLE_TIMEOUT` | 空闲销毁超时秒（0=永不） | `600` |
-| `ENGRAM_SANDBOX_REPLICAS` | 预热池大小（0=不预热） | `3` |
-
-**启用 Local 沙箱：**
+**Local 沙箱（宿主机进程，无隔离）：**
 ```env
 ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.local.local_sandbox_provider:LocalSandboxProvider
 ```
 
-**启用 Docker 沙箱：**
+**Docker 沙箱（容器隔离）：**
 ```env
 ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
 ```
@@ -142,49 +129,14 @@ ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:
 >
 > Windows + WSL2：设 `ENGRAM_SANDBOX_EXECUTOR=wsl`
 
-### MCP
+### 启用 MCP（权力授予）
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `ENGRAM_MCP_ENABLED` | MCP 总开关 | `false` |
-| `ENGRAM_MCP_CONFIG_PATH` | MCP 配置文件路径 | `.engram/mcp_servers.yaml` |
-| `ENGRAM_MCP_CORE_TOOLS` | 核心工具（逗号分隔，启动必加载） | `web_search,browse_page` |
+```env
+ENGRAM_MCP_ENABLED=true
+```
 
-### Skill
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `ENGRAM_SKILL_ENABLED` | Skill 模块总开关 | `false` |
-| `ENGRAM_SKILL_DB_PATH` | Skill SQLite 路径 | `.engram/skills.db` |
-| `ENGRAM_SKILL_DIRS` | Skill 扫描目录（逗号分隔） | `skills/` |
-| `ENGRAM_SKILL_INCLUDE_BUILTIN` | 是否加载 builtin 核心 skill | `true` |
-| `ENGRAM_SKILL_MAX_INJECT` | 单轮最多注入 skill 数 | `3` |
-| `ENGRAM_SKILL_QUALITY_THRESHOLD` | quality filter 淘汰阈值 | `0.3` |
-| `ENGRAM_SKILL_MIN_SELECTIONS` | 淘汰判定最少 selections | `5` |
-
-**Skill 自进化（Layer 2）：**
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `ENGRAM_SKILL_EVOLVE_ENABLED` | 自进化开关 | `false` |
-| `ENGRAM_SKILL_EVOLVE_THRESHOLD` | 进化触发阈值 | `0.3` |
-| `ENGRAM_SKILL_EVOLVE_MIN_SELECTIONS` | 进化最少 selections | `5` |
-| `ENGRAM_SKILL_EVOLVE_COOLDOWN_TURNS` | 进化冷却轮数 | `10` |
-| `ENGRAM_SKILL_EVOLVE_MUTATE_BUDGET` | 变异 token 预算 | `20` |
-| `ENGRAM_SKILL_EVOLVE_MAX_STEPS` | 最大进化步数 | `5` |
-
-**Skill 评估（Layer 3）：**
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `ENGRAM_SKILL_EVAL_ENABLED` | 评估层开关 | `false` |
-| `ENGRAM_SKILL_EVAL_JUDGMENT_ENABLED` | 执行判断 | `true` |
-| `ENGRAM_SKILL_EVAL_TASK_JUDGE_ENABLED` | 任务质量评分 | `true` |
-| `ENGRAM_SKILL_EVAL_CONTRACT_CHECK` | 响应契约检查 | `true` |
-| `ENGRAM_SKILL_EVAL_ASYNC` | 异步 eval | `true` |
-| `ENGRAM_SKILL_EVAL_SKIP_NO_SKILL` | 无 skill 时跳过 eval | `true` |
-| `ENGRAM_SKILL_EVAL_RUNTIME_WINDOW` | RuntimeTracker 窗口 | `20` |
-| `ENGRAM_SKILL_EVAL_DEGRADATION_DELTA` | 退化判定 delta | `0.15` |
+Server 声明在 `.engram/mcp_servers.yaml`（见 [MCP 工具配置](#mcp-工具配置)）。
+开关已开但文件缺失时，`engram doctor` 会把 MCP 标为 `broken` 并给出缺失路径。
 
 ---
 

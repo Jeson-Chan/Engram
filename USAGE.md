@@ -99,133 +99,47 @@ You should see the Engram ASCII logo and welcome screen.
 
 ## Configuration
 
-Engram is configured via a `.env` file in the project root. `.env.example` is the full template.
+The complete, always-current variable list — name, default, reading module,
+purpose — is generated from the code into **[docs/configuration.md](docs/configuration.md)**.
+CI fails if the document or `.env.example` drifts from the code.
 
-### LLM Providers
+```bash
+engram init     # probe the host, ask for keys + MCP/sandbox consent, write explicit .env
+engram doctor   # capability matrix (on / off / broken) + connectivity
+```
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DEEPSEEK_API_KEY` | DeepSeek API key (default provider, chain-tail fallback) | — |
-| `DEEPSEEK_BASE_URL` | DeepSeek endpoint | `https://api.deepseek.com` |
-| `OPENAI_API_KEY` | OpenAI API key | — |
-| `OPENAI_BASE_URL` | OpenAI endpoint (for proxy/relay) | official default |
-| `QWEN_API_KEY` | Qwen (Alibaba) API key | — |
-| `QWEN_BASE_URL` | Qwen endpoint | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+`engram init` asks for an LLM key, an optional Tavily key, and two
+power-granting questions (MCP, sandbox). Both stay **off** unless you say
+yes. Read-only features (memory, skills, Web UI) are enabled from probe
+results. Docker compose injects every DSN (`ENGRAM_CHECKPOINT_DSN`,
+`ENGRAM_REDIS_URL`, `ENGRAM_MEMORY_PG_DSN`) and `ENGRAM_WEB_UI_ENABLED`; keep
+them out of `.env`.
 
-> At least one provider must be configured. DeepSeek is recommended as it serves as the fallback chain tail.
+### Enabling the sandbox (power-granting)
 
-### Search loop protection
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENGRAM_LOOP_DETECTION_ENABLED` | Enable the dead-loop / over-search breaker | `true` |
-| `ENGRAM_SEARCH_SOFT_LIMIT` | Search calls per run before injecting a "stop searching" reminder | `12` |
-| `ENGRAM_SEARCH_HARD_LIMIT` | Search calls per run before forcing a final answer | `20` |
-
-> Only search tools (`web_search`, `tavily`, `deep_search`) are budgeted; bash and file tools are never capped. Set `ENGRAM_LOOP_DETECTION_ENABLED=false` to disable the guard entirely.
-
-### LLM timeouts
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENGRAM_LLM_REQUEST_TIMEOUT` | Per-request HTTP timeout in seconds (a stalled provider must not hang the run) | `120` |
-| `ENGRAM_LLM_MAX_RETRIES` | SDK-level retries; on timeout the fallback chain switches provider | `1` |
-| `ENGRAM_INTERNAL_LLM_TIMEOUT` | Timeout for helper LLM calls (reflection sufficiency, compression summaries) | `60` |
-
-### Sandbox
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENGRAM_SANDBOX_USE` | Sandbox provider path (empty = disabled) | empty |
-| `ENGRAM_SANDBOX_IMAGE` | Docker image name | `all-in-one-sandbox:latest` |
-| `ENGRAM_SANDBOX_PORT` | Container start port (auto-increment on conflict) | `18000` |
-| `ENGRAM_SANDBOX_EXECUTOR` | Docker exec env (`local` / `wsl`) | `local` |
-| `ENGRAM_SANDBOX_WSL_DISTRO` | WSL distro name (when executor=wsl) | `Ubuntu` |
-| `ENGRAM_SANDBOX_WSL_USER` | WSL user | default user |
-| `ENGRAM_SANDBOX_CONTAINER_PREFIX` | Container name prefix | `engram-sandbox` |
-| `ENGRAM_SANDBOX_IDLE_TIMEOUT` | Idle destroy timeout in seconds (0 = never) | `600` |
-| `ENGRAM_SANDBOX_REPLICAS` | Warm pool size (0 = no preheat) | `3` |
-
-**Enable Local sandbox (host process):**
+**Local sandbox (host process, no isolation):**
 ```env
 ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.local.local_sandbox_provider:LocalSandboxProvider
 ```
 
-**Enable Docker sandbox (container isolation):**
+**Docker sandbox (container isolation):**
 ```env
 ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:DockerSandboxProvider
 ```
 
-> Docker mode: pull image first — `docker pull all-in-one-sandbox:latest`
+> Docker mode: pull the image first — `docker pull all-in-one-sandbox:latest`
 >
 > Windows + WSL2 Docker: set `ENGRAM_SANDBOX_EXECUTOR=wsl`
 
-### MCP
+### Enabling MCP (power-granting)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENGRAM_MCP_ENABLED` | MCP master switch | `false` |
-| `ENGRAM_MCP_CONFIG_PATH` | MCP server config file path | `.engram/mcp_servers.yaml` |
-| `ENGRAM_MCP_CORE_TOOLS` | Core tools (comma-separated, loaded at startup) | `web_search,browse_page` |
+```env
+ENGRAM_MCP_ENABLED=true
+```
 
-### Skill
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENGRAM_SKILL_ENABLED` | Skill module master switch | `false` |
-| `ENGRAM_SKILL_DB_PATH` | Skill SQLite database path | `.engram/skills.db` |
-| `ENGRAM_SKILL_DIRS` | Skill scan directories (comma-separated) | `skills/` |
-| `ENGRAM_SKILL_INCLUDE_BUILTIN` | Load builtin core skills | `true` |
-| `ENGRAM_SKILL_MAX_INJECT` | Max skills injected per turn | `3` |
-| `ENGRAM_SKILL_QUALITY_THRESHOLD` | Quality filter threshold | `0.3` |
-| `ENGRAM_SKILL_MIN_SELECTIONS` | Min selections before quality filter applies | `5` |
-
-**Skill Evolution (Layer 2):**
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENGRAM_SKILL_EVOLVE_ENABLED` | Evolution switch | `false` |
-| `ENGRAM_SKILL_EVOLVE_THRESHOLD` | Evolution trigger threshold | `0.3` |
-| `ENGRAM_SKILL_EVOLVE_MIN_SELECTIONS` | Min selections to trigger evolution | `5` |
-| `ENGRAM_SKILL_EVOLVE_COOLDOWN_TURNS` | Cooldown turns between evolutions | `10` |
-| `ENGRAM_SKILL_EVOLVE_MUTATE_BUDGET` | Mutation token budget | `20` |
-| `ENGRAM_SKILL_EVOLVE_MAX_STEPS` | Max evolution steps | `5` |
-
-**Skill Evaluation (Layer 3):**
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENGRAM_SKILL_EVAL_ENABLED` | Evaluation switch | `false` |
-| `ENGRAM_SKILL_EVAL_JUDGMENT_ENABLED` | Execution judgment (SkillJudgment) | `true` |
-| `ENGRAM_SKILL_EVAL_TASK_JUDGE_ENABLED` | Task quality scoring | `true` |
-| `ENGRAM_SKILL_EVAL_CONTRACT_CHECK` | Response contract checking | `true` |
-| `ENGRAM_SKILL_EVAL_ASYNC` | Async eval (fire-and-forget) | `true` |
-| `ENGRAM_SKILL_EVAL_SKIP_NO_SKILL` | Skip eval when no skill injected | `true` |
-| `ENGRAM_SKILL_EVAL_RUNTIME_WINDOW` | RuntimeTracker window | `20` |
-| `ENGRAM_SKILL_EVAL_DEGRADATION_DELTA` | Degradation delta threshold | `0.15` |
-
-### Memory
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENGRAM_MEMORY_USE` | Memory provider (empty = disabled) | empty |
-| `ENGRAM_MEMORY_STORAGE_PATH` | Markdown truth source path | `.engram/memory` |
-| `ENGRAM_MEMORY_ENABLE_RECALL` | before_model recall | `true` |
-| `ENGRAM_MEMORY_TOKEN_BUDGET` | Recall token budget | `2000` |
-| `ENGRAM_MEMORY_PHASE2_ENABLED` | L5 auto-consolidation | `false` |
-| `ENGRAM_MEMORY_PHASE2_TURNS` | Consolidation every N turns | `10` |
-
-### Multi-Agent
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENGRAM_MULTIAGENT_ENABLED` | Multi-agent switch | `true` |
-| `ENGRAM_MULTIAGENT_SPECIALISTS` | Specialist list | `pi,codex,claude,subagent` |
-| `ENGRAM_MULTIAGENT_AUTO_APPROVE` | Auto-approve calls | `true` |
-| `ENGRAM_MULTIAGENT_PI_PROVIDER` | Pi provider (deepseek/openai/...) | empty |
-| `ENGRAM_MULTIAGENT_PI_API_KEY` | Pi API key (empty = auto-scan env) | empty |
-| `ENGRAM_MULTIAGENT_L2_ENABLED` | L2 evolution layer | `false` |
-| `ENGRAM_MULTIAGENT_L3_ENABLED` | L3 eval layer | `false` |
+Servers are declared in `.engram/mcp_servers.yaml` (see [MCP Tools](#mcp-tools)).
+`engram doctor` reports `broken` and names the missing path if the switch is
+on but the file is absent.
 
 ---
 

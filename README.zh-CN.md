@@ -38,51 +38,57 @@
 git clone https://github.com/Jeson-Chan/Engram.git
 cd Engram
 pip install -e ".[dev]"
-cp .env.example .env
 ```
 
-打开 `.env`，填入 `DEEPSEEK_API_KEY=sk-...`。
+想手工编辑配置？`cp .env.example .env` 仍然可用；完整变量参考见自动生成的
+[`docs/configuration.md`](docs/configuration.md)。
 
 ## 快速开始
 
+干净仓库三步走：
 
+```bash
+engram init              # 1. 探测本机环境，问密钥 + MCP/沙箱授权，写出 .env
+docker compose up -d     # 2. 网关(8000) + postgres + redis + 巩固 worker
+engram doctor            # 3. 能力矩阵 + 连通性（on / off / broken）
+```
 
-### 1 · TUI
+`engram init` 只写显式值：密钥、两个权力授予开关（MCP 与沙箱，未同意保持关闭）、
+以及探测结论。其余变量都有安全默认值；DSN 一律不进 `.env`，由 compose 注入。
+
+### 终端（TUI）
 
 ```powershell
-pip install -e ".[dev]"        # .env 里填好 API Key（见上文）
 engram                          # 或 python -m engram.backend.app.cli.main
 ```
 
-就这么多——直接提问。驾驶舱里：
+直接提问。驾驶舱里：
 
 | 快捷键 | 作用 |
 |---|---|
 | `Ctrl+K` | 会话切换 / 新建会话 |
 | `Ctrl+O` | Run 时间线（运行历史 + 持久事件） |
 | `Ctrl+G` | Memory 面板（热/冷/遗忘计数） |
-| `Ctrl+U` | Inspector（模型/模式/能力 + Context 预算） |
+| `Ctrl+U` | Inspector（模型/模式/能力——与 `engram doctor` 同一份报告） |
 | `Esc` | 关闭任何弹层 |
 
 
-### 2 · Web
+### Web 工作台
 
 ```powershell
 cd web; npm install; npm run build    # 一次性构建前端
 $env:ENGRAM_WEB_UI_ENABLED="true"; python -m engram.backend.app.gateway --port 8000
 ```
 
+用 compose 时 `ENGRAM_WEB_UI_ENABLED` 已由 compose 注入，工作台在
+`http://localhost:8000/app`。
 
-### 3 · Docker
+
+### Docker Agent
 
 ```bash
-cp .env.example .env            # 填入 DEEPSEEK_API_KEY
-docker compose up -d            # 网关(8000) + postgres + redis + 巩固 worker
 docker compose run --rm agent   # 容器里跑 TUI
 ```
-
-Web 工作台在 `http://localhost:8000/app`。先构建一次前端（`cd web; npm
-install; npm run build`）——静态文件从宿主机读取，重新构建无需重启网关。
 
 ## 已知限制
 

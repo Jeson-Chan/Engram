@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from engram.backend.app.gateway.main import create_app
+from engram.backend.app.gateway.web_ui import web_dist_path
 
 
 @pytest.fixture()
@@ -86,6 +87,28 @@ def test_enabled_but_missing_dist_no_mount(monkeypatch, tmp_path):
     client, _ = _client()
     with client as c:
         assert c.get("/app").status_code == 404  # 未挂载，但不崩
+
+
+def test_host_dist_takes_priority_over_image_built(tmp_path, monkeypatch):
+    """6.2：宿主机有 web/dist 时优先；否则回退镜像内 web/built。"""
+    monkeypatch.delenv("ENGRAM_WEB_UI_DIST", raising=False)
+    host = tmp_path / "web" / "dist"
+    built = tmp_path / "web" / "built"
+    host.mkdir(parents=True)
+    built.mkdir(parents=True)
+    assert web_dist_path(tmp_path) == host
+
+    # 仅镜像内产物（宿主机无 web/dist）
+    (tmp_path / "web" / "dist").rmdir()
+    assert web_dist_path(tmp_path) == built
+
+
+def test_image_built_used_when_host_dist_absent(tmp_path, monkeypatch):
+    monkeypatch.delenv("ENGRAM_WEB_UI_DIST", raising=False)
+    built = tmp_path / "web" / "built"
+    built.mkdir(parents=True)
+    assert web_dist_path(tmp_path) == built
+    assert web_dist_path(tmp_path / "empty") is None
 
 
 def test_real_web_dist_mounted_when_present(monkeypatch):

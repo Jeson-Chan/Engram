@@ -20,6 +20,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 from rich.text import Text
@@ -28,6 +29,23 @@ from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Label, ListItem, ListView, Static
+
+
+def capability_lines(report: Any) -> list[Text]:
+    """能力矩阵 → Text 行。与 CLI `engram doctor` 消费同一份 DoctorReport。"""
+    marks = {
+        "on": ("●", "green"),
+        "off": ("○", "dim"),
+        "broken": ("✕", "red"),
+    }
+    lines = [Text("能力矩阵（engram doctor 同源）", style="bold")]
+    for cap in report.capabilities:
+        symbol, style = marks.get(cap.state, ("?", "dim"))
+        row = Text(f"{symbol} {cap.label}: {cap.state}", style=style)
+        if cap.state != "on":
+            row.append(f" — {cap.detail}", style="dim")
+        lines.append(row)
+    return lines
 
 
 class GatewayClient:
@@ -270,7 +288,7 @@ class MemoryPanel(CockpitPanel):
 
 
 class InspectorPanel(CockpitPanel):
-    """Inspector（Ctrl+J）：模型/模式/能力 + Context 预算。"""
+    """Inspector（Ctrl+U）：模型/模式/能力 + Context 预算。"""
 
     def __init__(self, gateway: GatewayClient, cli_state: dict[str, Any]) -> None:
         super().__init__()
@@ -287,9 +305,18 @@ class InspectorPanel(CockpitPanel):
 
     def _fetch_status(self) -> None:
         status = self._gateway.status()
-        self.app.call_from_thread(self._render_data, status)
+        # 能力矩阵与 CLI `engram doctor` 同源（simplify-configuration D5）：
+        # 同一份 DoctorReport 数据，避免 TUI 与 CLI 两套判定漂移。
+        report = None
+        try:
+            from engram.backend.app.cli.doctor import build_report
 
-    def _render_data(self, status: dict | None) -> None:
+            report = build_report(Path(__file__).resolve().parents[4])
+        except Exception:
+            report = None
+        self.app.call_from_thread(self._render_data, status, report)
+
+    def _render_data(self, status: dict | None, report: Any = None) -> None:
         lines = [Text("Runtime Inspector", style="bold")]
         if status is None:
             lines.append(Text(_OFFLINE, style="dim"))
@@ -304,4 +331,8 @@ class InspectorPanel(CockpitPanel):
         if window:
             pct = (self._cli_state.get("current_fraction") or 0) * 100
             lines.append(Text(f"Context：{tokens} / {window} tok（{pct:.0f}%）"))
+
+        if report is not None:
+            lines.append(Text(""))
+            lines.extend(capability_lines(report))
         self.query_one("#inspector-content", Static).update(Text("\n").join(lines))

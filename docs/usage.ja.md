@@ -99,36 +99,25 @@ EngramのASCIIロゴとウェルカム画面が表示されれば成功。
 
 ## 設定
 
-プロジェクトルートの`.env`ファイルで設定します。`.env.example`が完全なテンプレートです。
+完全で常にコードと一致する変数リスト（変数名・デフォルト・読み取りモジュール・用途）は
+スキャナーが生成します：**[configuration.md](configuration.md)**。
+ドキュメントまたは `.env.example` がコードと乖離すると CI が失敗します。
 
-### LLMプロバイダー
+```bash
+engram init     # ホストを調査し、キー + MCP/サンドボックス同意を質問して .env を生成
+engram doctor   # 能力マトリクス（on / off / broken）+ 接続性チェック
+```
 
-| 変数 | 説明 | デフォルト |
-|------|------|-----------|
-| `DEEPSEEK_API_KEY` | DeepSeek APIキー（デフォルト、フォールバック尾部） | — |
-| `DEEPSEEK_BASE_URL` | DeepSeekエンドポイント | `https://api.deepseek.com` |
-| `OPENAI_API_KEY` | OpenAI APIキー | — |
-| `OPENAI_BASE_URL` | OpenAIエンドポイント（プロキシ用） | 公式デフォルト |
-| `QWEN_API_KEY` | Qwen APIキー | — |
-| `QWEN_BASE_URL` | Qwenエンドポイント | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+`engram init` は LLM キー、任意の Tavily キー、2 つの権限付与スイッチ
+（MCP、サンドボックス）を質問します。同意しない限り両方は**オフ**のままです。
+読み取り専用機能（メモリ、Skill、Web）は調査結果に基づいて有効になります。
+Docker compose がすべての DSN（`ENGRAM_CHECKPOINT_DSN`、`ENGRAM_REDIS_URL`、
+`ENGRAM_MEMORY_PG_DSN`）と `ENGRAM_WEB_UI_ENABLED` を注入するため、
+`.env` には書きません。
 
-> 少なくとも一つのプロバイダーを設定してください。DeepSeekをフォールバックとして設定を推奨します。
+### サンドボックスを有効化（権限付与）
 
-### Sandbox
-
-| 変数 | 説明 | デフォルト |
-|------|------|-----------|
-| `ENGRAM_SANDBOX_USE` | Sandboxプロバイダーパス（空=無効） | 空 |
-| `ENGRAM_SANDBOX_IMAGE` | Dockerイメージ名 | `all-in-one-sandbox:latest` |
-| `ENGRAM_SANDBOX_PORT` | コンテナ開始ポート | `18000` |
-| `ENGRAM_SANDBOX_EXECUTOR` | Docker実行環境（`local` / `wsl`） | `local` |
-| `ENGRAM_SANDBOX_WSL_DISTRO` | WSLディストロ名 | `Ubuntu` |
-| `ENGRAM_SANDBOX_WSL_USER` | WSLユーザー | デフォルトユーザー |
-| `ENGRAM_SANDBOX_CONTAINER_PREFIX` | コンテナ名プレフィックス | `engram-sandbox` |
-| `ENGRAM_SANDBOX_IDLE_TIMEOUT` | アイドル破棄タイムアウト秒（0=破棄しない） | `600` |
-| `ENGRAM_SANDBOX_REPLICAS` | ウォームプールサイズ（0=事前作成しない） | `3` |
-
-**Local Sandbox（ホストプロセス）:**
+**Local Sandbox（ホストプロセス、分離なし）:**
 ```env
 ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.local.local_sandbox_provider:LocalSandboxProvider
 ```
@@ -142,49 +131,15 @@ ENGRAM_SANDBOX_USE=engram.backend.agents.sandbox.docker.docker_sandbox_provider:
 >
 > Windows + WSL2：`ENGRAM_SANDBOX_EXECUTOR=wsl`を設定
 
-### MCP
+### MCPを有効化（権限付与）
 
-| 変数 | 説明 | デフォルト |
-|------|------|-----------|
-| `ENGRAM_MCP_ENABLED` | MCPマスタースイッチ | `false` |
-| `ENGRAM_MCP_CONFIG_PATH` | MCP設定ファイルパス | `.engram/mcp_servers.yaml` |
-| `ENGRAM_MCP_CORE_TOOLS` | コアツール（カンマ区切り、起動時にロード） | `web_search,browse_page` |
+```env
+ENGRAM_MCP_ENABLED=true
+```
 
-### Skill
-
-| 変数 | 説明 | デフォルト |
-|------|------|-----------|
-| `ENGRAM_SKILL_ENABLED` | Skillモジュールマスタースイッチ | `false` |
-| `ENGRAM_SKILL_DB_PATH` | Skill SQLiteパス | `.engram/skills.db` |
-| `ENGRAM_SKILL_DIRS` | Skillスキャンディレクトリ | `skills/` |
-| `ENGRAM_SKILL_INCLUDE_BUILTIN` | builtinコアSkillをロード | `true` |
-| `ENGRAM_SKILL_MAX_INJECT` | 1ターンの最大注入Skill数 | `3` |
-| `ENGRAM_SKILL_QUALITY_THRESHOLD` | 品質フィルター閾値 | `0.3` |
-| `ENGRAM_SKILL_MIN_SELECTIONS` | 品質フィルター適用最小選択回数 | `5` |
-
-**Skill進化（Layer 2）:**
-
-| 変数 | 説明 | デフォルト |
-|------|------|-----------|
-| `ENGRAM_SKILL_EVOLVE_ENABLED` | 進化スイッチ | `false` |
-| `ENGRAM_SKILL_EVOLVE_THRESHOLD` | 進化トリガー閾値 | `0.3` |
-| `ENGRAM_SKILL_EVOLVE_MIN_SELECTIONS` | 進化最小選択回数 | `5` |
-| `ENGRAM_SKILL_EVOLVE_COOLDOWN_TURNS` | 進化クールダウンターン数 | `10` |
-| `ENGRAM_SKILL_EVOLVE_MUTATE_BUDGET` | 変異トークン予算 | `20` |
-| `ENGRAM_SKILL_EVOLVE_MAX_STEPS` | 最大進化ステップ数 | `5` |
-
-**Skill評価（Layer 3）:**
-
-| 変数 | 説明 | デフォルト |
-|------|------|-----------|
-| `ENGRAM_SKILL_EVAL_ENABLED` | 評価スイッチ | `false` |
-| `ENGRAM_SKILL_EVAL_JUDGMENT_ENABLED` | 実行判定 | `true` |
-| `ENGRAM_SKILL_EVAL_TASK_JUDGE_ENABLED` | タスク品質スコアリング | `true` |
-| `ENGRAM_SKILL_EVAL_CONTRACT_CHECK` | レスポンス契約チェック | `true` |
-| `ENGRAM_SKILL_EVAL_ASYNC` | 非同期eval | `true` |
-| `ENGRAM_SKILL_EVAL_SKIP_NO_SKILL` | Skill未注入時にevalスキップ | `true` |
-| `ENGRAM_SKILL_EVAL_RUNTIME_WINDOW` | RuntimeTrackerウィンドウ | `20` |
-| `ENGRAM_SKILL_EVAL_DEGRADATION_DELTA` | 劣化判定delta | `0.15` |
+Server は `.engram/mcp_servers.yaml` で宣言します（[MCPツール設定](#mcpツール設定)参照）。
+スイッチがオンでファイルが無い場合、`engram doctor` は MCP を `broken` と表示し
+不足パスを示します。
 
 ---
 

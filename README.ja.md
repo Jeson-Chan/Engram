@@ -38,50 +38,58 @@ Python 3.12+ と DeepSeek の API キーが必要です（OpenAI 互換なら他
 git clone https://github.com/Jeson-Chan/Engram.git
 cd Engram
 pip install -e ".[dev]"
-cp .env.example .env
 ```
 
-`.env` を開いて `DEEPSEEK_API_KEY=sk-...` を記入します。
+手動で設定する場合、`cp .env.example .env` も使えます。完全な変数リファレンスは
+自動生成される [`docs/configuration.md`](docs/configuration.md) を参照してください。
 
 ## クイックスタート
 
-### 1 · TUI
+クリーンなチェックアウトから 3 ステップ：
 
 ```bash
-pip install -e ".[dev]"        # .env に API Key を設定済み（上記参照）
-engram                          # または python -m engram.backend.app.cli.main
+engram init              # 1. ホストを調査し、キー + MCP/サンドボックス同意を質問して .env を生成
+docker compose up -d     # 2. ゲートウェイ(8000) + postgres + redis + コンソリデーションワーカー
+engram doctor            # 3. 能力マトリクス + 接続性（on / off / broken）
 ```
 
-これだけ —— 何でも質問してください。コックピット内：
+`engram init` が書き込むのは明示的な値だけです：秘密情報、2 つの権限付与スイッチ
+（MCP とサンドボックスは同意しない限りオフ）、調査結果。その他は安全なデフォルト。
+DSN は `.env` に入れません（compose が注入します）。
+
+### ターミナル（TUI）
+
+```bash
+engram                   # または python -m engram.backend.app.cli.main
+```
+
+何でも質問してください。コックピット内：
 
 | キー | 操作 |
 |---|---|
 | `Ctrl+K` | セッション切替 / 新規セッション |
 | `Ctrl+O` | Run タイムライン（履歴 + 永続イベント） |
 | `Ctrl+G` | Memory パネル（hot/cold/forgotten カウント） |
-| `Ctrl+U` | Inspector（モデル/モード/能力 + Context 予算） |
+| `Ctrl+U` | Inspector（モデル/モード/能力 — `engram doctor` と同じレポート） |
 | `Esc` | オーバーレイを閉じる |
 
 
-### 2 · Web
+### Web ワークベンチ
 
 ```bash
 cd web && npm install && npm run build   # 一度だけ：フロントエンドをビルド
 ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
 ```
 
+compose では `ENGRAM_WEB_UI_ENABLED` が注入され、`http://localhost:8000/app` で
+利用できます。
 
-### 3 · Docker
+
+### Docker エージェント
 
 ```bash
-cp .env.example .env            # DEEPSEEK_API_KEY を記入
-docker compose up -d            # ゲートウェイ(8000) + postgres + redis + コンソリデーションワーカー
 docker compose run --rm agent   # コンテナで TUI
 ```
-
-Web ワークベンチは `http://localhost:8000/app`。フロントエンドを一度ビルド
-（`cd web && npm install && npm run build`）——静的ファイルはホストから読まれる
-ため、再ビルドにゲートウェイの再起動は不要です。
 
 ## 既知の制限
 

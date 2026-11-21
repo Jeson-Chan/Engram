@@ -746,7 +746,7 @@ class EngramTUI(App):
             self.push_screen(MemoryPanel(self._gateway, "default-user"))
 
     def action_inspector(self) -> None:
-        """Ctrl+J：Inspector（模型/模式/能力 + Context 预算）。"""
+        """Ctrl+U：Inspector（模型/模式/能力 + Context 预算）。"""
         if isinstance(self.screen, InspectorPanel):
             self.pop_screen()
         else:

@@ -21,19 +21,25 @@ from starlette.staticfiles import StaticFiles
 logger = logging.getLogger(__name__)
 
 _WEB_UI_ENV = "ENGRAM_WEB_UI_ENABLED"
-# 构建产物目录（web/dist；仓库根锚定——main.py 同款 parents[4] 根计算）
-_DIST_CANDIDATES = ("web/dist",)
+# 构建产物目录（仓库根锚定——main.py 同款 parents[4] 根计算）：
+# web/dist = 宿主机构建产物（compose 挂载，存在时优先）；
+# web/built = 镜像 multi-stage 构建产物（Dockerfile COPY，宿主机无产物时兜底）。
+_DIST_CANDIDATES = ("web/dist", "web/built")
 
 
-def web_dist_path() -> Path | None:
-    """构建产物路径：环境变量 ENGRAM_WEB_UI_DIST 或仓库 web/dist。"""
+def web_dist_path(project_root: Path | None = None) -> Path | None:
+    """构建产物路径：ENGRAM_WEB_UI_DIST 优先，否则按候选顺序查找。
+
+    候选顺序 web/dist（宿主机）→ web/built（镜像内 multi-stage 产物）。
+    project_root 仅测试注入；运行时锚定仓库根。
+    """
     configured = os.environ.get("ENGRAM_WEB_UI_DIST", "").strip()
     if configured:
         path = Path(configured)
         return path if path.is_dir() else None
-    project_root = Path(__file__).resolve().parents[4]
+    root = project_root or Path(__file__).resolve().parents[4]
     for candidate in _DIST_CANDIDATES:
-        path = project_root / candidate
+        path = root / candidate
         if path.is_dir():
             return path
     return None

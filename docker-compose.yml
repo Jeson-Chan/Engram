@@ -7,8 +7,12 @@
 #   docker compose run --rm agent run "问题"   # 单次研究
 #
 # 配置:
-#   1. 首次运行容器内会触发配置向导（生成 /app/.env）
-#   2. 或在宿主机项目根创建 .env，通过 env_file 注入
+#   1. 推荐先在宿主机运行 `engram init` 生成 .env（密钥 + MCP/沙箱授权开关）
+#   2. compose 用户无需在 .env 配置任何 DSN：
+#      ENGRAM_CHECKPOINT_DSN / ENGRAM_REDIS_URL / ENGRAM_MEMORY_PG_DSN
+#      均由各服务的 environment: 注入（容器内地址 postgres / redis）；
+#      ENGRAM_WEB_UI_ENABLED 由 gateway 的 environment: 注入。
+#   3. 也可在宿主机项目根手工创建 .env，通过 env_file 注入密钥
 #
 # 数据持久化:
 #   .engram/ → /app/.engram（DB、日志、artifact、memory、MCP 配置）
@@ -96,7 +100,8 @@ services:
     volumes:
       - ./.engram:/app/.engram   # 运行时数据（checkpointer 外的 journal/artifacts/memory）
       - ./skills:/app/skills
-      - ./web/dist:/app/web/dist:ro   # Web 工作台构建产物（web_ui.py 按 /app/web/dist 查找）
+      # 可选：宿主机有 web/dist 时优先使用；目录不存在则回退镜像内 web/built
+      - ./web/dist:/app/web/dist:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/openapi.json"]
       interval: 10s

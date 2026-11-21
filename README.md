@@ -38,50 +38,59 @@ Needs Python 3.12+ and a DeepSeek API key (any OpenAI-compatible provider also w
 git clone https://github.com/Jeson-Chan/Engram.git
 cd Engram
 pip install -e ".[dev]"
-cp .env.example .env
 ```
 
-Open `.env` and set `DEEPSEEK_API_KEY=sk-...`.
+Prefer editing files by hand? `cp .env.example .env` still works; the full
+variable reference is generated in [`docs/configuration.md`](docs/configuration.md).
 
 ## Quick Start
 
-### 1 · TUI
+Three steps from a clean checkout:
 
 ```bash
-pip install -e ".[dev]"        # after setting API keys in .env (see above)
-engram                          # or: python -m engram.backend.app.cli.main
+engram init              # 1. probe the host, ask for keys + MCP/sandbox consent, write .env
+docker compose up -d     # 2. gateway(8000) + postgres + redis + consolidation worker
+engram doctor            # 3. capability matrix + connectivity (on / off / broken)
 ```
 
-That's it — ask anything. Inside the cockpit:
+`engram init` writes only explicit values: secrets, the two power-granting
+switches (MCP and sandbox stay off unless you say yes), and probe
+conclusions. Everything else has a safe default. No DSNs go in `.env` —
+compose injects them.
+
+### Terminal (TUI)
+
+```bash
+engram                   # or: python -m engram.backend.app.cli.main
+```
+
+Ask anything. Inside the cockpit:
 
 | Keys | Action |
 |---|---|
 | `Ctrl+K` | session switcher / new session |
 | `Ctrl+O` | Run timeline (history + persisted events) |
 | `Ctrl+G` | Memory panel (hot/cold/forgotten counts) |
-| `Ctrl+U` | Inspector (model/mode/capabilities + context budget) |
+| `Ctrl+U` | Inspector (model/mode/capabilities — same report as `engram doctor`) |
 | `Esc` | close any overlay |
 
 
-### 2 · Web
+### Web workbench
 
 ```bash
 cd web && npm install && npm run build   # once: build the frontend
 ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
 ```
 
+Compose sets `ENGRAM_WEB_UI_ENABLED` for you; the workbench is then at
+`http://localhost:8000/app`.
 
-### 3 · Docker
+
+### Docker agent
 
 ```bash
-cp .env.example .env            # set DEEPSEEK_API_KEY
-docker compose up -d            # gateway(8000) + postgres + redis + consolidation worker
 docker compose run --rm agent   # TUI in a container
 ```
-
-The web workbench is served at `http://localhost:8000/app`. Build the
-frontend once (`cd web && npm install && npm run build`) — static files are
-read from the host, so rebuilding needs no gateway restart.
 
 ## Known limitations
 

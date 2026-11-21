@@ -7,6 +7,16 @@
 # 镜像包含: Python 3.12 + 项目代码 + 全部依赖 + Node.js 20（MCP stdio + pi agent）
 # 挂载卷: /app/.engram（运行时数据） /app/skills（用户 skill）
 
+# ---- 前端构建阶段：web/dist 打进镜像，宿主机无需 Node/npm ----
+# ARG 仅用于离线/镜像源不可达时替换 builder 基础镜像（默认 node:20-slim）。
+ARG NODE_BUILD_IMAGE=node:20-slim
+FROM ${NODE_BUILD_IMAGE} AS web-builder
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
 FROM python:3.12-slim AS base
 
 # 系统依赖：git（skill clone）+ curl + Node.js 20（MCP stdio server + pi coding agent）
@@ -28,6 +38,11 @@ COPY engram/ engram/
 # pyyaml 已在 pyproject.toml dependencies 中（memory store 需要）
 # optional provider 包按需安装：pip install -e ".[anthropic,gemini,ollama]"
 RUN pip install --no-cache-dir -e ".[dev]"
+
+# 镜像内置前端产物（/app/web/built）。web_ui.py 的候选顺序是
+# web/dist → web/built：宿主机挂载了 web/dist 时优先用宿主产物，
+# 否则使用镜像内这份，Docker 用户不再需要 npm 步骤。
+COPY --from=web-builder /web/dist ./web/built
 
 # 运行时数据卷（.engram: DB/logs/artifacts/memory，skills: 用户 skill）
 VOLUME ["/app/.engram", "/app/skills"]
