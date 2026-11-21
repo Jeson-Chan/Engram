@@ -40,29 +40,23 @@ cd Engram
 pip install -e ".[dev]"
 ```
 
-想手工编辑配置？`cp .env.example .env` 仍然可用；完整变量参考见自动生成的
-[`docs/configuration.md`](docs/configuration.md)。
-
 ## 快速开始
 
-干净仓库三步走：
-
 ```bash
-engram init              # 1. 探测本机环境，问密钥 + MCP/沙箱授权，写出 .env
-docker compose up -d     # 2. 网关(8000) + postgres + redis + 巩固 worker
-engram doctor            # 3. 能力矩阵 + 连通性（on / off / broken）
+engram init
+docker compose up -d
+engram doctor
 ```
 
-`engram init` 只写显式值：密钥、两个权力授予开关（MCP 与沙箱，未同意保持关闭）、
-以及探测结论。其余变量都有安全默认值；DSN 一律不进 `.env`，由 compose 注入。
+Web 工作台：`http://localhost:8000/app`。
 
 ### 终端（TUI）
 
 ```powershell
-engram                          # 或 python -m engram.backend.app.cli.main
+engram
 ```
 
-直接提问。驾驶舱里：
+驾驶舱里：
 
 | 快捷键 | 作用 |
 |---|---|
@@ -76,18 +70,37 @@ engram                          # 或 python -m engram.backend.app.cli.main
 ### Web 工作台
 
 ```powershell
-cd web; npm install; npm run build    # 一次性构建前端
-$env:ENGRAM_WEB_UI_ENABLED="true"; python -m engram.backend.app.gateway --port 8000
+cd web
+npm install
+npm run build
+cd ..
 ```
 
-用 compose 时 `ENGRAM_WEB_UI_ENABLED` 已由 compose 注入，工作台在
-`http://localhost:8000/app`。
+bash / zsh：
+
+```bash
+ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
+```
+
+PowerShell：
+
+```powershell
+$env:ENGRAM_WEB_UI_ENABLED = "true"
+python -m engram.backend.app.gateway --port 8000
+```
+
+cmd：
+
+```cmd
+set ENGRAM_WEB_UI_ENABLED=true
+python -m engram.backend.app.gateway --port 8000
+```
 
 
 ### Docker Agent
 
 ```bash
-docker compose run --rm agent   # 容器里跑 TUI
+docker compose run --rm agent
 ```
 
 ## 已知限制

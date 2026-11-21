@@ -40,31 +40,23 @@ cd Engram
 pip install -e ".[dev]"
 ```
 
-Prefer editing files by hand? `cp .env.example .env` still works; the full
-variable reference is generated in [`docs/configuration.md`](docs/configuration.md).
-
 ## Quick Start
 
-Three steps from a clean checkout:
-
 ```bash
-engram init              # 1. probe the host, ask for keys + MCP/sandbox consent, write .env
-docker compose up -d     # 2. gateway(8000) + postgres + redis + consolidation worker
-engram doctor            # 3. capability matrix + connectivity (on / off / broken)
+engram init
+docker compose up -d
+engram doctor
 ```
 
-`engram init` writes only explicit values: secrets, the two power-granting
-switches (MCP and sandbox stay off unless you say yes), and probe
-conclusions. Everything else has a safe default. No DSNs go in `.env` —
-compose injects them.
+Web workbench: `http://localhost:8000/app`.
 
 ### Terminal (TUI)
 
 ```bash
-engram                   # or: python -m engram.backend.app.cli.main
+engram
 ```
 
-Ask anything. Inside the cockpit:
+Inside the cockpit:
 
 | Keys | Action |
 |---|---|
@@ -78,18 +70,37 @@ Ask anything. Inside the cockpit:
 ### Web workbench
 
 ```bash
-cd web && npm install && npm run build   # once: build the frontend
+cd web
+npm install
+npm run build
+cd ..
+```
+
+bash / zsh:
+
+```bash
 ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
 ```
 
-Compose sets `ENGRAM_WEB_UI_ENABLED` for you; the workbench is then at
-`http://localhost:8000/app`.
+PowerShell:
+
+```powershell
+$env:ENGRAM_WEB_UI_ENABLED = "true"
+python -m engram.backend.app.gateway --port 8000
+```
+
+cmd:
+
+```cmd
+set ENGRAM_WEB_UI_ENABLED=true
+python -m engram.backend.app.gateway --port 8000
+```
 
 
 ### Docker agent
 
 ```bash
-docker compose run --rm agent   # TUI in a container
+docker compose run --rm agent
 ```
 
 ## Known limitations

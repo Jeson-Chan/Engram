@@ -40,30 +40,23 @@ cd Engram
 pip install -e ".[dev]"
 ```
 
-手動で設定する場合、`cp .env.example .env` も使えます。完全な変数リファレンスは
-自動生成される [`docs/configuration.md`](docs/configuration.md) を参照してください。
-
 ## クイックスタート
 
-クリーンなチェックアウトから 3 ステップ：
-
 ```bash
-engram init              # 1. ホストを調査し、キー + MCP/サンドボックス同意を質問して .env を生成
-docker compose up -d     # 2. ゲートウェイ(8000) + postgres + redis + コンソリデーションワーカー
-engram doctor            # 3. 能力マトリクス + 接続性（on / off / broken）
+engram init
+docker compose up -d
+engram doctor
 ```
 
-`engram init` が書き込むのは明示的な値だけです：秘密情報、2 つの権限付与スイッチ
-（MCP とサンドボックスは同意しない限りオフ）、調査結果。その他は安全なデフォルト。
-DSN は `.env` に入れません（compose が注入します）。
+Web ワークベンチ：`http://localhost:8000/app`。
 
 ### ターミナル（TUI）
 
 ```bash
-engram                   # または python -m engram.backend.app.cli.main
+engram
 ```
 
-何でも質問してください。コックピット内：
+コックピット内：
 
 | キー | 操作 |
 |---|---|
@@ -77,18 +70,37 @@ engram                   # または python -m engram.backend.app.cli.main
 ### Web ワークベンチ
 
 ```bash
-cd web && npm install && npm run build   # 一度だけ：フロントエンドをビルド
+cd web
+npm install
+npm run build
+cd ..
+```
+
+bash / zsh：
+
+```bash
 ENGRAM_WEB_UI_ENABLED=true python -m engram.backend.app.gateway --port 8000
 ```
 
-compose では `ENGRAM_WEB_UI_ENABLED` が注入され、`http://localhost:8000/app` で
-利用できます。
+PowerShell：
+
+```powershell
+$env:ENGRAM_WEB_UI_ENABLED = "true"
+python -m engram.backend.app.gateway --port 8000
+```
+
+cmd：
+
+```cmd
+set ENGRAM_WEB_UI_ENABLED=true
+python -m engram.backend.app.gateway --port 8000
+```
 
 
 ### Docker エージェント
 
 ```bash
-docker compose run --rm agent   # コンテナで TUI
+docker compose run --rm agent
 ```
 
 ## 既知の制限
