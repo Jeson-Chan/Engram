@@ -1,7 +1,7 @@
 """TUI 研究驾驶舱回归 — tui-research-cockpit（任务 6.1/6.2/6.3/6.4）。
 
 - 缺陷 H：弹层 Escape priority——焦点在输入控件时 Esc 也能关闭
-  （CommandPalette / McpPanel / SessionSwitcher / CockpitPanel 全覆盖）
+  （McpPanel / SessionSwitcher / CockpitPanel 全覆盖）
 - SessionSwitcher：离线网关显示离线态 + 新建会话项；选择新建 → 新 thread
 - 驾驶舱面板：离线网关显式空态；在线数据渲染（monkeypatch 网关返回）
 - 会话切换：headless EngramTUI Ctrl+K → 新建会话 → active_thread_id 变化
@@ -17,6 +17,7 @@ from textual.app import App
 from textual.widgets import TextArea
 
 from engram.backend.app.tui.app import EngramTUI
+from engram.backend.app.tui.mcp_panel import McpPanel
 from engram.backend.app.tui.cockpit import (
     GatewayClient,
     InspectorPanel,
@@ -24,7 +25,6 @@ from engram.backend.app.tui.cockpit import (
     RunTimelinePanel,
     SessionSwitcher,
 )
-from engram.backend.app.tui.command_palette import CommandPalette
 
 
 def _offline_gateway() -> GatewayClient:
@@ -52,18 +52,19 @@ async def _run(app: App) -> Any:
         return pilot
 
 
-def test_command_palette_escape_closes_with_input_focus():
-    """缺陷 H 回归：命令面板 + 输入焦点 → Esc 关闭（旧版被输入控件吞键）。"""
+def test_mcp_panel_escape_closes_with_input_focus():
+    """缺陷 H 回归（CommandPalette 已删，McpPanel 承接同型验证）：面板 + 输入焦点 → Esc 关闭。"""
 
     async def check() -> None:
-        app = _PanelApp(lambda: CommandPalette())
+        app = _PanelApp(lambda: McpPanel(None, None))
         async with app.run_test(size=(100, 30)) as pilot:
             app.query_one("#host-input", TextArea).focus()
             await pilot.pause()
-            assert isinstance(app.screen, CommandPalette)
+            from engram.backend.app.tui.mcp_panel import McpPanel as _MP
+            assert isinstance(app.screen, _MP)
             await pilot.press("escape")
             await pilot.pause()
-            assert not isinstance(app.screen, CommandPalette)  # 已关闭
+            assert not isinstance(app.screen, _MP)  # 已关闭
 
     asyncio.run(check())
 

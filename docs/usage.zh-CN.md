@@ -150,7 +150,6 @@ engram
 
 | 快捷键 | 功能 |
 |--------|------|
-| `Ctrl+P` | 命令面板 |
 | `Ctrl+N` | MCP 管理面板 |
 | `Ctrl+L` | 清屏 |
 | `Ctrl+C` | 退出 |
@@ -181,8 +180,7 @@ engram run "问题" --no-artifact
 | 命令 | 说明 |
 |------|------|
 | `/help` | 显示所有命令 |
-| `/clear` | 清屏 |
-| `/exit` | 退出 |
+| `/guide` | 分步配置向导（按需开启功能） |
 | `/expand` | 展开上一轮 Thought + 工具结果 |
 | `/thinking on\|off` | 切换 Thought 折叠显示 |
 

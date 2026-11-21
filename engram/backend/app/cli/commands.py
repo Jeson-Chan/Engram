@@ -1,4 +1,7 @@
-"""commands — CLI 命令系统（/help /clear /expert /default /report /exit /expand /thinking /tools /model /thread /prompt）。
+"""commands — CLI 命令系统（/help /guide /expert /default /report /expand /thinking /tools /model /thread /prompt）。
+
+退出统一走 Ctrl+C（/exit 已移除）；清屏统一走 Ctrl+L（/clear 已移除）。
+命令发现唯一入口为 /help（Ctrl+P 占位面板已删除）。
 
 命令以 / 开头，``handle_command`` 从 ``CommandRegistry`` 查 handler 分发。
 返回 True 表示退出 CLI，False 继续循环。
@@ -44,17 +47,12 @@ def _cmd_help(ctx: CommandContext) -> None:
         "  [cyan]Ctrl+O[/cyan]     Run 时间线（运行历史 + 事件）\n"
         "  [cyan]Ctrl+G[/cyan]     Memory 面板（统计 + 记忆列表）\n"
         "  [cyan]Ctrl+U[/cyan]     Inspector（模型/模式/能力 + Context 预算）\n"
-        "  [cyan]Ctrl+P[/cyan]     命令面板\n"
         "  [cyan]Ctrl+N[/cyan]     MCP 面板\n"
         "  [cyan]Ctrl+B[/cyan]     设置面板（API Key 等）\n"
         "  [cyan]Ctrl+L[/cyan]     清屏\n"
         "  [cyan]Esc[/cyan]       关闭弹层（任何焦点）/ 运行中=中断\n"
         "  [cyan]Ctrl+C[/cyan]     退出"
     )
-
-
-def _cmd_clear(ctx: CommandContext) -> None:
-    ctx.console.clear()
 
 
 def _cmd_expert(ctx: CommandContext) -> None:
@@ -77,6 +75,20 @@ def _cmd_report(ctx: CommandContext) -> None:
 
 def _cmd_exit(ctx: CommandContext) -> bool:
     return True
+
+
+def _cmd_guide(ctx: CommandContext) -> None:
+    """/guide：分步配置向导。
+
+    TUI：打开 GuideScreen 弹层（pending_guide 标记，由 _handle_command 消费——
+    commands.py 不依赖 TUI 模块，保持导入方向单向）。legacy CLI：提示走
+    engram init（TUI 专属交互在滚动 CLI 无弹层承载）。
+    """
+    ctx.state["pending_guide"] = True
+    ctx.console.print(
+        "[green]/guide 向导将在对话区上方打开（TUI）。[/green]"
+        "[dim]（传统滚动 CLI 请运行 engram init 完成配置引导）[/dim]"
+    )
 
 
 def _cmd_expand(ctx: CommandContext) -> None:
@@ -531,11 +543,10 @@ def _cmd_mcp(ctx: CommandContext) -> None:
 
 _registry = CommandRegistry()
 _registry.register(CommandSpec("/help", "Show this help", _cmd_help))
-_registry.register(CommandSpec("/clear", "Clear screen", _cmd_clear))
 _registry.register(CommandSpec("/expert", "Switch to expert mode (deep research), applies next round", _cmd_expert))
 _registry.register(CommandSpec("/default", "Switch to default mode (lightweight chat), applies next round", _cmd_default))
 _registry.register(CommandSpec("/report", "Generate report from current thread; optional topic", _cmd_report))
-_registry.register(CommandSpec("/exit", "Exit", _cmd_exit))
+_registry.register(CommandSpec("/guide", "Guided setup: enable features step by step", _cmd_guide))
 _registry.register(CommandSpec("/expand", "Expand last round tool results and Thought", _cmd_expand))
 _registry.register(CommandSpec("/thinking", "Toggle Thought fold row display (on|off)", _cmd_thinking))
 _registry.register(CommandSpec("/tools", "List available tools", _cmd_tools))

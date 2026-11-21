@@ -36,7 +36,7 @@ from engram.backend.app.tui.cockpit import (
     RunTimelinePanel,
     SessionSwitcher,
 )
-from engram.backend.app.tui.command_palette import CommandPalette
+from engram.backend.app.tui.guide_screen import GuideScreen
 from engram.backend.app.tui.conversation import ConversationLog
 from engram.backend.app.tui.help_screen import HelpRequestScreen
 from engram.backend.app.tui.mcp_panel import McpPanel
@@ -354,9 +354,8 @@ class InputBox(Container):
 class EngramTUI(App):
     """Engram 全屏 TUI——双状态布局。"""
 
-    # Textual 内置 ctrl+p 会打开系统自带的 command palette（textual.command
-    # .CommandPalette），和自定义的 Ctrl+P 面板抢同一键位、优先级更高会直接
-    # 吞掉按键——必须关掉内置的，才能让 action_toggle_command_palette 生效。
+    # Textual 内置 ctrl+p command palette 已无自定义对应面板（占位面板已删，
+    # 命令发现唯一入口 /help）；保持关闭，Ctrl+P 无响应。
     ENABLE_COMMAND_PALETTE = False
 
     CSS = f"""
@@ -409,7 +408,6 @@ class EngramTUI(App):
         Binding("ctrl+c", "quit", "Quit", show=False),
         Binding("ctrl+l", "clear_screen", "Clear", show=False),
         Binding("escape", "cancel_run", "Cancel", show=False, priority=True),
-        Binding("ctrl+p", "toggle_command_palette", "Commands", show=False),
         Binding("ctrl+n", "toggle_mcp_panel", "MCP", show=True, priority=True),
         Binding("ctrl+b", "toggle_settings", "Settings", show=True, priority=True),
         # 研究驾驶舱（tui-research-cockpit 任务 6.1/6.2/6.3）。
@@ -631,16 +629,9 @@ class EngramTUI(App):
         if self.has_class("conversation-mode"):
             self.query_one(ConversationLog).clear()
 
-    def action_toggle_command_palette(self) -> None:
-        """Ctrl+P 弹出/收起命令面板（占位 UI，列表项暂不接实际执行）。"""
-        if isinstance(self.screen, CommandPalette):
-            self.pop_screen()
-        else:
-            self.push_screen(CommandPalette())
-
     def action_toggle_mcp_panel(self) -> None:
         """Ctrl+M 弹出/收起 MCP 管理面板（运行时加载 MCP server）。"""
-        if isinstance(self.screen, (CommandPalette, McpPanel)):
+        if isinstance(self.screen, McpPanel):
             self.pop_screen()
         else:
             mcp_manager = getattr(self.runtime, "mcp_manager", None) if self.runtime else None
@@ -901,6 +892,12 @@ class EngramTUI(App):
 
         if should_exit:
             self.exit()
+
+        # /guide：打开分步配置向导（commands.py 不依赖 TUI——pending 标记桥接）
+        pending_guide = self.cli_state.get("pending_guide")
+        if pending_guide is not None:
+            self.cli_state["pending_guide"] = None
+            self.push_screen(GuideScreen(Path(__file__).resolve().parents[4] / ".env"))
 
         pending = self.cli_state.get("pending_expert_mode")
         if pending is not None:

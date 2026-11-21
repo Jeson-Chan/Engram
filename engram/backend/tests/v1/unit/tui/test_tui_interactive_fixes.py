@@ -149,27 +149,14 @@ def test_ctrl_c_priority_binding_removed():
 # ---------------------------------------------------------------------------
 
 def test_quit_removed_from_registry():
-    """/quit 不再注册；/exit 仍在。"""
-    from engram.backend.app.cli.commands import get_registry
-
-    names = {spec.name for spec in get_registry()._commands.values()} if hasattr(
-        get_registry(), "_commands") else set()
-    # 兼容 registry 内部结构差异：直接遍历注册表
-    reg = get_registry()
-    all_names = set()
-    for attr in ("_commands", "commands", "_registry"):
-        obj = getattr(reg, attr, None)
-        if isinstance(obj, dict):
-            all_names |= set(obj.keys())
-        elif obj is not None:
-            all_names |= {getattr(s, "name", "?") for s in (obj.values() if isinstance(obj, dict) else [])}
-    # 稳妥路径：handle_command 行为断言（与 CLI 语义一致）
+    """/quit 与 /exit 均不再注册（tui-interactive-fixes 移除 /quit，
+    tui-command-surface 移除 /exit——退出统一 Ctrl+C）。"""
     from engram.backend.app.cli.commands import handle_command
     from rich.console import Console
     import io
     console = Console(file=io.StringIO(), force_terminal=False, width=120)
     state: dict[str, Any] = {"mode": "default", "model": "m", "provider": ""}
-    assert handle_command("/exit", console, None, state, runtime=None) is True
+    assert handle_command("/exit", console, None, state, runtime=None) is False
     assert handle_command("/quit", console, None, state, runtime=None) is False
 
 

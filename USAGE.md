@@ -155,7 +155,6 @@ Textual full-screen dual-state layout — welcome view → conversation view.
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+P` | Command palette |
 | `Ctrl+N` | MCP panel |
 | `Ctrl+L` | Clear screen |
 | `Ctrl+C` | Quit |
@@ -210,8 +209,7 @@ Type `/` in TUI or CLI for command completion.
 | Command | Description |
 |---------|-------------|
 | `/help` | Show all commands |
-| `/clear` | Clear screen |
-| `/exit` | Exit |
+| `/guide` | Guided setup: enable features step by step |
 | `/expand` | Expand last round's Thought + tool results |
 | `/thinking on\|off` | Toggle Thought fold display |
 
@@ -844,7 +842,6 @@ Hold `Shift` and drag to bypass Textual's mouse capture and use terminal-native 
 | `Ctrl+O` | Run timeline — run history + persisted event log |
 | `Ctrl+G` | Memory panel — stats + traces with hot/cold/forgotten tags |
 | `Ctrl+U` | Inspector — model/mode/capabilities + context budget |
-| `Ctrl+P` | Command palette |
 | `Ctrl+N` | MCP panel |
 | `Ctrl+B` | Settings panel (API keys) |
 | `Ctrl+L` | Clear screen |
@@ -891,7 +888,7 @@ No provider has a non-empty API key. Check `.env`.
 ### Context overflow in long conversations
 
 Engram has context governance (DefaultStrategy) for auto-externalization and compaction. If issues persist:
-1. `/clear` to start fresh
+1. `Ctrl+L` to clear the screen
 2. Check `current_tokens` in status bar
 3. Expert mode has more aggressive governance
 

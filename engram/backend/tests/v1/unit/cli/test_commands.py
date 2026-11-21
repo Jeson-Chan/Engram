@@ -47,15 +47,29 @@ def test_help_does_not_set_pending() -> None:
     assert state["pending_report"] is None
 
 
-def test_exit_returns_true() -> None:
+def test_exit_removed() -> None:
+    """退出统一走 Ctrl+C（tui-command-surface）：/exit 不存在。"""
     state = _make_state()
-    assert handle_command("/exit", _make_console(), None, state, runtime=None) is True
+    assert handle_command("/exit", _make_console(), None, state, runtime=None) is False
 
 
 def test_quit_alias_removed() -> None:
-    """`/quit` 已弃用（tui-interactive-fixes）：只剩 `/exit` 一个退出命令。"""
+    """`/quit` 已弃用（tui-interactive-fixes）：`/exit` 亦于 tui-command-surface 移除。"""
     state = _make_state()
     assert handle_command("/quit", _make_console(), None, state, runtime=None) is False
+
+
+def test_clear_removed() -> None:
+    """清屏统一走 Ctrl+L（tui-command-surface）：/clear 不存在。"""
+    state = _make_state()
+    assert handle_command("/clear", _make_console(), None, state, runtime=None) is False
+
+
+def test_guide_sets_pending() -> None:
+    """-/guide：设 pending_guide 标记（TUI 消费打开向导）。"""
+    state = _make_state()
+    handle_command("/guide", _make_console(), None, state, runtime=None)
+    assert state["pending_guide"] is True
 
 
 def test_unknown_command_returns_false() -> None:

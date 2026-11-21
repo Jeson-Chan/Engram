@@ -3,7 +3,7 @@
 左侧：运行中显示 ``<spinner> running  esc interrupt``——spinner 用 rich.spinner.Spinner
 （Braille dots），运行时 auto_refresh=0.1 驱动 10fps 旋转，给用户"agent 在动、
 没卡死"的视觉反馈；空闲时 auto_refresh=0.0，spinner 不刷新不耗 CPU。
-右侧：``{tokens} ({pct}%)   ctrl+p commands``。
+右侧：``{tokens} ({pct}%)   /help commands``。
 模型/模式信息移到 InputBox 的 Build 信息行，此处仅保留运行态与用量提示，色系统一。
 背景透明（不叠灰底蒙版），直接落在 Screen 底色上，和 InputBox 的实体框区分开——
 只有输入框本身是"盒子"，状态提示是裸露在盒子外的纯文字，贴合参考设计。
@@ -90,7 +90,7 @@ class StatusBar(Widget):
             right.append(f"{_format_tokens(tokens)} ", style=theme.TEXT_SECONDARY)
             right.append(f"({pct:.1f}%)", style=pct_color)
             right.append("     ", style="")
-        right.append("ctrl+p ", style=theme.TEXT_DIM)
+        right.append("/help ", style=theme.TEXT_DIM)
         right.append("commands", style=theme.TEXT_SECONDARY)
 
         grid = Table.grid(expand=True)

@@ -14,7 +14,6 @@ from textual.screen import Screen
 
 from engram.backend.agents.capabilities.registry import CapabilityRegistry
 from engram.backend.app.tui.app import EngramTUI
-from engram.backend.app.tui.command_palette import CommandPalette
 
 
 def _runtime() -> SimpleNamespace:
@@ -35,17 +34,17 @@ class _PlainScreen(Screen):
     """普通 push_screen 叠层（SettingsScreen 同款）。"""
 
 
-def test_escape_closes_modal_screen() -> None:
+def test_ctrl_p_no_response() -> None:
+    """Ctrl+P 命令面板已删（tui-command-surface）：按键无响应。"""
     app = EngramTUI(runtime=_runtime())
 
     async def run() -> None:
         async with app.run_test(size=(80, 24)) as pilot:
             await pilot.press("ctrl+p")
             await pilot.pause()
-            assert isinstance(app.screen, CommandPalette)
-            await pilot.press("escape")
-            await pilot.pause()
-            assert not isinstance(app.screen, CommandPalette)
+            # 无任何面板打开——默认屏仍是主屏（非 ModalScreen）
+            from textual.screen import ModalScreen
+            assert not isinstance(app.screen, ModalScreen)
 
     asyncio.run(run())
 

@@ -1,11 +1,11 @@
 """McpPanel — Ctrl+N MCP 管理面板（ModalScreen）。
 
-风格延续 CommandPalette：居中浮层 + 标题行 + 分组 + 右对齐 esc 提示。
+居中浮层 + 标题行 + 分组 + 右对齐 esc 提示。
 结构化输入 server 配置，调 McpManager.add_server 加载，成功触发 reload_mcp_tools。
 
 INVARIANT:
 - Ctrl+N 推面板，Esc/Ctrl+N 关
-- 标题行左"MCP 管理"右"esc"，对齐 CommandPalette
+- 标题行左"MCP 管理"右"esc"
 - 已加载 server 列表用 row_text 风格（name + transport + tools + status 对齐）
 - 输入区分组：连接（Name/Transport/URL-Cmd）+ 参数（Args/Headers-Env）
 - Transport 用 RadioSet（stdio/http/sse）防输错
@@ -220,7 +220,7 @@ class McpPanel(ModalScreen[None]):
         self.query_one("#mcp-name", Input).focus()
 
     def _server_row(self, s: dict) -> Text:
-        """单行 server 信息，对齐 CommandPalette 的 row_text 风格。"""
+        """单行 server 信息（row_text 风格）。"""
         name = s.get("name", "?")
         transport = s.get("transport", "?")
         tool_count = s.get("tool_count", 0)

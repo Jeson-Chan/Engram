@@ -203,22 +203,32 @@ ENGRAM_SANDBOX_USE=
 """
 
 
-def update_env_file(env_path: Path, overrides: dict[str, str]) -> None:
+def update_env_file(env_path: Path, overrides: dict[str, str], *, create: bool = False) -> None:
     """更新 .env 文件中指定 key 的值，保留其他行原样。
 
-    供 TUI 配置面板（Ctrl+B）调用：读取当前 .env → 替换 KEY= 行 → 写回。
+    供 TUI 配置面板（Ctrl+B）与 /guide 向导调用：读取当前 .env → 替换 KEY= 行 → 写回。
+    create=True（向导语义）时文件不存在则创建，且 overrides 中不在文件里的键
+    追加为 KEY=value 行——向导的 `.env` 是显式报告，跳过项也写显式关闭值。
     """
     if not env_path.exists():
-        return
+        if not create:
+            return
+        env_path.write_text("", encoding="utf-8")
     lines = env_path.read_text(encoding="utf-8").splitlines()
     result: list[str] = []
+    replaced: set[str] = set()
     for line in lines:
         stripped = line.strip()
         if stripped and not stripped.startswith("#") and "=" in stripped:
             key = stripped.split("=", 1)[0].strip()
             if key in overrides:
                 result.append(f"{key}={overrides[key]}")
+                replaced.add(key)
                 continue
         result.append(line)
+    if create:
+        for key, value in overrides.items():
+            if key not in replaced:
+                result.append(f"{key}={value}")
     env_path.write_text("\n".join(result) + "\n", encoding="utf-8")
 
