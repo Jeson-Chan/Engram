@@ -117,32 +117,37 @@ export function SessionRail({ drawer = false }: { drawer?: boolean }) {
           ) : (
             <div className="title" data-testid="session-title">{titleOf(s)}</div>
           )}
+          {/* 动作键：绝对定位右上角，不参与 meta 的 flex 挤压（防遮挡） */}
+          {editingId !== s.session_id && (
+            <div className="item-actions">
+              <span
+                className="del"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  beginEdit(s);
+                }}
+                title="重命名"
+                data-testid={`rename-${s.session_id.slice(0, 6)}`}
+              >
+                <IconEdit size={10} color="var(--muted)" />
+              </span>
+              <span
+                className="del"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.deleteSession(s.session_id);
+                }}
+                title="删除"
+                data-testid={`delete-${s.session_id.slice(0, 6)}`}
+              >
+                删除
+              </span>
+            </div>
+          )}
           <div className="meta">
             <span>{s.user_id}</span>
             <span>{s.created_at?.slice(0, 16).replace("T", " ")}</span>
             <span className="sid" data-testid="session-id">{s.session_id.slice(0, 12)}</span>
-            <span
-              className="del"
-              style={{ marginLeft: "auto", cursor: "pointer" }}
-              onClick={(e) => {
-                e.stopPropagation();
-                beginEdit(s);
-              }}
-              title="重命名"
-              data-testid={`rename-${s.session_id.slice(0, 6)}`}
-            >
-              <IconEdit size={10} color="var(--muted)" />
-            </span>
-            <span
-              className="del"
-              style={{ cursor: "pointer" }}
-              onClick={(e) => {
-                e.stopPropagation();
-                actions.deleteSession(s.session_id);
-              }}
-            >
-              删除
-            </span>
           </div>
         </div>
       ))}

@@ -43,6 +43,8 @@ pip install -e ".[dev]"
 ## クイックスタート
 
 ```bash
+engram init
+engram doctor
 engram
 ```
 
@@ -106,9 +108,13 @@ docker compose up -d
 ```
 
 メモリ階層（Redis ホット / Postgres コールド）は compose が注入——
-`.env` に DSN は不要。設定変更はコンテナ再ビルド
-（`docker compose up -d --build`）が必要：イメージにコードが焼き込まれ、
-階層 DSN は常に compose が `.env` より優先。
+`.env` に DSN は不要。設定変更時はコンテナを再ビルド：
+
+```bash
+docker compose up -d --build
+```
+
+イメージにコードが焼き込まれ、階層 DSN は常に compose が `.env` より優先。
 
 どちらの方式でも `http://localhost:8000/app` で利用できます。
 

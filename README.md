@@ -43,6 +43,8 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```bash
+engram init
+engram doctor
 engram
 ```
 
@@ -106,9 +108,13 @@ docker compose up -d
 ```
 
 Memory tiers (Redis hot / Postgres cold) are injected by compose — no
-DSN needed in `.env`. Config changes require rebuilding the containers
-(`docker compose up -d --build`), since the image bakes the code and
-compose overrides `.env` for tier DSNs.
+DSN needed in `.env`. Config changes require rebuilding the containers:
+
+```bash
+docker compose up -d --build
+```
+
+The image bakes the code, and compose overrides `.env` for tier DSNs.
 
 The workbench is served at `http://localhost:8000/app` either way.
 

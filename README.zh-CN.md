@@ -43,6 +43,8 @@ pip install -e ".[dev]"
 ## 快速开始
 
 ```powershell
+engram init
+engram doctor
 engram
 ```
 
@@ -71,8 +73,7 @@ npm install
 npm run build
 cd ..
 ```
-
-### 本地起后端（venv）
+### 本地启动后端（venv）
 
 跑在你的 Python 环境里。默认 Markdown 单层记忆；要分层可配 Redis/PG
 （TUI 里 `/guide` 有引导步骤）。`.env` 配置改动需重启网关进程。
@@ -97,15 +98,20 @@ set ENGRAM_WEB_UI_ENABLED=true
 python -m engram.backend.app.gateway --port 8000
 ```
 
-### docker 起后端
+### docker 启动后端
 
 ```bash
 docker compose up -d
 ```
 
 记忆分层（Redis 热层 / Postgres 冷层）由 compose 注入，`.env` 无需配 DSN。
-配置改动需重建容器（`docker compose up -d --build`）——镜像内烧死代码，
-且分层 DSN 永远 compose 优先于 `.env`。
+如有配置改动，需重建容器
+
+```bash
+docker compose up -d --build
+```
+
+分层 DSN 永远 compose 优先于 `.env`。
 
 两种方式工作台都在 `http://localhost:8000/app`。
 
