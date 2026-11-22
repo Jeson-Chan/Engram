@@ -43,18 +43,13 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```bash
-engram init
-docker compose up -d
-engram doctor
-```
-
-Web workbench: `http://localhost:8000/app`.
-
-### Terminal (TUI)
-
-```bash
 engram
 ```
+
+The first launch asks for an API key (or run `engram init`). That's it —
+the TUI is self-contained: chat, memory, skills all run in-process, no
+backend or Docker required. `engram doctor` gives an optional health
+check (capability matrix + connectivity).
 
 Inside the cockpit:
 
@@ -63,11 +58,13 @@ Inside the cockpit:
 | `Ctrl+K` | session switcher / new session |
 | `Ctrl+O` | Run timeline (history + persisted events) |
 | `Ctrl+G` | Memory panel (hot/cold/forgotten counts) |
-| `Ctrl+U` | Inspector (model/mode/capabilities — same report as `engram doctor`) |
+| `Ctrl+U` | Inspector (model/mode/capabilities + runtime environment) |
 | `Esc` | close any overlay |
 
+## Web workbench
 
-### Web workbench
+Build the frontend once, then pick how to run the backend. Both work;
+they differ in memory tiers and how config changes take effect.
 
 ```bash
 cd web
@@ -75,6 +72,12 @@ npm install
 npm run build
 cd ..
 ```
+
+### Local backend (venv)
+
+Runs in your Python environment. Memory stays Markdown (single tier)
+unless you configure Redis/PG (`/guide` in the TUI can walk you through
+it). Config changes to `.env` need a gateway restart.
 
 bash / zsh:
 
@@ -96,12 +99,18 @@ set ENGRAM_WEB_UI_ENABLED=true
 python -m engram.backend.app.gateway --port 8000
 ```
 
-
-### Docker agent
+### Docker backend
 
 ```bash
-docker compose run --rm agent
+docker compose up -d
 ```
+
+Memory tiers (Redis hot / Postgres cold) are injected by compose — no
+DSN needed in `.env`. Config changes require rebuilding the containers
+(`docker compose up -d --build`), since the image bakes the code and
+compose overrides `.env` for tier DSNs.
+
+The workbench is served at `http://localhost:8000/app` either way.
 
 ## Known limitations
 

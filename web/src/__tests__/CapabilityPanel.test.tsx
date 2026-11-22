@@ -54,7 +54,7 @@ function stubApi(capabilities: unknown, status = 200) {
     }
     if (path.startsWith("/status")) {
       return jsonResponse({ model: "m", provider: "p", mode: "expert",
-        skills: [], mcp: [], sandbox: {} });
+        deployment: "venv", skills: [], mcp: [], sandbox: {} });
     }
     if (path.startsWith("/memory/traces")) return jsonResponse([]);
     if (path.startsWith("/memory/stats")) {
@@ -81,6 +81,10 @@ describe("CapabilityPanel（能力 tab）", () => {
     expect(screen.getByTestId("conn-pg").dataset.state).toBe("skipped");
     // broken 汇总标记
     expect(screen.getByText("有 broken 项")).toBeTruthy();
+    // 部署徽章（statusbar，venv 后端）
+    expect(screen.getByTestId("deployment-badge").textContent).toBe("venv");
+    // 配置入口注脚
+    expect(screen.getByTestId("config-tui-only-note").textContent).toContain("TUI");
   });
 
   it("端点失败：显式错误态而非空白", async () => {

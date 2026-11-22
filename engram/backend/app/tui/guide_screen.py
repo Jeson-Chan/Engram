@@ -38,6 +38,16 @@ _LOCAL_SANDBOX = (
 
 
 @dataclass(frozen=True)
+class GuideField:
+    """步骤内嵌输入字段（如 Tavily key、Redis URL）。"""
+
+    env_key: str            # 写入 .env 的键
+    placeholder: str        # 输入框占位提示
+    default: str = ""       # 预填值（用户未编辑时也写入；留空语义由步骤自定）
+    password: bool = False  # 掩码显示（密钥类）
+
+
+@dataclass(frozen=True)
 class GuideStep:
     """向导的一个功能步骤（声明式）。"""
 
@@ -45,13 +55,19 @@ class GuideStep:
     title: str                    # 步骤标题
     description: str              # 这功能做什么
     effect: str                   # 开启后行为提示（成本/行为变化）
-    env_key: str                  # 写入 .env 的键
+    env_key: str                  # 写入 .env 的主开关键
     on_value: str                 # 开启值
-    off_value: str                # 关闭值（跳过时写显式关闭）
+    off_value: str                # 关闭值（跳过时写显式关闭；空串=跳过不写键）
     probe_key: str | None         # probes 返回的键（None=无外部依赖）
     power_granting: bool = False  # 权力授予类：默认跳过 + 开启警示
     startup_only: bool = False    # 写入后需重启生效
-    input_env: str | None = None  # 开启时需要用户填值的 env 键（如 Tavily key）
+    input_fields: tuple[GuideField, ...] = ()  # 开启时需填值的字段
+    # 未开启/跳过时键的写入语义：
+    #   off_value 非空 → 写显式关闭值（开关类原则）
+    #   off_value 空 → 不写键（隐式默认类：分层记忆空值=默认 Markdown，
+    #   写显式空串反而会覆盖 compose 注入）
+    extra_probe_keys: tuple[str, ...] = ()     # 附加探测行（如分层记忆的 redis+pg）
+    extra_write_keys: tuple[tuple[str, str], ...] = ()  # 附加写入键（值来自 input_fields）
 
 
 GUIDE_STEPS: tuple[GuideStep, ...] = (
@@ -60,7 +76,10 @@ GUIDE_STEPS: tuple[GuideStep, ...] = (
         description="主搜索后端（结构化结果）；无 key 自动回退 DuckDuckGo。",
         effect="需要 TAVILY_API_KEY（免费额度即可）；不开启也总能搜。",
         env_key="TAVILY_API_KEY", on_value="", off_value="",
-        probe_key="tavily", input_env="TAVILY_API_KEY",
+        probe_key="tavily",
+        input_fields=(
+            GuideField("TAVILY_API_KEY", "输入 TAVILY_API_KEY（回车确认，可留空稍后填）", password=True),
+        ),
     ),
     GuideStep(
         key="skill", title="Skill 注入",
@@ -82,6 +101,25 @@ GUIDE_STEPS: tuple[GuideStep, ...] = (
         effect="权力授予：Local 沙箱在宿主机执行命令（无隔离）；开启后需重启生效。",
         env_key="ENGRAM_SANDBOX_USE", on_value=_LOCAL_SANDBOX, off_value="",
         probe_key="docker", power_granting=True, startup_only=True,
+    ),
+    GuideStep(
+        key="memory_tier", title="分层记忆（热层/冷层）",
+        description=(
+            "热层(Redis)=读取加速（最近记忆秒回，越用越热）；"
+            "冷层(Postgres)=永久沉淀（热层淘汰后的归宿）。"
+            "默认 Markdown 单层，功能不受影响——这是可选提速/增强。"
+        ),
+        effect="写入两个连接串，重启后生效；不开启则保持 Markdown 单层。",
+        env_key="ENGRAM_MEMORY_TIER", on_value="", off_value="",  # 占位主键不写入
+        probe_key=None, startup_only=True,
+        input_fields=(
+            GuideField("ENGRAM_REDIS_URL", "Redis URL（留空=不启用热层）",
+                       default="redis://localhost:6379/0"),
+            GuideField("ENGRAM_MEMORY_PG_DSN", "Postgres DSN（留空=不启用冷层）",
+                       default="postgresql://engram:engram@localhost:5432/engram"),
+        ),
+        extra_probe_keys=("redis", "pg"),
+        extra_write_keys=(("ENGRAM_REDIS_URL", ""), ("ENGRAM_MEMORY_PG_DSN", "")),
     ),
     GuideStep(
         key="memory", title="长期记忆",
@@ -131,7 +169,8 @@ class GuideScreen(ModalScreen[bool]):
         self.step_index = 0          # 0..N-1 功能步；N = 汇总步
         # 长期记忆默认开启（只读类，核心功能）；其余默认跳过
         self.choices: dict[str, bool] = {s.key: s.key == "memory" for s in GUIDE_STEPS}
-        self._inputs: dict[str, str] = {}  # input_env → 用户填的值（Tavily key 等）
+        self._inputs: dict[str, str] = {}  # input 字段 env_key → 用户填的值
+        self._input_field_index = 0  # 当前编辑的字段索引（多字段步骤内切换）
         self.written = False         # 汇总确认后置 True（测试可读）
 
     def compose(self) -> ComposeResult:
@@ -169,7 +208,7 @@ class GuideScreen(ModalScreen[bool]):
 
     def _visible_steps(self) -> list[GuideStep]:
         if self._is_docker():
-            return [s for s in GUIDE_STEPS if s.key not in ("memory", "phase2")]
+            return [s for s in GUIDE_STEPS if s.key not in ("memory_tier", "memory", "phase2")]
         return list(GUIDE_STEPS)
 
     def _summary_index(self) -> int:
@@ -197,11 +236,18 @@ class GuideScreen(ModalScreen[bool]):
             foot.update(Text(
                 "→ 下一步 · ← 上一步 · Enter 切换 开/跳过 · Esc 退出", style=theme.TEXT_DIM,
             ))
-            # 开启且需要填值（如 Tavily key）→ 显示输入框并聚焦
-            if self.choices[step.key] and step.input_env:
+            # 开启且有输入字段 → 显示输入框并聚焦当前字段
+            if self.choices[step.key] and step.input_fields:
+                fields = step.input_fields
+                self._input_field_index = min(self._input_field_index, len(fields) - 1)
+                field = fields[self._input_field_index]
                 value_input.display = True
-                value_input.value = self._inputs.get(step.input_env, "")
-                value_input.placeholder = f"输入 {step.input_env}（回车确认，可留空稍后填）"
+                value_input.value = self._inputs.get(
+                    field.env_key, field.default)
+                value_input.placeholder = (
+                    f"{field.env_key} · 字段 {self._input_field_index + 1}/{len(fields)}"
+                    "（回车确认，→ 下一个字段）")
+                value_input.password = field.password
                 value_input.focus()
             else:
                 value_input.display = False
@@ -213,20 +259,31 @@ class GuideScreen(ModalScreen[bool]):
             ))
             value_input.display = False
 
-    def _probe_text(self, step: GuideStep) -> Text:
-        """该步骤的探测结论行。"""
-        if step.probe_key is None:
-            return Text("探测：无外部依赖", style=theme.TEXT_DIM)
+    def _probe_line(self, probe_key: str, label: str) -> Text:
+        """单个探测键的结论行。"""
         if self.probes is None:
-            return Text("探测：进行中…", style=theme.TEXT_DIM)
-        result = self.probes.get(step.probe_key)
+            return Text(f"探测（{label}）：进行中…", style=theme.TEXT_DIM)
+        result = self.probes.get(probe_key)
         if result is None:
-            return Text("探测：未执行", style=theme.TEXT_DIM)
+            return Text(f"探测（{label}）：未执行", style=theme.TEXT_DIM)
         available = bool(getattr(result, "available", False))
         detail = str(getattr(result, "detail", ""))
         style = theme.TEXT_PRIMARY if available else "yellow"
         state = "就绪" if available else "未配置"
-        return Text(f"探测：{state} — {detail}", style=style)
+        return Text(f"探测（{label}）：{state} — {detail}", style=style)
+
+    def _probe_text(self, step: GuideStep) -> Text:
+        """该步骤的探测结论行（主探测 + 附加探测行）。"""
+        extra = [self._probe_line(k, k) for k in step.extra_probe_keys]
+        newline = chr(10)
+        if extra and step.probe_key is None:
+            return Text(newline).join(extra)
+        if step.probe_key is None:
+            return Text("探测：无外部依赖", style=theme.TEXT_DIM)
+        main = self._probe_line(step.probe_key, step.probe_key)
+        if extra:
+            return Text(newline).join([main] + extra)
+        return main
 
     def _render_step(self, step: GuideStep) -> Text:
         lines: list[Text] = [
@@ -250,15 +307,22 @@ class GuideScreen(ModalScreen[bool]):
             lines.append(Text("选择：  开启 [ 跳过 ]", style=theme.TEXT_DIM))
         if step.startup_only:
             lines.append(Text("（此项写入后需重启生效）", style="yellow"))
-        if step.input_env and enabled:
-            filled = self._inputs.get(step.input_env, "")
-            if filled:
-                lines.append(Text(f"{step.input_env}：已填写（已隐藏）", style=theme.TEXT_DIM))
-            else:
-                lines.append(Text(
-                    f"请在下方输入框填入 {step.input_env}（可留空稍后填；空值写入后功能不生效）",
-                    style="yellow",
-                ))
+        if step.input_fields and enabled:
+            for field in step.input_fields:
+                value = self._inputs.get(field.env_key, field.default)
+                if value:
+                    lines.append(Text(
+                        f"{field.env_key}：已填写（已隐藏）", style=theme.TEXT_DIM))
+                else:
+                    lines.append(Text(
+                        f"{field.env_key}：未填（留空=不写此键）", style="yellow"))
+            # 依赖不可达警示：开启也不会生效
+            for pk in step.extra_probe_keys:
+                probe = (self.probes or {}).get(pk)
+                if probe is not None and not bool(getattr(probe, "available", False)):
+                    lines.append(Text(
+                        f"⚠ {pk} 不可达——开启也不会生效（可跳过此步）", style="yellow"))
+                    break
         return Text("\n").join(lines)
 
     def _render_summary(self) -> Text:
@@ -278,18 +342,35 @@ class GuideScreen(ModalScreen[bool]):
             line = Text()
             line.append(mark)
             line.append(f"{step.title}  {step.env_key}=")
+            if step.key == "memory_tier":
+                # 分层记忆汇总：列出各字段值；跳过整行 dim 且不写键
+                if on:
+                    for field in step.input_fields:
+                        value = self._inputs.get(field.env_key, field.default)
+                        if not value:
+                            missing_key.append(f"{step.title}·{field.env_key}")
+                        lines.append(Text(
+                            f"{mark.plain if hasattr(mark, 'plain') else ''}{step.title}  "
+                            f"{field.env_key}={value or chr(34)*2}", style=theme.TEXT_DIM))
+                    restart_items.append(step.title)
+                else:
+                    lines.append(Text(
+                        f"○ 跳过 {step.title}（保持 Markdown 单层，不写键）", style=theme.TEXT_DIM))
+                continue
             value = step.on_value if on else step.off_value
-            if on and step.input_env:
-                value = self._inputs.get(step.input_env, "")
+            if on and step.input_fields:
+                value = self._inputs.get(step.input_fields[0].env_key, step.input_fields[0].default)
                 if not value:
                     missing_key.append(step.title)
             line.append(Text(value if value else '""', style=theme.TEXT_DIM))
             lines.append(line)
             if on and step.startup_only:
                 restart_items.append(step.title)
-            elif on and step.input_env is None:
+            elif on and not step.input_fields:
                 immediate.append(step.title)
-            elif on and step.input_env and self._inputs.get(step.input_env):
+            elif on and step.input_fields and all(
+                self._inputs.get(f.env_key, f.default) for f in step.input_fields
+            ):
                 immediate.append(step.title)
         lines.append(Text(""))
         if missing_key:
@@ -331,14 +412,24 @@ class GuideScreen(ModalScreen[bool]):
             self._refresh_ui()
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Tavily key 等输入实时存值（写入时收集）。"""
+        """输入实时存值（写入时收集；按当前字段路由）。"""
         steps = self._visible_steps()
         step = steps[self.step_index] if self.step_index < len(steps) else None
-        if step is not None and step.input_env:
-            self._inputs[step.input_env] = event.value.strip()
+        if step is not None and step.input_fields:
+            field = step.input_fields[
+                min(self._input_field_index, len(step.input_fields) - 1)]
+            self._inputs[field.env_key] = event.value.strip()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Enter 确认填值并把焦点还给屏——否则 → 翻页被 Input 吃掉，用户困在本步。"""
+        """Enter 确认当前字段：还有后续字段→切下一个；末字段→焦点还屏
+        （否则 → 翻页被 Input 吃掉，用户困在本步）。"""
+        steps = self._visible_steps()
+        step = steps[self.step_index] if self.step_index < len(steps) else None
+        if step is not None and step.input_fields:
+            if self._input_field_index < len(step.input_fields) - 1:
+                self._input_field_index += 1
+                self._refresh_ui()
+                return
         self.app.set_focus(None)
 
     def _write_env(self) -> None:
@@ -354,9 +445,19 @@ class GuideScreen(ModalScreen[bool]):
         overrides: dict[str, str] = {}
         for step in self._visible_steps():
             on = self._memory_effective() if step.key == "memory" else self.choices[step.key]
+            if step.key == "memory_tier":
+                # 分层记忆：开启且字段有值 → 写该键；留空 → 不写（隐式默认
+                # Markdown——显式空串会覆盖 compose 注入，反显式性）。
+                if on:
+                    for field in step.input_fields:
+                        value = self._inputs.get(field.env_key, field.default)
+                        if value:
+                            overrides[field.env_key] = value
+                continue
             value = step.on_value if on else step.off_value
-            if on and step.input_env:
-                value = self._inputs.get(step.input_env, "")
+            if on and step.input_fields:
+                value = self._inputs.get(
+                    step.input_fields[0].env_key, step.input_fields[0].default)
             overrides[step.env_key] = value
         update_env_file(self._env_path, overrides, create=True)
         load_dotenv(self._env_path, override=True)

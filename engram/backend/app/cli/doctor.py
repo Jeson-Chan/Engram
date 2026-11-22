@@ -156,7 +156,8 @@ def build_report(
         tail = "，使用 Markdown 单层存储" if memory_use else "（记忆未启用）"
         capabilities.append(Capability(
             "memory_hot", "记忆热层（Redis）", "off",
-            f"未配置 ENGRAM_REDIS_URL{tail}",
+            f"未配置 ENGRAM_REDIS_URL{tail}。热层=读取加速（最近记忆秒回）；"
+            "默认 Markdown 单层，功能不受影响",
         ))
     elif redis_probe is not None and redis_probe.available:
         capabilities.append(Capability("memory_hot", "记忆热层（Redis）", "on", redis_probe.detail))
@@ -173,7 +174,8 @@ def build_report(
         tail = "，使用 Markdown 单层存储" if memory_use else "（记忆未启用）"
         capabilities.append(Capability(
             "memory_cold", "记忆冷层（Postgres）", "off",
-            f"未配置 ENGRAM_MEMORY_PG_DSN{tail}",
+            f"未配置 ENGRAM_MEMORY_PG_DSN{tail}。冷层=永久沉淀（热层淘汰后的归宿）；"
+            "默认 Markdown 单层，功能不受影响",
         ))
     elif pg_probe is not None and pg_probe.available:
         capabilities.append(Capability("memory_cold", "记忆冷层（Postgres）", "on", pg_probe.detail))

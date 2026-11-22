@@ -36,7 +36,7 @@
 | `ENGRAM_MCP_ENABLED` | false | `engram/backend/agents/mcp/__init__.py`<br>`engram/backend/app/cli/doctor.py`<br>`engram/backend/app/tui/settings_screen.py` | MCP 总开关（权力授予，默认关闭） |
 | `ENGRAM_MEMORY_ENABLE_EXTRACT` | false | `engram/backend/agents/config/loader.py` | 实时抽取开关（after_model） |
 | `ENGRAM_MEMORY_ENABLE_RECALL` | true | `engram/backend/agents/config/loader.py` | 记忆召回开关（before_model） |
-| `ENGRAM_MEMORY_PG_DSN` | （空） | `engram/backend/agents/memory/strategies/default/strategy.py`<br>`engram/backend/app/cli/doctor.py`<br>`engram/backend/app/cli/probes.py`<br>`engram/backend/app/demo/seed.py` | 记忆冷层 Postgres DSN（compose 注入） |
+| `ENGRAM_MEMORY_PG_DSN` | （空） | `engram/backend/agents/memory/strategies/default/strategy.py`<br>`engram/backend/app/cli/doctor.py`<br>`engram/backend/app/cli/probes.py`<br>`engram/backend/app/demo/seed.py`<br>`engram/backend/app/tui/guide_screen.py` | 记忆冷层 Postgres DSN（compose 注入） |
 | `ENGRAM_MEMORY_PHASE2_ENABLED` | false | `engram/backend/agents/config/loader.py`<br>`engram/backend/app/cli/doctor.py` | L5 自动沉淀（Phase 2） |
 | `ENGRAM_MEMORY_PHASE2_TURNS` | 10 | `engram/backend/agents/config/loader.py` | 自动沉淀触发轮数 |
 | `ENGRAM_MEMORY_STORAGE_PATH` | .engram/memory | `engram/backend/agents/config/loader.py` | 记忆 Markdown 持久化根目录 |
@@ -68,7 +68,7 @@
 | `ENGRAM_MULTIAGENT_TIMEOUT` | 600 | `engram/backend/agents/multiagent/config.py` | MultiAgent 配置 |
 | `ENGRAM_PG_DSN` | — | `engram/backend/agents/runtime/pg_checkpointer.py` | 网关 Postgres DSN |
 | `ENGRAM_PROVIDER` | — | `engram/backend/app/gateway/views.py` | Engram 运行时配置 |
-| `ENGRAM_REDIS_URL` | （空） | `engram/backend/agents/config/loader.py`<br>`engram/backend/app/cli/doctor.py`<br>`engram/backend/app/cli/probes.py`<br>`engram/backend/app/demo/seed.py` | 记忆热层 Redis URL（compose 注入） |
+| `ENGRAM_REDIS_URL` | （空） | `engram/backend/agents/config/loader.py`<br>`engram/backend/app/cli/doctor.py`<br>`engram/backend/app/cli/probes.py`<br>`engram/backend/app/demo/seed.py`<br>`engram/backend/app/tui/guide_screen.py` | 记忆热层 Redis URL（compose 注入） |
 | `ENGRAM_RUNS_PG_DSN` | （空） | `engram/backend/app/demo/seed.py`<br>`engram/backend/app/gateway/main.py` | Run 记录 Postgres DSN |
 | `ENGRAM_SANDBOX_ALLOW_HOST_BASH` | true | `engram/backend/agents/config/loader.py`<br>`engram/backend/app/cli/doctor.py` | Local 沙箱是否允许宿主机 bash |
 | `ENGRAM_SANDBOX_BIND_HOST` | 127.0.0.1 | `engram/backend/agents/sandbox/docker/local_container_backend.py` | 沙箱配置 |

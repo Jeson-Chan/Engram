@@ -125,6 +125,36 @@ def test_run_doctor_json_and_exit_code(monkeypatch, tmp_path: Path, capsys):
     ) == 1
 
 
+def test_doctor_tier_purpose_copy(monkeypatch, tmp_path: Path):
+    """1.1：热层/冷层 off 文案含用途说明（治"不知道干什么用的"）。"""
+    monkeypatch.delenv("ENGRAM_REDIS_URL", raising=False)
+    monkeypatch.delenv("ENGRAM_MEMORY_PG_DSN", raising=False)
+    monkeypatch.setenv("ENGRAM_MEMORY_USE", "default")
+    report = doctor.build_report(tmp_path, probes=_probes(redis=False, pg=False))
+    hot = next(c for c in report.capabilities if c.key == "memory_hot")
+    cold = next(c for c in report.capabilities if c.key == "memory_cold")
+    assert "热层=读取加速" in hot.detail
+    assert "Markdown 单层" in hot.detail
+    assert "冷层=永久沉淀" in cold.detail
+
+
+def test_tui_capability_lines_show_deployment(monkeypatch, tmp_path: Path):
+    """1.2：Inspector 运行环境行两态。"""
+    from engram.backend.app.tui.cockpit import capability_lines
+
+    class _Rep:
+        deployment = "docker"
+        capabilities = ()
+    rendered = chr(10).join(str(line) for line in capability_lines(_Rep()))
+    assert "运行环境：docker 容器" in rendered
+
+    class _Rep2:
+        deployment = "venv"
+        capabilities = ()
+    rendered = chr(10).join(str(line) for line in capability_lines(_Rep2()))
+    assert "运行环境：宿主机直跑" in rendered
+
+
 def test_tui_capability_lines_consume_same_report(monkeypatch, tmp_path: Path):
     """4.3：TUI Inspector 与 CLI 消费同一份 DoctorReport，状态一致。"""
     from engram.backend.app.tui.cockpit import capability_lines

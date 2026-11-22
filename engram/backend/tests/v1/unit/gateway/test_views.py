@@ -177,6 +177,21 @@ class TestRuntimeStatus:
             config=config,
         )
 
+    def test_deployment_field_venv_and_docker(self, monkeypatch):
+        """1.3：/status.deployment 由 probe_deployment 决定；无密钥。"""
+        monkeypatch.delenv("ENGRAM_DOCKER", raising=False)
+        view = runtime_status_from_runtime(self._runtime())
+        assert view.deployment == "venv"
+
+        monkeypatch.setenv("ENGRAM_DOCKER", "1")
+        view = runtime_status_from_runtime(self._runtime())
+        assert view.deployment == "docker"
+
+    def test_deployment_field_default_none_backcompat(self):
+        """字段默认 None——旧 payload 反序列化不炸（向后兼容）。"""
+        empty = RuntimeStatus()
+        assert empty.deployment is None
+
     def test_fields_and_no_secret(self):
         import os
 

@@ -37,7 +37,8 @@ class _GuideHost(App):
         self.dismissed.append(result)
 
 
-def _probes(mcp_ok: bool = False, docker_ok: bool = False, tavily_ok: bool = False):
+def _probes(mcp_ok: bool = False, docker_ok: bool = False, tavily_ok: bool = False,
+            redis_ok: bool = False, pg_ok: bool = False):
     def result(name, ok, detail=""):
         return SimpleNamespace(available=ok, detail=detail or f"{name} state")
 
@@ -47,6 +48,8 @@ def _probes(mcp_ok: bool = False, docker_ok: bool = False, tavily_ok: bool = Fal
         "docker": result("docker", docker_ok, "Docker 29.0.1"),
         "deployment": result("deployment", docker_ok,
                              "docker 容器内" if docker_ok else "宿主机直跑（venv）"),
+        "redis": result("redis", redis_ok, "Redis 可达" if redis_ok else "6379 不可达"),
+        "pg": result("pg", pg_ok, "Postgres 可达" if pg_ok else "5432 不可达"),
     }
 
 
@@ -62,9 +65,9 @@ def _content(screen) -> str:
 
 def test_guide_step_order_and_defaults():
     """步骤固定顺序（Tavily→Skill→MCP→沙箱→巩固）；全部默认跳过；权力授予步预选跳过。"""
-    assert [s.key for s in GUIDE_STEPS] == ["tavily", "skill", "mcp", "sandbox", "memory", "phase2"]
-    assert [s.power_granting for s in GUIDE_STEPS] == [False, False, True, True, False, False]
-    assert [s.startup_only for s in GUIDE_STEPS] == [False, True, True, True, True, True]
+    assert [s.key for s in GUIDE_STEPS] == ["tavily", "skill", "mcp", "sandbox", "memory_tier", "memory", "phase2"]
+    assert [s.power_granting for s in GUIDE_STEPS] == [False, False, True, True, False, False, False]
+    assert [s.startup_only for s in GUIDE_STEPS] == [False, True, True, True, True, True, True]
 
     async def check() -> None:
         app = _GuideHost(lambda: GuideScreen(Path("nonexistent.env"), probes=_probes()))
@@ -434,6 +437,7 @@ def test_docker_deployment_hides_memory_steps(tmp_path: Path):
             screen = app.screen
             keys = [s.key for s in screen._visible_steps()]
             assert "memory" not in keys and "phase2" not in keys
+            assert "memory_tier" not in keys
             assert "tavily" in keys and "mcp" in keys
             # 汇总提示 docker 注记
             screen.step_index = screen._summary_index()
@@ -448,6 +452,96 @@ def test_docker_deployment_hides_memory_steps(tmp_path: Path):
     text = env.read_text(encoding="utf-8")
     assert "ENGRAM_MEMORY_USE" not in text
     assert "ENGRAM_MEMORY_PHASE2_ENABLED" not in text
+
+
+def test_memory_tier_step_visible_venv_and_writes(tmp_path: Path, monkeypatch):
+    """2.2/2.3：venv 展示分层记忆步骤；开启填值写入两键 + 重启清单。"""
+    import os
+
+    env = tmp_path / ".env"
+    for step in GUIDE_STEPS:
+        monkeypatch.setenv(step.env_key, "orig")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "orig")
+    for extra in ("ENGRAM_REDIS_URL", "ENGRAM_MEMORY_PG_DSN"):
+        monkeypatch.setenv(extra, "orig")
+
+    async def check() -> None:
+        app = _GuideHost(lambda: GuideScreen(env, probes=_probes(
+            redis_ok=True, pg_ok=True, docker_ok=False,
+        )))
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            keys = [s.key for s in screen._visible_steps()]
+            assert "memory_tier" in keys
+            # 开启分层记忆（步骤索引 4）
+            screen.step_index = 4
+            screen._refresh_ui()
+            await pilot.press("enter")
+            await pilot.pause()
+            assert screen.choices["memory_tier"] is True
+            # 填两个字段：第一个字段（Redis）
+            value_input = screen.query_one("#guide-input")
+            value_input.value = "redis://localhost:6379/9"
+            await pilot.pause()
+            # Enter 提交第一字段 → 切第二字段
+            await pilot.press("enter")
+            await pilot.pause()
+            value_input.value = "postgresql://engram:engram@localhost:5433/engram"
+            await pilot.pause()
+            # Enter 提交第二字段（末字段 → 焦点还屏）
+            await pilot.press("enter")
+            await pilot.pause()
+            # 到汇总确认
+            screen.step_index = screen._summary_index()
+            screen._refresh_ui()
+            content = _content(screen)
+            assert "分层记忆" in content and "ENGRAM_REDIS_URL" in content
+            await pilot.press("enter")
+            await pilot.pause()
+
+    asyncio.run(check())
+    text = env.read_text(encoding="utf-8")
+    assert "ENGRAM_REDIS_URL=redis://localhost:6379/9" in text
+    assert "ENGRAM_MEMORY_PG_DSN=postgresql://engram:engram@localhost:5433/engram" in text
+
+
+def test_memory_tier_skip_writes_no_keys(tmp_path: Path, monkeypatch):
+    """2.3：跳过分层记忆 → 两个键都不写（隐式默认 Markdown）。"""
+    env = tmp_path / ".env"
+
+    async def check() -> None:
+        app = _GuideHost(lambda: GuideScreen(env, probes=_probes()))
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            screen.step_index = screen._summary_index()
+            screen._refresh_ui()
+            await pilot.press("enter")
+            await pilot.pause()
+
+    asyncio.run(check())
+    text = env.read_text(encoding="utf-8")
+    assert "ENGRAM_REDIS_URL" not in text
+    assert "ENGRAM_MEMORY_PG_DSN" not in text
+
+
+def test_memory_tier_unreachable_dep_warns(tmp_path: Path):
+    """2.2：依赖不可达 → 步骤内黄字"开启也不会生效"。"""
+    async def check() -> None:
+        app = _GuideHost(lambda: GuideScreen(Path("nonexistent.env"), probes=_probes(
+            redis_ok=False, pg_ok=False,
+        )))
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            screen.step_index = 4  # memory_tier
+            screen.choices["memory_tier"] = True
+            screen._refresh_ui()
+            content = _content(screen)
+            assert "不可达" in content and "不会生效" in content
+
+    asyncio.run(check())
 
 
 def test_ctrl_p_binding_removed_from_tui():

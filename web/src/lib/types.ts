@@ -50,6 +50,7 @@ export interface RuntimeStatus {
   model: string | null;
   provider: string | null;
   mode: string | null;
+  deployment?: "docker" | "venv" | null;
   skills: Array<Record<string, unknown>>;
   mcp: Array<Record<string, unknown>>;
   sandbox: Record<string, unknown>;

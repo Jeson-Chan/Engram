@@ -95,6 +95,7 @@ class RuntimeStatus(BaseModel):
     model: str | None = None
     provider: str | None = None
     mode: str | None = None  # "expert" | "lightweight"
+    deployment: str | None = None  # "docker" | "venv"（后端启动方式；绝不含密钥）
     skills: list[dict[str, Any]] = Field(default_factory=list)
     mcp: list[dict[str, Any]] = Field(default_factory=list)
     sandbox: dict[str, Any] = Field(default_factory=dict)
@@ -223,10 +224,15 @@ def runtime_status_from_runtime(runtime: Any) -> RuntimeStatus:
             "timeout": getattr(sandbox_cfg, "timeout", None),
         }
 
+    from engram.backend.app.cli.probes import probe_deployment
+
+    deployment_probe = probe_deployment()
+
     return RuntimeStatus(
         model=getattr(runtime, "researcher_model_name", None),
         provider=os.environ.get("ENGRAM_PROVIDER") or None,
         mode=mode,
+        deployment="docker" if deployment_probe.available else "venv",
         skills=skills,
         mcp=mcp,
         sandbox=sandbox,

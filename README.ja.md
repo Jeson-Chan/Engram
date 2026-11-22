@@ -43,18 +43,13 @@ pip install -e ".[dev]"
 ## クイックスタート
 
 ```bash
-engram init
-docker compose up -d
-engram doctor
-```
-
-Web ワークベンチ：`http://localhost:8000/app`。
-
-### ターミナル（TUI）
-
-```bash
 engram
 ```
+
+初回起動時に API キーを尋ねます（先に `engram init` でも可）。以上——
+TUI は自己完結：対話・メモリ・Skill はすべてプロセス内で動き、バックエンド
+も Docker も不要です。`engram doctor` はオプションのヘルスチェック
+（能力マトリクス + 接続性）。
 
 コックピット内：
 
@@ -63,11 +58,13 @@ engram
 | `Ctrl+K` | セッション切替 / 新規セッション |
 | `Ctrl+O` | Run タイムライン（履歴 + 永続イベント） |
 | `Ctrl+G` | Memory パネル（hot/cold/forgotten カウント） |
-| `Ctrl+U` | Inspector（モデル/モード/能力 — `engram doctor` と同じレポート） |
+| `Ctrl+U` | Inspector（モデル/モード/能力 + 実行環境） |
 | `Esc` | オーバーレイを閉じる |
 
+## Web ワークベンチ
 
-### Web ワークベンチ
+フロントエンドを一度ビルドし、バックエンドの起動方法を選びます。
+どちらでも動きます；違いはメモリ階層と設定変更の反映方法です。
 
 ```bash
 cd web
@@ -75,6 +72,12 @@ npm install
 npm run build
 cd ..
 ```
+
+### ローカルバックエンド（venv）
+
+Python 環境で実行。メモリはデフォルトで Markdown 単層；階層化するには
+Redis/PG を設定（TUI の `/guide` に案内ステップあり）。`.env` の変更は
+ゲートウェイ再起動で反映。
 
 bash / zsh：
 
@@ -96,12 +99,18 @@ set ENGRAM_WEB_UI_ENABLED=true
 python -m engram.backend.app.gateway --port 8000
 ```
 
-
-### Docker エージェント
+### Docker バックエンド
 
 ```bash
-docker compose run --rm agent
+docker compose up -d
 ```
+
+メモリ階層（Redis ホット / Postgres コールド）は compose が注入——
+`.env` に DSN は不要。設定変更はコンテナ再ビルド
+（`docker compose up -d --build`）が必要：イメージにコードが焼き込まれ、
+階層 DSN は常に compose が `.env` より優先。
+
+どちらの方式でも `http://localhost:8000/app` で利用できます。
 
 ## 既知の制限
 

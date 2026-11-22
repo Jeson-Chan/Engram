@@ -173,6 +173,11 @@ function Shell() {
             {state.status ? state.status.model : state.statusError ? "网关不可用" : "…"}
           </span>
           {state.status?.mode && <span className="badge">{state.status.mode}</span>}
+          {state.status?.deployment && (
+            <span className="badge" data-testid="deployment-badge">
+              {state.status.deployment}
+            </span>
+          )}
           <button
             className="theme-toggle"
             onClick={toggleTheme}

@@ -40,6 +40,10 @@ def capability_lines(report: Any) -> list[Text]:
         "broken": ("✕", "red"),
     }
     lines = [Text("能力矩阵（engram doctor 同源）", style="bold")]
+    deployment = getattr(report, "deployment", None)
+    if deployment:
+        env_label = "docker 容器（记忆层由 compose 注入）" if deployment == "docker" else "宿主机直跑（venv）"
+        lines.append(Text(f"运行环境：{env_label}", style="cyan"))
     for cap in report.capabilities:
         symbol, style = marks.get(cap.state, ("?", "dim"))
         row = Text(f"{symbol} {cap.label}: {cap.state}", style=style)
