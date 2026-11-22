@@ -84,8 +84,15 @@ GUIDE_STEPS: tuple[GuideStep, ...] = (
         probe_key="docker", power_granting=True, startup_only=True,
     ),
     GuideStep(
+        key="memory", title="长期记忆",
+        description="跨会话记住对话内容（Markdown/分层存储，只读类）。",
+        effect="记忆沉淀（后台巩固）依赖此项：没有它，沉淀没有写入对象。",
+        env_key="ENGRAM_MEMORY_USE", on_value="default", off_value="",
+        probe_key=None, startup_only=True,
+    ),
+    GuideStep(
         key="phase2", title="自动记忆沉淀（后台巩固）",
-        description="每 N 轮自动抽取 + 巩固长期记忆。",
+        description="每 N 轮自动抽取 + 巩固长期记忆；依赖长期记忆——开启将自动带上。",
         effect="会产生额外 LLM 调用（成本）；默认关闭，属 opt-in。",
         env_key="ENGRAM_MEMORY_PHASE2_ENABLED", on_value="true", off_value="false",
         probe_key=None, startup_only=True,
@@ -127,7 +134,8 @@ class GuideScreen(ModalScreen[bool]):
         self._probes_injected = probes
         self.probes: dict[str, Any] | None = probes
         self.step_index = 0          # 0..N-1 功能步；N = 汇总步
-        self.choices: dict[str, bool] = {s.key: False for s in GUIDE_STEPS}
+        # 长期记忆默认开启（只读类，核心功能）；其余默认跳过
+        self.choices: dict[str, bool] = {s.key: s.key == "memory" for s in GUIDE_STEPS}
         self._inputs: dict[str, str] = {}  # input_env → 用户填的值（Tavily key 等）
         self.written = False         # 汇总确认后置 True（测试可读）
 
@@ -154,6 +162,10 @@ class GuideScreen(ModalScreen[bool]):
     def _probes_done(self, results: dict[str, Any]) -> None:
         self.probes = results
         self._refresh_ui()
+
+    def _memory_effective(self) -> bool:
+        """长期记忆生效态：显式开启，或随记忆沉淀自动带上（沉淀的上游依赖）。"""
+        return self.choices["memory"] or self.choices["phase2"]
 
     # ---- 渲染 ----
 
@@ -239,7 +251,7 @@ class GuideScreen(ModalScreen[bool]):
         missing_key: list[str] = []     # 开启但 key 未填（写入空值，功能不生效）
         immediate: list[str] = []       # 即刻生效（非 startup_only 且值就绪）
         for step in GUIDE_STEPS:
-            on = self.choices[step.key]
+            on = self._memory_effective() if step.key == "memory" else self.choices[step.key]
             mark = Text("✓ 开启 ", style="green") if on else Text("○ 跳过 ", style=theme.TEXT_DIM)
             line = Text()
             line.append(mark)
@@ -317,8 +329,9 @@ class GuideScreen(ModalScreen[bool]):
 
         overrides: dict[str, str] = {}
         for step in GUIDE_STEPS:
-            value = step.on_value if self.choices[step.key] else step.off_value
-            if self.choices[step.key] and step.input_env:
+            on = self._memory_effective() if step.key == "memory" else self.choices[step.key]
+            value = step.on_value if on else step.off_value
+            if on and step.input_env:
                 value = self._inputs.get(step.input_env, "")
             overrides[step.env_key] = value
         update_env_file(self._env_path, overrides, create=True)

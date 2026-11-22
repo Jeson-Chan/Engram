@@ -60,16 +60,16 @@ def _content(screen) -> str:
 
 def test_guide_step_order_and_defaults():
     """步骤固定顺序（Tavily→Skill→MCP→沙箱→巩固）；全部默认跳过；权力授予步预选跳过。"""
-    assert [s.key for s in GUIDE_STEPS] == ["tavily", "skill", "mcp", "sandbox", "phase2"]
-    assert [s.power_granting for s in GUIDE_STEPS] == [False, False, True, True, False]
-    assert [s.startup_only for s in GUIDE_STEPS] == [False, True, True, True, True]
+    assert [s.key for s in GUIDE_STEPS] == ["tavily", "skill", "mcp", "sandbox", "memory", "phase2"]
+    assert [s.power_granting for s in GUIDE_STEPS] == [False, False, True, True, False, False]
+    assert [s.startup_only for s in GUIDE_STEPS] == [False, True, True, True, True, True]
 
     async def check() -> None:
         app = _GuideHost(lambda: GuideScreen(Path("nonexistent.env"), probes=_probes()))
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
             screen = app.screen
-            assert screen.choices == {s.key: False for s in GUIDE_STEPS}
+            assert screen.choices == {s.key: s.key == "memory" for s in GUIDE_STEPS}  # 长期记忆默认开启
 
     asyncio.run(check())
 
@@ -154,6 +154,55 @@ def test_guide_esc_midway_writes_nothing(tmp_path: Path):
 
     asyncio.run(check())
     assert not env.exists()
+
+
+def test_phase2_forces_memory_on_at_write(tmp_path: Path, monkeypatch):
+    """记忆沉淀开启 → 写入时自动带上 ENGRAM_MEMORY_USE=default（上游依赖）。
+
+    回归：此前 /guide 只写 PHASE2_ENABLED=true 不写 MEMORY_USE，
+    doctor 报 broken"Phase 2 已开启但记忆主 Provider 未启用"。
+    """
+    import os
+
+    env = tmp_path / ".env"
+    for step in GUIDE_STEPS:
+        monkeypatch.setenv(step.env_key, "orig")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "orig")
+
+    async def check() -> None:
+        app = _GuideHost(lambda: GuideScreen(env, probes=_probes()))
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            # 用户关掉长期记忆，只开沉淀
+            screen.choices["memory"] = False
+            screen.choices["phase2"] = True
+            screen.step_index = len(GUIDE_STEPS)
+            screen._refresh_ui()
+            content = _content(screen)
+            assert "✓ 开启" in content  # 汇总里长期记忆显示为开启（随沉淀带上）
+            await pilot.press("enter")
+            await pilot.pause()
+
+    asyncio.run(check())
+    text = env.read_text(encoding="utf-8")
+    assert "ENGRAM_MEMORY_PHASE2_ENABLED=true" in text
+    assert "ENGRAM_MEMORY_USE=default" in text  # 依赖自动补上
+
+
+def test_memory_defaults_on_in_wizard(tmp_path: Path):
+    """长期记忆默认开启（只读类核心功能）；其余默认跳过。"""
+
+    async def check() -> None:
+        app = _GuideHost(lambda: GuideScreen(Path("nonexistent.env"), probes=_probes()))
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            assert screen.choices["memory"] is True
+            assert screen.choices["tavily"] is False
+            assert screen.choices["mcp"] is False
+
+    asyncio.run(check())
 
 
 def test_guide_summary_writes_env(tmp_path: Path):
