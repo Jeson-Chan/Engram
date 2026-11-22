@@ -141,6 +141,25 @@ def mount_status_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=503, detail="agent runtime not ready")
         return runtime_status_from_runtime(runtime)
 
+    @app.get("/capabilities")
+    def read_capabilities() -> dict:
+        """能力三态矩阵 + 连通性（engram doctor 同源，只读、无密钥）。
+
+        与 CLI doctor / TUI Ctrl+U 消费同一份 DoctorReport——Web 只做展示。
+        探测含网络检查（秒级），同步端点跑线程池可接受；前端按需拉取。
+        """
+        from engram.backend.app.cli.doctor import build_report
+
+        project_root = Path(__file__).resolve().parents[4]
+        try:
+            report = build_report(project_root)
+        except Exception as exc:  # noqa: BLE001 - 端点绝不 500 裸栈
+            logger.exception("capabilities report failed")
+            raise HTTPException(status_code=503, detail=f"probe failed: {exc}") from exc
+        payload = report.to_dict()
+        payload["has_broken"] = report.has_broken
+        return payload
+
 
 class _AsRunEvent:
     """JSONL 行 → RunEvent 形态鸭子（run_event_view_from 读属性）。"""

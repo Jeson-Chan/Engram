@@ -11,6 +11,7 @@ import {
 import { EngramAPI, type SessionRecord } from "./lib/api";
 import { parseEventData, streamSSE } from "./lib/sse";
 import type {
+  CapabilityReport,
   MemoryTraceView,
   MessageView,
   RunEventView,
@@ -83,7 +84,10 @@ export interface AppState {
   memoryStats: Record<string, number> | null;
   status: RuntimeStatus | null;
   statusError: string | null;
-  inspectorTab: "run" | "memory";
+  /** 能力矩阵（doctor 同源；切到"能力" tab 时按需拉取） */
+  capabilities: CapabilityReport | null;
+  capabilitiesError: string | null;
+  inspectorTab: "run" | "capabilities";
   user_id: string;
   /** 主区模式（memory-management-ui）：对话工作台 / 全宽记忆管理页 */
   mainView: "chat" | "memory";
@@ -115,7 +119,8 @@ type Action =
   | { type: "memory"; traces: MemoryTraceView[]; stats: Record<string, number> | null }
   | { type: "memoryUnavailable"; on: boolean }
   | { type: "status"; status: RuntimeStatus | null; error?: string | null }
-  | { type: "inspectorTab"; tab: "run" | "memory" }
+  | { type: "capabilities"; report: CapabilityReport | null; error?: string | null }
+  | { type: "inspectorTab"; tab: "run" | "capabilities" }
   | { type: "mainView"; view: "chat" | "memory" }
   | { type: "memFilters"; patch: Partial<MemFilters> }
   | { type: "memPartition"; partition: MemPartition | null }
@@ -139,6 +144,8 @@ const initialState: AppState = {
   memoryStats: null,
   status: null,
   statusError: null,
+  capabilities: null,
+  capabilitiesError: null,
   inspectorTab: "run",
   user_id: "default-user",
   mainView: "chat",
@@ -227,6 +234,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, memSelected: action.ids };
     case "status":
       return { ...state, status: action.status, statusError: action.error ?? null };
+    case "capabilities":
+      return { ...state, capabilities: action.report, capabilitiesError: action.error ?? null };
     case "inspectorTab":
       return { ...state, inspectorTab: action.tab };
     case "resetTurns":
@@ -317,7 +326,8 @@ export interface AppActions {
     q?: string; type?: string; minStrength?: number; forgotten?: boolean; layer?: string;
   }): Promise<void>;
   refreshStatus(): Promise<void>;
-  setInspectorTab(tab: "run" | "memory"): void;
+  refreshCapabilities(): Promise<void>;
+  setInspectorTab(tab: "run" | "capabilities"): void;
   setMainView(view: "chat" | "memory"): void;
   setMemFilters(patch: Partial<MemFilters>): void;
   setMemPartition(partition: MemPartition | null): void;
@@ -437,6 +447,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const refreshCapabilities = useCallback(async () => {
+    try {
+      const report = await api.current.capabilities();
+      dispatch({ type: "capabilities", report });
+    } catch (err) {
+      dispatch({ type: "capabilities", report: null, error: String((err as Error).message) });
+    }
+  }, []);
+
   const send = useCallback(async (mode: "chat" | "research", message: string) => {
     const sid = stateRef.current.currentSessionId;
     if (!sid || stateRef.current.streaming) return;
@@ -523,7 +542,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshRuns]);
 
-  const setInspectorTab = useCallback((tab: "run" | "memory") => {
+  const setInspectorTab = useCallback((tab: "run" | "capabilities") => {
     dispatch({ type: "inspectorTab", tab });
   }, []);
 
@@ -625,13 +644,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const actions = useMemo<AppActions>(
     () => ({
       refreshSessions, createSession, selectSession, deleteSession,
-      send, refreshRuns, openRun, refreshMemory, refreshStatus, setInspectorTab,
+      send, refreshRuns, openRun, refreshMemory, refreshStatus, refreshCapabilities, setInspectorTab,
       setMainView, setMemFilters, setMemPartition, toggleMemSelected,
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
     }),
     [refreshSessions, createSession, selectSession, deleteSession, send,
-      refreshRuns, openRun, refreshMemory, refreshStatus, setInspectorTab,
+      refreshRuns, openRun, refreshMemory, refreshStatus, refreshCapabilities, setInspectorTab,
       setMainView, setMemFilters, setMemPartition, toggleMemSelected,
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory],

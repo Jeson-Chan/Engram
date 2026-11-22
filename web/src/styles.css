@@ -584,3 +584,23 @@ button, .session-item, .tree-node, .tabbar button, .nav-tabs button, .drawer-tog
 .markdown-body img { max-width: 100%; image-rendering: pixelated; border: 2px solid var(--border); }
 .markdown-body del { color: var(--muted); }
 .markdown-body input[type="checkbox"] { margin-right: 4px; }
+
+/* 能力矩阵（CapabilityPanel）— doctor 同源三态行 */
+.cap-row {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.cap-row .cap-state { display: flex; align-items: center; gap: 8px; }
+.cap-row .cap-state .st { font-size: 11px; }
+.cap-row .cap-state .st.ok { color: var(--ok); }
+.cap-row .cap-state .st.fail { color: var(--error); }
+.cap-row .cap-state .st.off { color: var(--muted); }
+.cap-row .cap-label { font-size: 12px; }
+.cap-row .cap-detail {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  word-break: break-all;
+}
+.cap-row .cap-fix { display: block; color: var(--c-user); }
+.cap-row[data-state="broken"] .cap-label { color: var(--error); }

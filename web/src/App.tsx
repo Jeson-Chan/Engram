@@ -4,6 +4,7 @@ import { SessionRail } from "./components/SessionRail";
 import { Conversation } from "./components/Conversation";
 import { RunInspector } from "./components/RunInspector";
 import { MemoryExplorer } from "./components/MemoryExplorer";
+import { CapabilityPanel } from "./components/CapabilityPanel";
 import { IconRun, IconSun, IconMoon } from "./components/pixel-icons";
 import "./styles.css";
 
@@ -94,8 +95,15 @@ function Shell() {
         >
           <IconRun size={11} color="var(--c-agent)" /> Run
         </button>
+        <button
+          className={state.inspectorTab === "capabilities" ? "on" : ""}
+          onClick={() => actions.setInspectorTab("capabilities")}
+          data-testid="cap-tab"
+        >
+          <IconRun size={11} color="var(--c-agent)" /> 能力
+        </button>
       </div>
-      <RunInspector />
+      {state.inspectorTab === "capabilities" ? <CapabilityPanel /> : <RunInspector />}
     </div>
   );
 

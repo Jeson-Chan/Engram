@@ -1,12 +1,6 @@
 /** 网关 REST 客户端 — docs/api.md 契约的前端实现。 */
 
-import type {
-  MessageView,
-  MemoryTraceView,
-  RunEventView,
-  RunRecord,
-  RuntimeStatus,
-} from "./types";
+import type { CapabilityReport, MessageView, MemoryTraceView, RunEventView, RunRecord, RuntimeStatus } from "./types";
 
 export interface SessionRecord {
   session_id: string;
@@ -157,6 +151,13 @@ export class EngramAPI {
   status(): Promise<RuntimeStatus> {
     return fetch(`${this.base}/status`).then((r) =>
       jsonOrThrow<RuntimeStatus>(r, "load status failed"),
+    );
+  }
+
+  /** 能力三态矩阵（engram doctor 同源；探测含网络检查，秒级延迟）。 */
+  capabilities(): Promise<CapabilityReport> {
+    return fetch(`${this.base}/capabilities`).then((r) =>
+      jsonOrThrow<CapabilityReport>(r, "load capabilities failed"),
     );
   }
 }

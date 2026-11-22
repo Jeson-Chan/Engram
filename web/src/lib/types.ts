@@ -55,6 +55,28 @@ export interface RuntimeStatus {
   sandbox: Record<string, unknown>;
 }
 
+/** 能力三态矩阵行（engram doctor 同源，GET /capabilities；无密钥）。 */
+export interface CapabilityRow {
+  key: string;
+  label: string;
+  state: "on" | "off" | "broken";
+  detail: string;
+  fix: string;
+}
+
+export interface ConnectivityRow {
+  key: string;
+  label: string;
+  state: "ok" | "fail" | "skipped";
+  detail: string;
+}
+
+export interface CapabilityReport {
+  capabilities: CapabilityRow[];
+  connectivity: ConnectivityRow[];
+  has_broken?: boolean;
+}
+
 export interface RunRecord {
   run_id: string;
   thread_id: string;
