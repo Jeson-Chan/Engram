@@ -247,6 +247,57 @@ def test_guide_power_granting_not_explicitly_enabled_stays_off(tmp_path: Path):
     assert "ENGRAM_SANDBOX_USE=" in text  # 关闭值（空）
 
 
+def test_guide_opens_via_handle_command():
+    """真实 EngramTUI._handle_command 路径：/guide 回车打开向导。
+
+    回归：0351556 曾在此路径漏 import pathlib.Path，/guide 一回车即 NameError
+    崩溃退出（单测全走最小宿主 push GuideScreen，没覆盖 _handle_command）。
+    """
+    import asyncio
+    from types import SimpleNamespace
+    from textual.screen import ModalScreen
+
+    from engram.backend.agents.capabilities.registry import CapabilityRegistry
+    from engram.backend.app.tui.app import EngramTUI
+
+    def _runtime() -> SimpleNamespace:
+        return SimpleNamespace(
+            thread_id="t-guide",
+            config=SimpleNamespace(runtime=SimpleNamespace(
+                expert_mode=False,
+                logs_root=".engram/test-logs",
+                timezone="UTC",
+                plan_enabled=False,
+            )),
+            capability_registry=CapabilityRegistry(models={}),
+            mcp_manager=None,
+        )
+
+    async def check() -> None:
+        app = EngramTUI(runtime=_runtime())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            from engram.backend.app.tui.app import ConversationInput
+            inp = app.query_one("#welcome-input", ConversationInput)
+            inp.focus()
+            await pilot.pause()
+            inp.text = "/guide"
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.pause()
+            assert isinstance(app.screen, GuideScreen), (
+                f"/guide 未打开向导，当前屏：{type(app.screen).__name__}"
+            )
+            # 真实 on_key：切换选择 + 翻页不崩
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("right")
+            await pilot.pause()
+
+    asyncio.run(check())
+
+
 def test_ctrl_p_binding_removed_from_tui():
     """Ctrl+P 绑定已从 EngramTUI 移除。"""
     from engram.backend.app.tui.app import EngramTUI

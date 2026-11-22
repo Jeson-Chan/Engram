@@ -867,6 +867,7 @@ class EngramTUI(App):
 
     def _handle_command(self, cmd: str) -> None:
         """处理 / 命令。"""
+        from pathlib import Path
         from rich.console import Console
         from io import StringIO
 
