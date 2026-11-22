@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
 import { IconCoinStack } from "./pixel-icons";
+import { ToolPoolChips } from "./ToolPoolDialog";
 import { Markdown } from "./Markdown";
 import type { ChatTurn, ToolCallState } from "../store";
 import type { MessageView } from "../lib/types";
@@ -194,6 +195,7 @@ export function Conversation() {
           ⚠ {state.droppedNotice}
         </div>
       )}
+      <ToolPoolChips />
       <div className="composer">
         <div className="modes">
           <button

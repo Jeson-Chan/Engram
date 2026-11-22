@@ -4,7 +4,7 @@
  * 探测含网络检查（秒级）——切到本 tab 时按需拉取，不随 App mount 请求。
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { useApp } from "../store";
 import { IconRun, IconAnalytics } from "./pixel-icons";
@@ -40,6 +40,7 @@ function CapRow({ row, kind }: { row: CapabilityRow | ConnectivityRow; kind: "ca
 export function CapabilityPanel() {
   const { state, actions } = useApp();
   const report = state.capabilities;
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // 切到本 tab 时按需拉取（数据为空且无错误 → 首次）
   useEffect(() => {
@@ -94,15 +95,26 @@ export function CapabilityPanel() {
           {report.connectivity.map((row) => (
             <CapRow key={row.key} row={row} kind="conn" />
           ))}
-          <div style={{ fontSize: 11, color: "var(--muted)", padding: "6px 12px" }}>
-            与 TUI `engram doctor` 同一份报告；off = 未启用（附原因），broken = 已启用但缺依赖。
-          </div>
-          <div
-            style={{ fontSize: 11, color: "var(--muted)", padding: "0 12px 10px" }}
-            data-testid="config-tui-only-note"
-          >
-            配置仅可在 TUI 中修改（/guide 或 Ctrl+B）——Web 端为只读展示；
-            gateway 只在启动时读取 .env，改动需重启对应后端（venv 重启进程 / docker 重建镜像）。
+          {helpOpen && (
+            <div data-testid="capability-help" style={{ padding: "0 12px 6px" }}>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                与 TUI `engram doctor` 同一份报告；off = 未启用（附原因），broken = 已启用但缺依赖。
+              </div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }} data-testid="config-tui-only-note">
+                配置仅可在 TUI 中修改（/guide 或 Ctrl+B）——Web 端为只读展示；
+                gateway 只在启动时读取 .env，改动需重启对应后端（venv 重启进程 / docker 重建镜像）。
+              </div>
+            </div>
+          )}
+          <div style={{ padding: "0 12px 10px" }}>
+            <button
+              className="px-btn-secondary"
+              onClick={() => setHelpOpen((v) => !v)}
+              data-testid="capability-help-toggle"
+              style={{ fontSize: 12, padding: "2px 10px" }}
+            >
+              ? 帮助{helpOpen ? "（收起）" : ""}
+            </button>
           </div>
         </>
       )}

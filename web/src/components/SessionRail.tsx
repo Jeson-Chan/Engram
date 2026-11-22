@@ -1,7 +1,8 @@
 import type { CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
 import type { SessionRecord } from "../lib/api";
-import { IconSession, IconMemory } from "./pixel-icons";
+import { IconSession, IconMemory, IconEdit } from "./pixel-icons";
 
 /** GitHub 仓库主页同款 logo(web-pixel-flavor-a 收口轮)。
  *  直接内嵌 docs/assets/engram-logo.gif(1200x480,自带紫→青渐变 +
@@ -27,6 +28,39 @@ export function titleOf(record: SessionRecord): string {
 
 export function SessionRail({ drawer = false }: { drawer?: boolean }) {
   const { state, actions } = useApp();
+  // 行内重命名状态：正在编辑的 session_id（null=无）
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // 进入编辑态：input 聚焦 + 全选（autofocus 在条件渲染下不可靠）
+  useEffect(() => {
+    if (editingId !== null) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editingId]);
+
+  const beginEdit = (s: SessionRecord) => {
+    setEditValue(titleOf(s));
+    setEditingId(s.session_id);
+  };
+
+  const commitEdit = () => {
+    if (editingId === null) return;
+    const title = editValue.trim();
+    const current = titleOf(
+      state.sessions.find((s) => s.session_id === editingId)
+        ?? { metadata: {}, session_id: editingId } as SessionRecord,
+    );
+    setEditingId(null);
+    // 空值/未变更按取消（不发请求）
+    if (!title || title === current) return;
+    actions.renameSession(editingId, title);
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
   return (
     <div className={`rail${drawer ? " drawer-rail" : ""}`} data-testid="session-rail">
       <PixelWordmark />
@@ -59,16 +93,49 @@ export function SessionRail({ drawer = false }: { drawer?: boolean }) {
         <div
           key={s.session_id}
           className={`session-item${s.session_id === state.currentSessionId ? " active" : ""}`}
-          onClick={() => actions.selectSession(s.session_id)}
+          onClick={() => {
+            if (editingId === s.session_id) return; // 编辑态点击短路
+            actions.selectSession(s.session_id);
+          }}
           data-testid={`session-${s.session_id.slice(0, 6)}`}
         >
-          <div className="title">{titleOf(s)}</div>
+          {editingId === s.session_id ? (
+            <input
+              ref={inputRef}
+              className="rename-input"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") commitEdit();
+                if (e.key === "Escape") cancelEdit();
+              }}
+              onBlur={commitEdit}
+              onClick={(e) => e.stopPropagation()}
+              data-testid="rename-input"
+            />
+          ) : (
+            <div className="title" data-testid="session-title">{titleOf(s)}</div>
+          )}
           <div className="meta">
             <span>{s.user_id}</span>
             <span>{s.created_at?.slice(0, 16).replace("T", " ")}</span>
+            <span className="sid" data-testid="session-id">{s.session_id.slice(0, 12)}</span>
             <span
               className="del"
               style={{ marginLeft: "auto", cursor: "pointer" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                beginEdit(s);
+              }}
+              title="重命名"
+              data-testid={`rename-${s.session_id.slice(0, 6)}`}
+            >
+              <IconEdit size={10} color="var(--muted)" />
+            </span>
+            <span
+              className="del"
+              style={{ cursor: "pointer" }}
               onClick={(e) => {
                 e.stopPropagation();
                 actions.deleteSession(s.session_id);

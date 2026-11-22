@@ -86,6 +86,34 @@ class SessionRegistry:
             records = [r for r in records if r.user_id == user_id]
         return records
 
+    def rename(self, session_id: str, title: str) -> "SessionRecord | None":
+        """重命名：更新 metadata.title（整记录覆盖写——save upsert 语义）。
+
+        返回更新后的记录；未知 id 返 None（端点 404）。空 title 由调用方
+        （端点层）拒绝——registry 只管持久化。
+        与 delete 同模式：store 先写（失败上抛，内存不改 → 端点 500 状态一致）。
+        """
+        with self._lock:
+            record = self._sessions.get(session_id)
+        if record is None:
+            return None
+        metadata = dict(record.metadata)
+        metadata["title"] = title
+        # SessionRecord 构造签名不含 status（固定 "active"）——直接复用字段
+        updated = SessionRecord(
+            session_id=record.session_id,
+            thread_id=record.thread_id,
+            user_id=record.user_id,
+            created_at=record.created_at,
+            metadata=metadata,
+        )
+        updated.status = record.status
+        if self._store is not None:
+            self._store.update(updated)  # 失败上抛：内存未改，状态一致
+        with self._lock:
+            self._sessions[session_id] = updated
+        return updated
+
     def delete(self, session_id: str) -> bool:
         """删除会话。store 先删（失败上抛，内存条目保留 → 端点 500 而不是
         假 204，重启后数据也一致——review medium 的对称修复）。"""

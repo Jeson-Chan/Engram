@@ -989,3 +989,79 @@ button, .session-item, .tree-node, .tabbar button, .nav-tabs button, .drawer-tog
 }
 .markdown-body del { color: var(--muted); }
 .markdown-body input[type="checkbox"] { margin-right: 4px; }
+
+/* ---------- 工具池 chip 行 + 弹层行（web-workbench-interactions） ---------- */
+
+.pool-chip-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 16px 0;
+}
+.pool-chip {
+  border: 2px solid var(--border);
+  background: var(--panel2);
+  color: var(--text);
+  padding: 2px 10px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--px-shadow-soft);
+  transition: var(--px-transition);
+}
+.pool-chip:hover { border-color: var(--c-agent); color: var(--c-agent); }
+.pool-chip:active {
+  transform: var(--px-press-shift);
+  box-shadow: 1px 1px 0 var(--px-shadow-soft);
+}
+.pool-chip:focus-visible {
+  outline: 2px dashed var(--c-agent);
+  outline-offset: 2px;
+}
+
+.pool-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 12px;
+}
+.pool-row:last-child { border-bottom: none; }
+.pool-row .pool-name { font-weight: 600; font-family: ui-monospace, monospace; }
+.pool-row .pool-detail {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+
+/* ---------- 会话行内重命名 + id 展示 ---------- */
+
+.rename-input {
+  width: 100%;
+  border: 2px solid var(--c-user);
+  background: var(--panel);
+  color: var(--text);
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 13px;
+  border-radius: 0;
+}
+.rename-input:focus-visible {
+  outline: 2px dashed var(--c-user);
+  outline-offset: 2px;
+}
+
+.session-item .sid {
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+/* 记忆按钮禁用态（常驻渲染 + 禁点提示） */
+.statusbar .px-btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--border-soft);
+  color: var(--muted);
+}

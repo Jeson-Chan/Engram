@@ -71,6 +71,15 @@ export class EngramAPI {
     });
   }
 
+  /** 重命名（PATCH /sessions/{id}）——返回更新后的会话记录。 */
+  renameSession(sessionId: string, title: string): Promise<SessionRecord> {
+    return fetch(`${this.base}/sessions/${sessionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }).then((r) => jsonOrThrow<SessionRecord>(r, "rename failed"));
+  }
+
   // ---- history ----
 
   messages(sessionId: string, limit = 50, offset = 0): Promise<MessageView[]> {

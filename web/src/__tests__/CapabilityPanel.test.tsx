@@ -83,8 +83,13 @@ describe("CapabilityPanel（能力 tab）", () => {
     expect(screen.getByText("有 broken 项")).toBeTruthy();
     // 部署徽章（statusbar，venv 后端）
     expect(screen.getByTestId("deployment-badge").textContent).toBe("venv");
-    // 配置入口注脚
+    // 帮助折叠：默认收起，点击展开后注脚可见
+    expect(screen.queryByTestId("config-tui-only-note")).toBeNull();
+    fireEvent.click(screen.getByTestId("capability-help-toggle"));
     expect(screen.getByTestId("config-tui-only-note").textContent).toContain("TUI");
+    // 再点收起
+    fireEvent.click(screen.getByTestId("capability-help-toggle"));
+    expect(screen.queryByTestId("config-tui-only-note")).toBeNull();
   });
 
   it("端点失败：显式错误态而非空白", async () => {

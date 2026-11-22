@@ -104,6 +104,7 @@ export interface AppState {
 type Action =
   | { type: "sessions"; sessions: SessionRecord[] }
   | { type: "addSession"; session: SessionRecord }
+  | { type: "renameSession"; sessionId: string; title: string }
   | { type: "removeSession"; sessionId: string }
   | { type: "selectSession"; sessionId: string | null; }
   | { type: "history"; messages: MessageView[] }
@@ -163,6 +164,15 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         sessions: [...state.sessions, action.session],
+      };
+    case "renameSession":
+      return {
+        ...state,
+        sessions: state.sessions.map((s) =>
+          s.session_id === action.sessionId
+            ? { ...s, metadata: { ...s.metadata, title: action.title } }
+            : s,
+        ),
       };
     case "removeSession":
       return {
@@ -319,6 +329,7 @@ export interface AppActions {
   createSession(): Promise<void>;
   selectSession(sessionId: string): Promise<void>;
   deleteSession(sessionId: string): Promise<void>;
+  renameSession(sessionId: string, title: string): Promise<void>;
   send(mode: "chat" | "research", message: string): Promise<void>;
   refreshRuns(): Promise<void>;
   openRun(runId: string): Promise<void>;
@@ -389,6 +400,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // reducer 内 append（闭包里读 stateRef 会拿到过期列表覆盖丢会话）
     dispatch({ type: "addSession", session: record });
     dispatch({ type: "selectSession", sessionId: record.session_id });
+  }, []);
+
+  const renameSession = useCallback(async (sessionId: string, title: string) => {
+    // 乐观更新：先改本地；失败回滚原值 + dropped 提示（与 delSession 错误模式一致）
+    const original = stateRef.current.sessions.find((s) => s.session_id === sessionId);
+    dispatch({ type: "renameSession", sessionId, title });
+    try {
+      await api.current.renameSession(sessionId, title);
+    } catch (err) {
+      if (original) {
+        dispatch({
+          type: "renameSession",
+          sessionId,
+          title: String(original.metadata?.title ?? ""),
+        });
+      }
+      dispatch({ type: "dropped", notice: `重命名失败：${(err as Error).message}` });
+    }
   }, []);
 
   const deleteSession = useCallback(async (sessionId: string) => {
@@ -643,13 +672,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const actions = useMemo<AppActions>(
     () => ({
-      refreshSessions, createSession, selectSession, deleteSession,
+      refreshSessions, createSession, selectSession, deleteSession, renameSession,
       send, refreshRuns, openRun, refreshMemory, refreshStatus, refreshCapabilities, setInspectorTab,
       setMainView, setMemFilters, setMemPartition, toggleMemSelected,
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
     }),
-    [refreshSessions, createSession, selectSession, deleteSession, send,
+    [refreshSessions, createSession, selectSession, deleteSession, renameSession, send,
       refreshRuns, openRun, refreshMemory, refreshStatus, refreshCapabilities, setInspectorTab,
       setMainView, setMemFilters, setMemPartition, toggleMemSelected,
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,

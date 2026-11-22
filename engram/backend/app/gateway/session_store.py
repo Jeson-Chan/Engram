@@ -35,6 +35,11 @@ class SessionStore(Protocol):
 
     def save(self, record: SessionRecord) -> None: ...
 
+    def update(self, record: SessionRecord) -> None:
+        """整记录覆盖写（重命名等）。save 的 upsert 语义已覆盖——
+        两个实现都直接复用 save，Protocol 声明仅为可替换实现的显式契约。"""
+        ...
+
     def delete(self, session_id: str) -> None: ...
 
     def load_all(self) -> list[SessionRecord]: ...
@@ -50,6 +55,10 @@ class InMemorySessionStore:
     def save(self, record: SessionRecord) -> None:
         with self._lock:
             self._records[record.session_id] = record
+
+    def update(self, record: SessionRecord) -> None:
+        # save 的 upsert 语义已覆盖（整替换）
+        self.save(record)
 
     def delete(self, session_id: str) -> None:
         with self._lock:
@@ -101,6 +110,10 @@ class SqliteSessionStore:
                     json.dumps(record.metadata, ensure_ascii=False),
                 ),
             )
+
+    def update(self, record: SessionRecord) -> None:
+        """重命名等整记录覆盖写——save 的 upsert 语义即所需。"""
+        self.save(record)
 
     def delete(self, session_id: str) -> None:
         with self._lock, self._conn:

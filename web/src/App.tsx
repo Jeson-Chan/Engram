@@ -186,26 +186,20 @@ function Shell() {
           >
             {theme === "dark" ? <IconSun size={13} /> : <IconMoon size={13} />}
           </button>
-          {state.status?.skills && state.status.skills.length > 0 && (
-            <span className="badge">{state.status.skills.length} skills</span>
-          )}
-          {state.status?.mcp && state.status.mcp.length > 0 && (
-            <span className="badge">{state.status.mcp.length} MCP</span>
-          )}
-          {state.currentSessionId && (
-            <button
-              className="px-btn-secondary"
-              onClick={() => {
-                const session = state.sessions.find(
-                  (s) => s.session_id === state.currentSessionId,
-                );
-                if (session) actions.openMemoryForThread(session.thread_id);
-              }}
-              data-testid="session-memories"
-            >
-              本会话记忆
-            </button>
-          )}
+          <button
+            className="px-btn-secondary"
+            disabled={!state.currentSessionId}
+            title={state.currentSessionId ? "查看当前会话的记忆" : "先选择一个会话"}
+            onClick={() => {
+              const session = state.sessions.find(
+                (s) => s.session_id === state.currentSessionId,
+              );
+              if (session) actions.openMemoryForThread(session.thread_id);
+            }}
+            data-testid="session-memories"
+          >
+            本会话记忆
+          </button>
         </div>
         <Conversation />
       </div>

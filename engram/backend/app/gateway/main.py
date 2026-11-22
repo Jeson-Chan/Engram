@@ -23,6 +23,7 @@ from collections.abc import Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 from engram.backend.app.bootstrap import AppRuntime, bootstrap_runtime
 from engram.backend.app.gateway.chat import mount_chat_routes
@@ -156,6 +157,17 @@ def create_app(
             raise HTTPException(status_code=404, detail="session not found")
         return _to_response(record)
 
+    @app.patch("/sessions/{session_id}", response_model=SessionResponse)
+    def rename_session(session_id: str, payload: RenameRequest) -> SessionResponse:
+        """重命名会话（metadata.title）。空 title 400；未知 id 404。"""
+        title = (payload.title or "").strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="title must be non-empty")
+        updated = app.state.session_registry.rename(session_id, title)
+        if updated is None:
+            raise HTTPException(status_code=404, detail="session not found")
+        return _to_response(updated)
+
     @app.delete("/sessions/{session_id}", status_code=204)
     def delete_session(session_id: str) -> None:
         deleted = app.state.session_registry.delete(session_id)
@@ -165,6 +177,11 @@ def create_app(
         app.state.sse_buffers.drop(session_id)
 
     return app
+
+
+class RenameRequest(BaseModel):
+    """PATCH /sessions/{id} 请求体。"""
+    title: str = ""
 
 
 def _to_response(record) -> SessionResponse:
