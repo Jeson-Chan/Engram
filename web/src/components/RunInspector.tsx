@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useApp } from "../store";
 import { IconRun, IconMemory, IconClock, IconTimeline } from "./pixel-icons";
 import type { RunRecord, RunEventView } from "../lib/types";
@@ -34,7 +34,7 @@ export function RunInspector() {
 
   return (
     <div data-testid="run-inspector">
-      <div className="px-panel-bar"><IconClock size={17} color="var(--c-agent)" /> 运行历史</div>
+      <div className="px-panel-bar" style={{ "--bar-c": "var(--c-exec)" } as CSSProperties}><IconClock size={17} color="#fff" /> 运行历史</div>
       {state.runs.length === 0 && (
         <div className="empty">本会话还没有运行<br />发一条消息或研究一次</div>
       )}
@@ -67,8 +67,8 @@ export function RunInspector() {
         </a>
       )}
 
-      <div className="px-panel-bar">
-        <IconTimeline size={11} color="var(--c-agent)" /> 事件时间线 {state.runEvents.length > 0 ? `(${state.runEvents.length})` : ""}
+      <div className="px-panel-bar" style={{ "--bar-c": "var(--c-agent)" } as CSSProperties}>
+        <IconTimeline size={11} color="#fff" /> 事件时间线 {state.runEvents.length > 0 ? `(${state.runEvents.length})` : ""}
       </div>
       <div style={{ fontSize: 11, color: "var(--muted)", padding: "0 12px 6px" }}>
         时间线中的工具节点可与对话区工具卡片互相定位（同一 run 的事实）。

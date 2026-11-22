@@ -5,6 +5,7 @@
  */
 
 import { useEffect } from "react";
+import type { CSSProperties } from "react";
 import { useApp } from "../store";
 import { IconRun, IconAnalytics } from "./pixel-icons";
 import type { CapabilityRow, ConnectivityRow } from "../lib/types";
@@ -49,8 +50,8 @@ export function CapabilityPanel() {
 
   return (
     <div data-testid="capability-panel">
-      <div className="px-panel-bar">
-        <IconAnalytics size={17} color="var(--c-agent)" /> 能力矩阵
+      <div className="px-panel-bar" style={{ "--bar-c": "var(--c-agent)" } as CSSProperties}>
+        <IconAnalytics size={17} color="#fff" /> 能力矩阵
         {report?.has_broken && <span className="st fail" style={{ marginLeft: "auto" }}>有 broken 项</span>}
       </div>
 
@@ -87,8 +88,8 @@ export function CapabilityPanel() {
           {report.capabilities.map((row) => (
             <CapRow key={row.key} row={row} kind="cap" />
           ))}
-          <div className="px-panel-bar">
-            <IconRun size={11} color="var(--c-agent)" /> 连通性检查
+          <div className="px-panel-bar" style={{ "--bar-c": "var(--c-agent)" } as CSSProperties}>
+            <IconRun size={11} color="#fff" /> 连通性检查
           </div>
           {report.connectivity.map((row) => (
             <CapRow key={row.key} row={row} kind="conn" />

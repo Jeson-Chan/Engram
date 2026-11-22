@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useApp } from "../store";
 import type { SessionRecord } from "../lib/api";
 import { IconSession, IconMemory } from "./pixel-icons";
@@ -47,7 +48,7 @@ export function SessionRail({ drawer = false }: { drawer?: boolean }) {
           <IconMemory size={13} /> 记忆
         </button>
       </div>
-      <div className="px-panel-bar">会话</div>
+      <div className="px-panel-bar" style={{ "--bar-c": "var(--c-user)" } as CSSProperties}>会话</div>
       <button className="px-btn" onClick={() => actions.createSession()}>
         <IconSession size={11} /> 新建会话
       </button>

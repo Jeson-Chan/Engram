@@ -42,6 +42,8 @@ const FAMILIES: Array<[string, number, number]> = [
   ["紫", 265, 305],
   ["青", 155, 190],
   ["橙", 10, 40],
+  // 墨族(web-ui-redesign)：藏青墨线(浅色主题 border/ink)——新系统正式色族
+  ["墨", 195, 235],
   // 状态色族(红=error / 绿=ok / 黄=warn)
   ["红", 350, 10],  // 跨 0 处理:另判
   ["黄", 40, 70],

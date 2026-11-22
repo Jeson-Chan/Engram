@@ -7,6 +7,7 @@
  */
 
 import { useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { useApp } from "../store";
 import { IconEpisodic, IconSemantic, IconProcedural } from "./pixel-icons";
 import type { MemoryTraceView } from "../lib/types";
@@ -82,7 +83,7 @@ export function MemoryExplorer() {
     return (
       <div className="memory-page" data-testid="memory-explorer">
         <div className="memory-page-head">
-          <div className="px-panel-bar">记忆管理</div>
+          <div className="px-panel-bar" style={{ "--bar-c": "var(--c-agent)" } as CSSProperties}>记忆管理</div>
         </div>
         <div className="empty" data-testid="memory-unavailable">
           记忆未配置
@@ -125,7 +126,7 @@ export function MemoryExplorer() {
   return (
     <div className="memory-page" data-testid="memory-explorer">
       <div className="memory-page-head">
-        <div className="px-panel-bar">记忆管理</div>
+        <div className="px-panel-bar" style={{ "--bar-c": "var(--c-agent)" } as CSSProperties}>记忆管理</div>
         <span className="badge">{state.user_id}</span>
         <span className="mem-stats" data-testid="memory-stats" style={{ display: "inline-flex", gap: 8 }}>
         <span className="stat"><IconMemory size={11} /> 全部 <b>{state.memoryStats?.total ?? 0}</b></span>
