@@ -185,17 +185,17 @@ def build_report(
     phase2 = _env_true("ENGRAM_MEMORY_PHASE2_ENABLED")
     if not phase2:
         capabilities.append(Capability(
-            "memory_phase2", "L5 自动沉淀（Phase 2）", "off",
+            "memory_phase2", "自动记忆沉淀（后台巩固）", "off",
             "ENGRAM_MEMORY_PHASE2_ENABLED=false",
         ))
     elif not memory_use:
         capabilities.append(Capability(
-            "memory_phase2", "L5 自动沉淀（Phase 2）", "broken",
+            "memory_phase2", "自动记忆沉淀（后台巩固）", "broken",
             "Phase 2 已开启但记忆主 Provider 未启用", "设置 ENGRAM_MEMORY_USE=default",
         ))
     else:
         capabilities.append(Capability(
-            "memory_phase2", "L5 自动沉淀（Phase 2）", "on", "每 N 轮自动抽取 + 巩固",
+            "memory_phase2", "自动记忆沉淀（后台巩固）", "on", "每 N 轮自动抽取 + 巩固",
         ))
 
     if _env_true("ENGRAM_SKILL_ENABLED"):

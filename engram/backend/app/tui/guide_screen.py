@@ -28,7 +28,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Static
+from textual.widgets import Input, Static
 
 from engram.backend.app.tui import theme
 
@@ -51,6 +51,7 @@ class GuideStep:
     probe_key: str | None         # probes 返回的键（None=无外部依赖）
     power_granting: bool = False  # 权力授予类：默认跳过 + 开启警示
     startup_only: bool = False    # 写入后需重启生效
+    input_env: str | None = None  # 开启时需要用户填值的 env 键（如 Tavily key）
 
 
 GUIDE_STEPS: tuple[GuideStep, ...] = (
@@ -59,14 +60,14 @@ GUIDE_STEPS: tuple[GuideStep, ...] = (
         description="主搜索后端（结构化结果）；无 key 自动回退 DuckDuckGo。",
         effect="需要 TAVILY_API_KEY（免费额度即可）；不开启也总能搜。",
         env_key="TAVILY_API_KEY", on_value="", off_value="",
-        probe_key="tavily",
+        probe_key="tavily", input_env="TAVILY_API_KEY",
     ),
     GuideStep(
         key="skill", title="Skill 注入",
         description="按需把 skill 文档注入上下文（只读类，依赖就位即安全）。",
         effect="无外部依赖；注入会占少量上下文 token。",
         env_key="ENGRAM_SKILL_ENABLED", on_value="true", off_value="false",
-        probe_key=None,
+        probe_key=None, startup_only=True,
     ),
     GuideStep(
         key="mcp", title="MCP 工具",
@@ -83,11 +84,11 @@ GUIDE_STEPS: tuple[GuideStep, ...] = (
         probe_key="docker", power_granting=True, startup_only=True,
     ),
     GuideStep(
-        key="phase2", title="记忆自动沉淀（L5 巩固）",
+        key="phase2", title="自动记忆沉淀（后台巩固）",
         description="每 N 轮自动抽取 + 巩固长期记忆。",
         effect="会产生额外 LLM 调用（成本）；默认关闭，属 opt-in。",
         env_key="ENGRAM_MEMORY_PHASE2_ENABLED", on_value="true", off_value="false",
-        probe_key=None,
+        probe_key=None, startup_only=True,
     ),
 )
 
@@ -115,6 +116,7 @@ class GuideScreen(ModalScreen[bool]):
     #guide-title {{ color: {theme.ACCENT_BRAND}; margin-bottom: 0; }}
     #guide-hint {{ color: {theme.TEXT_DIM}; margin-bottom: 1; }}
     #guide-body {{ height: auto; }}
+    #guide-input {{ display: none; height: 3; margin-top: 1; }}
     #guide-foot {{ margin-top: 1; color: {theme.TEXT_DIM}; }}
     """
 
@@ -126,6 +128,7 @@ class GuideScreen(ModalScreen[bool]):
         self.probes: dict[str, Any] | None = probes
         self.step_index = 0          # 0..N-1 功能步；N = 汇总步
         self.choices: dict[str, bool] = {s.key: False for s in GUIDE_STEPS}
+        self._inputs: dict[str, str] = {}  # input_env → 用户填的值（Tavily key 等）
         self.written = False         # 汇总确认后置 True（测试可读）
 
     def compose(self) -> ComposeResult:
@@ -134,6 +137,7 @@ class GuideScreen(ModalScreen[bool]):
             yield Static("Enter 切换 开/跳过 · → 下一步 · Esc 退出（不写入）", id="guide-hint")
             with VerticalScroll(id="guide-body"):
                 yield Static("", id="guide-content")
+            yield Input(placeholder="TAVILY_API_KEY", password=True, id="guide-input")
             yield Static("", id="guide-foot")
 
     def on_mount(self) -> None:
@@ -157,6 +161,7 @@ class GuideScreen(ModalScreen[bool]):
         title = self.query_one("#guide-title", Static)
         content = self.query_one("#guide-content", Static)
         foot = self.query_one("#guide-foot", Static)
+        value_input = self.query_one("#guide-input", Input)
         if self.step_index < _STEP_COUNT:
             step = GUIDE_STEPS[self.step_index]
             title.update(Text(f"配置向导 {self.step_index + 1}/{_STEP_COUNT} · {step.title}"))
@@ -164,12 +169,21 @@ class GuideScreen(ModalScreen[bool]):
             foot.update(Text(
                 "→ 下一步 · ← 上一步 · Enter 切换 开/跳过 · Esc 退出", style=theme.TEXT_DIM,
             ))
+            # 开启且需要填值（如 Tavily key）→ 显示输入框并聚焦
+            if self.choices[step.key] and step.input_env:
+                value_input.display = True
+                value_input.value = self._inputs.get(step.input_env, "")
+                value_input.placeholder = f"输入 {step.input_env}（回车确认，可留空稍后填）"
+                value_input.focus()
+            else:
+                value_input.display = False
         else:
             title.update(Text("配置向导 · 汇总"))
             content.update(self._render_summary())
             foot.update(Text(
                 "Enter 确认写入 .env · Esc 取消（不写入）", style=theme.TEXT_DIM,
             ))
+            value_input.display = False
 
     def _probe_text(self, step: GuideStep) -> Text:
         """该步骤的探测结论行。"""
@@ -208,30 +222,60 @@ class GuideScreen(ModalScreen[bool]):
             lines.append(Text("选择：  开启 [ 跳过 ]", style=theme.TEXT_DIM))
         if step.startup_only:
             lines.append(Text("（此项写入后需重启生效）", style="yellow"))
+        if step.input_env and enabled:
+            filled = self._inputs.get(step.input_env, "")
+            if filled:
+                lines.append(Text(f"{step.input_env}：已填写（已隐藏）", style=theme.TEXT_DIM))
+            else:
+                lines.append(Text(
+                    f"请在下方输入框填入 {step.input_env}（可留空稍后填；空值写入后功能不生效）",
+                    style="yellow",
+                ))
         return Text("\n").join(lines)
 
     def _render_summary(self) -> Text:
         lines: list[Text] = [Text("将写入 .env："), Text("")]
-        startup_items: list[str] = []
+        restart_items: list[str] = []   # 写入后需重启生效（startup_only）
+        missing_key: list[str] = []     # 开启但 key 未填（写入空值，功能不生效）
+        immediate: list[str] = []       # 即刻生效（非 startup_only 且值就绪）
         for step in GUIDE_STEPS:
             on = self.choices[step.key]
             mark = Text("✓ 开启 ", style="green") if on else Text("○ 跳过 ", style=theme.TEXT_DIM)
             line = Text()
             line.append(mark)
             line.append(f"{step.title}  {step.env_key}=")
-            line.append(Text(step.on_value if on else step.off_value or '""', style=theme.TEXT_DIM))
+            value = step.on_value if on else step.off_value
+            if on and step.input_env:
+                value = self._inputs.get(step.input_env, "")
+                if not value:
+                    missing_key.append(step.title)
+            line.append(Text(value if value else '""', style=theme.TEXT_DIM))
             lines.append(line)
             if on and step.startup_only:
-                startup_items.append(step.title)
+                restart_items.append(step.title)
+            elif on and step.input_env is None:
+                immediate.append(step.title)
+            elif on and step.input_env and self._inputs.get(step.input_env):
+                immediate.append(step.title)
         lines.append(Text(""))
-        if startup_items:
-            lines.append(Text(f"需重启生效：{'、'.join(startup_items)}", style="yellow"))
+        if missing_key:
+            lines.append(Text(
+                f"⚠ 已开启但未填值：{'、'.join(missing_key)}——功能在填值前不会生效",
+                style="yellow",
+            ))
+        if restart_items:
+            lines.append(Text(f"需重启生效：{'、'.join(restart_items)}", style="yellow"))
+        if immediate:
+            lines.append(Text(f"即刻生效：{'、'.join(immediate)}", style="green"))
         lines.append(Text("（未提及的键保持原值）", style=theme.TEXT_DIM))
         return Text("\n").join(lines)
 
     # ---- 键处理 ----
 
     async def on_key(self, event: events.Key) -> None:
+        # 输入框持有焦点时（如填 Tavily key）按键归 Input，不触发向导切换
+        if isinstance(self.app.focused, Input):
+            return
         if event.key == "escape":
             return  # 走 BINDINGS dismiss_panel
         if self.step_index <= _SUMMARY_INDEX:
@@ -251,14 +295,34 @@ class GuideScreen(ModalScreen[bool]):
             self.step_index = max(0, self.step_index - 1)
             self._refresh_ui()
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Tavily key 等输入实时存值（写入时收集）。"""
+        step = GUIDE_STEPS[self.step_index] if self.step_index < _STEP_COUNT else None
+        if step is not None and step.input_env:
+            self._inputs[step.input_env] = event.value.strip()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Enter 确认填值并把焦点还给屏——否则 → 翻页被 Input 吃掉，用户困在本步。"""
+        self.app.set_focus(None)
+
     def _write_env(self) -> None:
-        """汇总确认 → 写 .env（跳过项写显式关闭值；未提及键保留）。"""
+        """汇总确认 → 写 .env（跳过项写显式关闭值；未提及键保留）+ 刷新进程环境。
+
+        load_dotenv(override=True) 与 SettingsScreen 同款：Tavily 等每次调用
+        直读 os.environ 的功能即刻生效；startup-only 项仍需重启（完成提示
+        会列出清单——Ctrl+U 显示的是运行态，restart 项在重启前保持 off）。
+        """
+        from dotenv import load_dotenv
         from engram.backend.app.cli.setup_wizard import update_env_file
 
         overrides: dict[str, str] = {}
         for step in GUIDE_STEPS:
-            overrides[step.env_key] = step.on_value if self.choices[step.key] else step.off_value
+            value = step.on_value if self.choices[step.key] else step.off_value
+            if self.choices[step.key] and step.input_env:
+                value = self._inputs.get(step.input_env, "")
+            overrides[step.env_key] = value
         update_env_file(self._env_path, overrides, create=True)
+        load_dotenv(self._env_path, override=True)
         self.written = True
 
     def action_dismiss_panel(self) -> None:

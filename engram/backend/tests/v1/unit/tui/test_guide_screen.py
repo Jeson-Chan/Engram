@@ -62,7 +62,7 @@ def test_guide_step_order_and_defaults():
     """步骤固定顺序（Tavily→Skill→MCP→沙箱→巩固）；全部默认跳过；权力授予步预选跳过。"""
     assert [s.key for s in GUIDE_STEPS] == ["tavily", "skill", "mcp", "sandbox", "phase2"]
     assert [s.power_granting for s in GUIDE_STEPS] == [False, False, True, True, False]
-    assert [s.startup_only for s in GUIDE_STEPS] == [False, False, True, True, False]
+    assert [s.startup_only for s in GUIDE_STEPS] == [False, True, True, True, True]
 
     async def check() -> None:
         app = _GuideHost(lambda: GuideScreen(Path("nonexistent.env"), probes=_probes()))
@@ -122,6 +122,7 @@ def test_guide_enter_toggles_choice_and_power_warning():
             assert "[ 开启 ]" in content and "权力授予" not in content
             # 跳到 MCP 步：Enter → 开启（带警示）
             screen.step_index = 2
+            screen._refresh_ui()  # 切步收起 Tavily 输入框、焦点回屏
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause()
@@ -296,6 +297,76 @@ def test_guide_opens_via_handle_command():
             await pilot.pause()
 
     asyncio.run(check())
+
+
+def test_tavily_step_collects_api_key(tmp_path: Path, monkeypatch):
+    """Tavily 步开启后显示输入框；填入的 key 写入 .env 与进程环境。"""
+    import os
+
+    env = tmp_path / ".env"
+    # load_dotenv(override=True) 会把 tmp .env 的键灌进进程 env——
+    # monkeypatch 记录原值，teardown 自动还原，避免污染其他测试
+    for step in GUIDE_STEPS:
+        monkeypatch.setenv(step.env_key, "orig")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "orig")
+
+    async def check() -> None:
+        app = _GuideHost(lambda: GuideScreen(env, probes=_probes(tavily_ok=True)))
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            # 第 1 步 Tavily：Enter 开启 → 输入框出现并聚焦
+            await pilot.press("enter")
+            await pilot.pause()
+            value_input = screen.query_one("#guide-input")
+            assert value_input.display is True
+            # 在输入框里填 key（Input 有焦点时屏级 on_key 不拦截）
+            value_input.value = "tvly-test-123"
+            await pilot.pause()
+            assert screen._inputs.get("TAVILY_API_KEY") == "tvly-test-123"
+            # Input 提交后焦点归还屏（Enter 确认填值的交互）
+            await pilot.press("enter")
+            await pilot.pause()
+            assert not value_input.has_focus
+            # 翻到汇总确认写入
+            screen.step_index = len(GUIDE_STEPS)
+            screen._refresh_ui()
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app.dismissed == [True]
+
+    asyncio.run(check())
+    text = env.read_text(encoding="utf-8")
+    assert "TAVILY_API_KEY=tvly-test-123" in text
+    # 进程环境已刷新（即刻生效的机制）
+    assert os.environ.get("TAVILY_API_KEY") == "tvly-test-123"
+
+
+def test_guide_write_refreshes_process_env(tmp_path: Path, monkeypatch):
+    """写入后 load_dotenv(override=True)：Ctrl+U/doctor 读 os.environ 能看到新值。"""
+    import os
+
+    env = tmp_path / ".env"
+    for step in GUIDE_STEPS:
+        monkeypatch.setenv(step.env_key, "orig")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "orig")
+
+    async def check() -> None:
+        app = _GuideHost(lambda: GuideScreen(env, probes=_probes()))
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            screen.step_index = 1  # skill
+            screen._refresh_ui()
+            await pilot.press("enter")
+            await pilot.pause()
+            screen.step_index = len(GUIDE_STEPS)
+            screen._refresh_ui()
+            await pilot.press("enter")
+            await pilot.pause()
+
+    asyncio.run(check())
+    assert os.environ.get("ENGRAM_SKILL_ENABLED") == "true"
 
 
 def test_ctrl_p_binding_removed_from_tui():
