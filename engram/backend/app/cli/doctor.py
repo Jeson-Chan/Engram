@@ -57,6 +57,7 @@ class Connectivity:
 class DoctorReport:
     capabilities: tuple[Capability, ...]
     connectivity: tuple[Connectivity, ...]
+    deployment: str = "venv"  # "docker" | "venv"——guide/前端据此决定记忆层指引
 
     @property
     def has_broken(self) -> bool:
@@ -64,6 +65,7 @@ class DoctorReport:
 
     def to_dict(self) -> dict:
         return {
+            "deployment": self.deployment,
             "capabilities": [
                 {
                     "key": c.key,
@@ -331,7 +333,10 @@ def build_report(
         node_result.detail if node_result is not None else "探测未执行",
     ))
 
-    return DoctorReport(tuple(capabilities), tuple(connectivity))
+    deployment_probe = _probe(probe_results, "deployment")
+    deployment = "docker" if (deployment_probe is not None and deployment_probe.available) else "venv"
+
+    return DoctorReport(tuple(capabilities), tuple(connectivity), deployment=deployment)
 
 
 _STATE_STYLE = {
@@ -356,6 +361,9 @@ _STATE_LABEL = {
 def render_report(report: DoctorReport, console: Console | None = None) -> None:
     """渲染两张表（CLI 输出；TUI 复用 build_report 的数据自行绘制）。"""
     console = console or Console()
+
+    deploy_label = "docker 容器（记忆层由 compose 注入）" if report.deployment == "docker" else "宿主机直跑（venv）"
+    console.print(f"[cyan]运行环境[/cyan]：{deploy_label}")
 
     cap_table = Table(title="能力矩阵", show_lines=False)
     cap_table.add_column("功能", style="cyan")

@@ -45,6 +45,8 @@ def _probes(mcp_ok: bool = False, docker_ok: bool = False, tavily_ok: bool = Fal
         "tavily": result("tavily", tavily_ok),
         "mcp_config": result("mcp", mcp_ok, "缺少 .engram/mcp_servers.yaml"),
         "docker": result("docker", docker_ok, "Docker 29.0.1"),
+        "deployment": result("deployment", docker_ok,
+                             "docker 容器内" if docker_ok else "宿主机直跑（venv）"),
     }
 
 
@@ -416,6 +418,36 @@ def test_guide_write_refreshes_process_env(tmp_path: Path, monkeypatch):
 
     asyncio.run(check())
     assert os.environ.get("ENGRAM_SKILL_ENABLED") == "true"
+
+
+def test_docker_deployment_hides_memory_steps(tmp_path: Path):
+    """docker 部署：记忆两步从向导隐藏；确认写入不含记忆键。"""
+    import os
+
+    env = tmp_path / ".env"
+    probes = _probes(docker_ok=True)  # helper 里 docker_ok → deployment=docker
+
+    async def check() -> None:
+        app = _GuideHost(lambda: GuideScreen(env, probes=probes))
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            keys = [s.key for s in screen._visible_steps()]
+            assert "memory" not in keys and "phase2" not in keys
+            assert "tavily" in keys and "mcp" in keys
+            # 汇总提示 docker 注记
+            screen.step_index = screen._summary_index()
+            screen._refresh_ui()
+            content = _content(screen)
+            assert "compose 注入" in content
+            # 确认写入
+            await pilot.press("enter")
+            await pilot.pause()
+
+    asyncio.run(check())
+    text = env.read_text(encoding="utf-8")
+    assert "ENGRAM_MEMORY_USE" not in text
+    assert "ENGRAM_MEMORY_PHASE2_ENABLED" not in text
 
 
 def test_ctrl_p_binding_removed_from_tui():

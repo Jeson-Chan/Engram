@@ -25,6 +25,7 @@ import rawSun from "../assets/icons/sun.svg?raw";
 import rawMoon from "../assets/icons/moon.svg?raw";
 import rawBudget from "../assets/icons/budget.svg?raw";
 import rawTimeline from "../assets/icons/timeline.svg?raw";
+import rawAnalytics from "../assets/icons/analytics.svg?raw";
 
 interface IconProps {
   size?: number;
@@ -142,4 +143,9 @@ export function PixelSpinner({ size = 16, color }: { size?: number; color?: stri
       </g>
     </svg>
   );
+}
+
+/** 能力矩阵:柱状+折线(库:analytics) */
+export function IconAnalytics(props: IconProps) {
+  return <PixelIcon {...props} raw={rawAnalytics} label="analytics" />;
 }

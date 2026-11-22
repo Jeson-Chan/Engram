@@ -6,7 +6,7 @@
 
 import { useEffect } from "react";
 import { useApp } from "../store";
-import { IconRun } from "./pixel-icons";
+import { IconRun, IconAnalytics } from "./pixel-icons";
 import type { CapabilityRow, ConnectivityRow } from "../lib/types";
 
 const STATE_MARK: Record<string, { symbol: string; cls: string }> = {
@@ -50,9 +50,22 @@ export function CapabilityPanel() {
   return (
     <div data-testid="capability-panel">
       <div className="px-panel-bar">
-        <IconRun size={17} color="var(--c-agent)" /> 能力矩阵
+        <IconAnalytics size={17} color="var(--c-agent)" /> 能力矩阵
         {report?.has_broken && <span className="st fail" style={{ marginLeft: "auto" }}>有 broken 项</span>}
       </div>
+
+      {report && (
+        <div className="cap-row" data-testid="cap-deployment" data-state="ok">
+          <div className="cap-state">
+            <span className="cap-label">运行环境</span>
+          </div>
+          <div className="cap-detail">
+            {report.deployment === "docker"
+              ? "docker 容器内——记忆层由 compose 注入，.env 无需配置记忆"
+              : "宿主机直跑（venv）——默认 Markdown 记忆；分层需自行配置 Redis/PG"}
+          </div>
+        </div>
+      )}
 
       {!report && !state.capabilitiesError && (
         <div className="empty">探测中…（连通性检查需数秒）</div>
@@ -60,6 +73,12 @@ export function CapabilityPanel() {
       {!report && state.capabilitiesError && (
         <div className="empty" data-testid="capabilities-error">
           能力数据不可用：{state.capabilitiesError}
+          {/404/.test(state.capabilitiesError) && (
+            <div style={{ marginTop: 8 }}>
+              网关里没有 /capabilities 路由——gateway 是旧版本。
+              venv 直跑请重启网关；docker 部署请 `docker compose up -d --build gateway`。
+            </div>
+          )}
         </div>
       )}
 

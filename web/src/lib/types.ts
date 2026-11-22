@@ -72,6 +72,7 @@ export interface ConnectivityRow {
 }
 
 export interface CapabilityReport {
+  deployment?: "docker" | "venv";
   capabilities: CapabilityRow[];
   connectivity: ConnectivityRow[];
   has_broken?: boolean;

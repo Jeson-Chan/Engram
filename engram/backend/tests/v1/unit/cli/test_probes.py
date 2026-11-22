@@ -159,3 +159,23 @@ def test_probe_tavily(monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
     monkeypatch.setattr(probes.socket, "create_connection", lambda *a, **k: _Sock())
     assert probes.probe_tavily().available is True
+
+def test_probe_deployment_host_and_container(monkeypatch):
+    """/.dockerenv 或 ENGRAM_DOCKER=1 → docker；否则宿主机。"""
+
+def test_probe_deployment_venv_default(monkeypatch):
+    """无 /.dockerenv 且无 ENGRAM_DOCKER → 宿主机直跑（available=False）。"""
+    from engram.backend.app.cli.probes import probe_deployment
+    monkeypatch.delenv("ENGRAM_DOCKER", raising=False)
+    result = probe_deployment()
+    assert result.available is False
+    assert "宿主机" in result.detail
+
+
+def test_probe_deployment_docker_env(monkeypatch):
+    """ENGRAM_DOCKER=1 → docker（available=True）。"""
+    from engram.backend.app.cli.probes import probe_deployment
+    monkeypatch.setenv("ENGRAM_DOCKER", "1")
+    result = probe_deployment()
+    assert result.available is True
+    assert "docker" in result.detail

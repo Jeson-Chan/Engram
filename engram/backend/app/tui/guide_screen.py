@@ -99,11 +99,6 @@ GUIDE_STEPS: tuple[GuideStep, ...] = (
     ),
 )
 
-_STEP_COUNT = len(GUIDE_STEPS)
-# 汇总步索引 = 全部功能步之后
-_SUMMARY_INDEX = _STEP_COUNT
-
-
 class GuideScreen(ModalScreen[bool]):
     """/guide 分步向导：↑↓/Enter 操作，Esc 任意时刻退出（不写入）。"""
 
@@ -161,10 +156,30 @@ class GuideScreen(ModalScreen[bool]):
 
     def _probes_done(self, results: dict[str, Any]) -> None:
         self.probes = results
+        # docker 部署会隐藏记忆层两步——步数收缩时当前索引不能越界
+        self.step_index = min(self.step_index, self._summary_index())
         self._refresh_ui()
 
+    def _is_docker(self) -> bool:
+        """部署模式：docker 容器内 → 记忆层由 compose 注入，向导隐藏记忆两步。"""
+        if self.probes is None:
+            return False  # 探测未完成前按宿主机形态展示（步骤收缩后不影响已写入）
+        dep = self.probes.get("deployment")
+        return dep is not None and bool(getattr(dep, "available", False))
+
+    def _visible_steps(self) -> list[GuideStep]:
+        if self._is_docker():
+            return [s for s in GUIDE_STEPS if s.key not in ("memory", "phase2")]
+        return list(GUIDE_STEPS)
+
+    def _summary_index(self) -> int:
+        return len(self._visible_steps())
+
     def _memory_effective(self) -> bool:
-        """长期记忆生效态：显式开启，或随记忆沉淀自动带上（沉淀的上游依赖）。"""
+        """长期记忆生效态：显式开启，或随记忆沉淀自动带上（沉淀的上游依赖）。
+
+        docker 部署下记忆由 compose 注入，此值不参与写入（记忆两步被隐藏）。
+        """
         return self.choices["memory"] or self.choices["phase2"]
 
     # ---- 渲染 ----
@@ -174,9 +189,10 @@ class GuideScreen(ModalScreen[bool]):
         content = self.query_one("#guide-content", Static)
         foot = self.query_one("#guide-foot", Static)
         value_input = self.query_one("#guide-input", Input)
-        if self.step_index < _STEP_COUNT:
-            step = GUIDE_STEPS[self.step_index]
-            title.update(Text(f"配置向导 {self.step_index + 1}/{_STEP_COUNT} · {step.title}"))
+        steps = self._visible_steps()
+        if self.step_index < self._summary_index():
+            step = steps[self.step_index]
+            title.update(Text(f"配置向导 {self.step_index + 1}/{self._summary_index()} · {step.title}"))
             content.update(self._render_step(step))
             foot.update(Text(
                 "→ 下一步 · ← 上一步 · Enter 切换 开/跳过 · Esc 退出", style=theme.TEXT_DIM,
@@ -247,10 +263,16 @@ class GuideScreen(ModalScreen[bool]):
 
     def _render_summary(self) -> Text:
         lines: list[Text] = [Text("将写入 .env："), Text("")]
+        if self._is_docker():
+            lines.append(Text(
+                "docker 部署：记忆层（含沉淀开关）由 compose 注入，本向导不写记忆配置。",
+                style=theme.TEXT_DIM,
+            ))
+            lines.append(Text(""))
         restart_items: list[str] = []   # 写入后需重启生效（startup_only）
         missing_key: list[str] = []     # 开启但 key 未填（写入空值，功能不生效）
         immediate: list[str] = []       # 即刻生效（非 startup_only 且值就绪）
-        for step in GUIDE_STEPS:
+        for step in self._visible_steps():
             on = self._memory_effective() if step.key == "memory" else self.choices[step.key]
             mark = Text("✓ 开启 ", style="green") if on else Text("○ 跳过 ", style=theme.TEXT_DIM)
             line = Text()
@@ -290,18 +312,19 @@ class GuideScreen(ModalScreen[bool]):
             return
         if event.key == "escape":
             return  # 走 BINDINGS dismiss_panel
-        if self.step_index <= _SUMMARY_INDEX:
+        summary_index = self._summary_index()
+        if self.step_index <= summary_index:
             event.stop()
         if event.key == "enter":
-            if self.step_index < _STEP_COUNT:
-                step = GUIDE_STEPS[self.step_index]
+            if self.step_index < summary_index:
+                step = self._visible_steps()[self.step_index]
                 self.choices[step.key] = not self.choices[step.key]
                 self._refresh_ui()
             else:
                 self._write_env()
                 self.dismiss(True)
         elif event.key == "right" or event.key == "down":
-            self.step_index = min(_SUMMARY_INDEX, self.step_index + 1)
+            self.step_index = min(summary_index, self.step_index + 1)
             self._refresh_ui()
         elif event.key == "left" or event.key == "up":
             self.step_index = max(0, self.step_index - 1)
@@ -309,7 +332,8 @@ class GuideScreen(ModalScreen[bool]):
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Tavily key 等输入实时存值（写入时收集）。"""
-        step = GUIDE_STEPS[self.step_index] if self.step_index < _STEP_COUNT else None
+        steps = self._visible_steps()
+        step = steps[self.step_index] if self.step_index < len(steps) else None
         if step is not None and step.input_env:
             self._inputs[step.input_env] = event.value.strip()
 
@@ -328,7 +352,7 @@ class GuideScreen(ModalScreen[bool]):
         from engram.backend.app.cli.setup_wizard import update_env_file
 
         overrides: dict[str, str] = {}
-        for step in GUIDE_STEPS:
+        for step in self._visible_steps():
             on = self._memory_effective() if step.key == "memory" else self.choices[step.key]
             value = step.on_value if on else step.off_value
             if on and step.input_env:

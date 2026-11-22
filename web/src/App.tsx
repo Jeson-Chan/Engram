@@ -5,7 +5,7 @@ import { Conversation } from "./components/Conversation";
 import { RunInspector } from "./components/RunInspector";
 import { MemoryExplorer } from "./components/MemoryExplorer";
 import { CapabilityPanel } from "./components/CapabilityPanel";
-import { IconRun, IconSun, IconMoon } from "./components/pixel-icons";
+import { IconRun, IconAnalytics, IconSun, IconMoon } from "./components/pixel-icons";
 import "./styles.css";
 
 /** 深/浅主题切换:盖章 documentElement.dataset.theme + localStorage 持久化;无记录跟随系统。 */
@@ -100,7 +100,7 @@ function Shell() {
           onClick={() => actions.setInspectorTab("capabilities")}
           data-testid="cap-tab"
         >
-          <IconRun size={11} color="var(--c-agent)" /> 能力
+          <IconAnalytics size={11} color="var(--c-agent)" /> 能力
         </button>
       </div>
       {state.inspectorTab === "capabilities" ? <CapabilityPanel /> : <RunInspector />}

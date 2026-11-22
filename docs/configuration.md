@@ -24,6 +24,7 @@
 | `DEEPSEEK_ENABLED` | true | `engram/backend/agents/config/provider_config.py` | 单独禁用 deepseek（false=禁用） |
 | `DEEPSEEK_MODEL` | deepseek-v4-flash | `engram/backend/agents/config/provider_profile.py` | deepseek 默认模型 |
 | `ENGRAM_CHECKPOINT_DSN` | （空） | `engram/backend/agents/runtime/pg_checkpointer.py`<br>`engram/backend/app/cli/probes.py` | LangGraph 会话状态持久层 DSN（compose 注入） |
+| `ENGRAM_DOCKER` | （空） | `engram/backend/app/cli/probes.py` | Engram 运行时配置 |
 | `ENGRAM_GATEWAY_DB` | （空） | `engram/backend/app/gateway/session_store.py` | 网关会话库路径（SQLite） |
 | `ENGRAM_GATEWAY_URL` | http://127.0.0.1:8000 | `engram/backend/app/tui/cockpit.py` | Engram 运行时配置 |
 | `ENGRAM_INTERNAL_LLM_TIMEOUT` | 60 | `engram/backend/agents/middlewares/reflection_middleware.py` | 内部辅助 LLM 调用超时（秒） |

@@ -217,6 +217,26 @@ def probe_tavily(timeout: float = 1.5) -> ProbeResult:
     return ProbeResult("tavily", False, "Tavily 端点不可达", "检查网络/代理")
 
 
+def probe_deployment() -> ProbeResult:
+    """部署模式识别：docker 容器内 / 宿主机直跑（venv）。
+
+    available=True 表示 docker。判据（按可靠度）：
+    1. /.dockerenv 存在（标准容器必然有）；
+    2. ENGRAM_DOCKER=1（Dockerfile/compose 显式声明的逃生口）。
+    都不满足 → 宿主机直跑。DNS 内容不做猜测——误判的代价是 guide
+    隐藏记忆层步骤，宁可保守。
+    """
+    if Path("/.dockerenv").exists() or os.environ.get("ENGRAM_DOCKER", "") == "1":
+        return ProbeResult(
+            "deployment", True,
+            "docker 容器内——记忆层由 compose 注入，.env 无需配置记忆",
+        )
+    return ProbeResult(
+        "deployment", False,
+        "宿主机直跑（venv）——默认 Markdown 记忆；分层需自行配置 Redis/PG",
+    )
+
+
 def probe_all(project_root: Path) -> dict[str, ProbeResult]:
     """运行全部探测（固定顺序，便于稳定输出）。"""
     results = [
@@ -228,5 +248,6 @@ def probe_all(project_root: Path) -> dict[str, ProbeResult]:
         probe_mcp_config(project_root),
         probe_llm(),
         probe_tavily(),
+        probe_deployment(),
     ]
     return {result.name: result for result in results}
