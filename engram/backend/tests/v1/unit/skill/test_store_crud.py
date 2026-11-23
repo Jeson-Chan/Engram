@@ -294,6 +294,35 @@ def test_discover_updates_changed_file(tmp_path):
 # ── set_enabled 持久 enable/disable ──────────────────────
 
 
+def test_discover_does_not_reset_runtime_enabled(tmp_path):
+    """discover 同步文件变更时不得把运行时禁用态写回 frontmatter 默认。
+
+    2026-11-23 修复回归：此前每次网关启动 discover→_upsert_record 的 UPDATE
+    分支带 enabled=frontmatter 默认值，运行时禁用态重启即丢失。
+    """
+    store = SQLiteSkillStore(tmp_path / "skills.db")
+    skill_dir = tmp_path / "skills" / "my-skill"
+    skill_dir.mkdir(parents=True)
+    smd = skill_dir / "SKILL.md"
+    smd.write_text("---\nname: my-skill\ndescription: d\n---\n\nbody\n", encoding="utf-8")
+
+    results = store.discover([tmp_path / "skills"])
+    sid = results[0].skill_id
+    assert store.set_enabled(sid, False) is True
+
+    # 模拟重启：再次 discover（同文件）→ 运行时禁用态保留
+    store.discover([tmp_path / "skills"])
+    assert store.get(sid).enabled is False
+
+    # 文件内容变更 → 同步 description，但 enabled 仍不被覆盖
+    smd.write_text("---\nname: my-skill\ndescription: d2\n---\n\nbody\n", encoding="utf-8")
+    store.discover([tmp_path / "skills"])
+    got = store.get(sid)
+    assert got.description == "d2"
+    assert got.enabled is False
+    store.close()
+
+
 def test_set_enabled_persists(tmp_path):
     """set_enabled 持久 SQLite，跨实例生效。"""
     db = tmp_path / "skills.db"

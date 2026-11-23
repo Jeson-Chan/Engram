@@ -397,7 +397,13 @@ class SQLiteSkillStore:
         return results
 
     def _upsert_record(self, record: SkillRecord) -> None:
-        """INSERT OR IGNORE；已存在则 UPDATE 同步文件变更。持锁。"""
+        """INSERT OR IGNORE；已存在则 UPDATE 同步文件变更。持锁。
+
+        INVARIANT（2026-11-23 修复）：UPDATE 分支**不覆盖 enabled**——frontmatter
+        的 enabled 只是初始值，运行时经 set_enabled 变更后由 store 持有真值；此前
+        每次启动 discover 经本方法把 frontmatter 默认值写回，导致运行时禁用态
+        重启即丢失（web-skill-override「启停跨重启持久化」不成立）。
+        """
         with self._mu:
             cur = self._conn.execute(
                 """INSERT OR IGNORE INTO skill_records
@@ -413,15 +419,14 @@ class SQLiteSkillStore:
                  utc_now_iso(), utc_now_iso()),
             )
             if cur.rowcount == 0:
-                # 已存在，同步文件变更
+                # 已存在，同步文件变更（保留运行时 enabled，不回写 frontmatter 默认）
                 self._conn.execute(
                     """UPDATE skill_records
                          SET path=?, content_hash=?, description=?,
-                             allowed_tools=?, enabled=?, last_updated=?
+                             allowed_tools=?, last_updated=?
                        WHERE skill_id=?""",
                     (record.path, record.content_hash, record.description,
                      json.dumps(list(record.allowed_tools)),
-                     1 if record.enabled else 0,
                      utc_now_iso(), record.skill_id),
                 )
             if record.lineage.parent_skill_ids:
