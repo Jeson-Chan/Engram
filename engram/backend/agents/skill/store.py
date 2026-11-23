@@ -271,9 +271,16 @@ class SQLiteSkillStore:
         self._init_schema()
 
     def _init_schema(self) -> None:
-        """建表 + WAL + user_version 迁移。构造时持锁。"""
+        """建表 + journal 模式 + user_version 迁移。构造时持锁。
+
+        journal_mode=DELETE（2026-11-23）:WAL 的 -wal/-shm 依赖跨进程共享内存，
+        在 Docker Desktop Windows bind mount（.engram 挂载）上跨宿主/容器不可用——
+        实测出现 disk I/O error、且容器重启后 WAL 未 checkpoint 的 set_enabled
+        变更丢失（web-skill-override「启停跨重启持久化」不成立）。该库仅网关注入
+        的单条连接（含 threading.Lock 串行化）使用，DELETE 回滚日志足够且可靠。
+        """
         with self._mu:
-            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA journal_mode=DELETE")
             self._conn.execute("PRAGMA busy_timeout=30000")
             self._conn.executescript(_SCHEMA_SQL)
             current = self._conn.execute("PRAGMA user_version").fetchone()[0]

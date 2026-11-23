@@ -30,11 +30,13 @@ def test_schema_creates_tables_indices_and_version(tmp_path):
         store.close()
 
 
-def test_wal_mode(tmp_path):
+def test_delete_journal_mode(tmp_path):
+    # 2026-11-23：WAL 在 Docker Desktop Windows bind mount 上跨宿主/容器不可用
+    # （disk I/O error + 重启丢未 checkpoint 变更），改 DELETE 回滚日志。
     store = SQLiteSkillStore(tmp_path / "skills.db")
     try:
         mode = store._conn.execute("PRAGMA journal_mode").fetchone()[0]
-        assert mode == "wal"
+        assert mode == "delete"
     finally:
         store.close()
 
