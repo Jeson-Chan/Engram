@@ -27,6 +27,8 @@ from textual import events
 
 from engram.backend.app.cli.banner import render_logo
 from engram.backend.app.cli.commands import get_registry, handle_command
+from engram.backend.app.tui.completion_host import CompletionHost
+from engram.backend.app.tui.suggestion_popup import SuggestionPopup
 from engram.backend.app.services.stream_service import EngramStreamClient
 from engram.backend.app.tui import theme
 from engram.backend.app.tui.cockpit import (
@@ -204,6 +206,15 @@ class ConversationInput(TextArea):
             pass
 
     async def _on_key(self, event: events.Key) -> None:
+        # command-completion：补全浮层打开时，↑↓/Tab/Esc 优先由补全逻辑消费
+        # （覆盖 TextArea 的光标移动与 tab 缩进默认行为）。
+        try:
+            if self.app.completion_key(self, event.key):  # type: ignore[attr-defined]
+                event.stop()
+                event.prevent_default()
+                return
+        except Exception:
+            pass
         # Enter（无修饰键）→ 发送。覆盖 TextArea 默认的 ``enter → 插入 \n``。
         #TextArea 默认在 ``_on_key`` 里把 ``enter`` 映射为 ``\n`` 插入，不走 BINDINGS，
         # 所以光在 BINDINGS 里加 binding 无效，必须在此拦截。
@@ -351,8 +362,8 @@ class InputBox(Container):
 # ---- App ----
 
 
-class EngramTUI(App):
-    """Engram 全屏 TUI——双状态布局。"""
+class EngramTUI(CompletionHost, App):
+    """Engram 全屏 TUI——双状态布局（CompletionHost 提供斜杠命令补全）。"""
 
     # Textual 内置 ctrl+p command palette 已无自定义对应面板（占位面板已删，
     # 命令发现唯一入口 /help）；保持关闭，Ctrl+P 无响应。
@@ -498,6 +509,27 @@ class EngramTUI(App):
         base = f"■ Build · {model}"
         return f"{base}  {provider}" if provider else base
 
+    # ---- 补全宿主数据源（command-completion；候选/按键逻辑在 CompletionHost mixin）----
+
+    def _skill_names(self) -> list[str]:
+        mgr = getattr(self.runtime, "skill_manager", None)
+        if mgr is None:
+            return []
+        try:
+            return [s["name"] for s in mgr.list_skills()]
+        except Exception:
+            return []
+
+    def _provider_names(self) -> list[str]:
+        try:
+            from engram.backend.agents.config.provider_config import (
+                discover_available_providers,
+            )
+
+            return [p.provider for p in discover_available_providers()]
+        except Exception:
+            return []
+
     def compose(self) -> ComposeResult:
         # 欢迎页（居中 logo + 副标题 + 输入框 + 提示）
         subtitle = f"v1.0.0 · {self.cli_state['mode']} · {self.cli_state['model']}"
@@ -505,6 +537,7 @@ class EngramTUI(App):
             Static(render_logo(), id="logo"),
             Static(subtitle, id="subtitle"),
             InputRow(
+                SuggestionPopup(id="welcome-completion"),
                 ConversationInput(placeholder="Ask anything...  (输入 / 查看命令)", id="welcome-input"),
                 DraftSummary(self.draft, id="welcome-summary"),
             ),
@@ -516,6 +549,7 @@ class EngramTUI(App):
                 ConversationLog(),
                 Static("", id="exec-panel"),
                 InputBox(
+                    SuggestionPopup(id="conv-completion"),
                     ConversationInput(
                         placeholder="Ask anything...  (输入 / 查看命令 · Enter 发送 · Ctrl+Enter 换行)",
                         id="conv-input",
@@ -582,6 +616,15 @@ class EngramTUI(App):
         if len(getattr(self, "screen_stack", [])) > 1:
             self.pop_screen()
             return
+        # command-completion：Esc 关闭补全浮层优先于取消运行（priority 绑定抢先于输入框）
+        for selector in self.COMPLETION_POPUPS.values():
+            try:
+                popup = self.query_one(selector, SuggestionPopup)
+            except Exception:
+                continue
+            if popup.visible:
+                popup.hide()
+                return
         worker = getattr(self, "_research_worker", None)
         if not self.cli_state.get("_running") and not (worker is not None and worker.is_running):
             return
@@ -814,6 +857,13 @@ class EngramTUI(App):
 
     async def on_conversation_input_submitted(self, event: ConversationInput.Submitted) -> None:
         text = event.value.strip()
+        # command-completion：提交后收起浮层
+        try:
+            popup = self._completion_popup(event.input)
+            if popup is not None:
+                popup.hide()
+        except Exception:
+            pass
         self.clear_draft()
         if not text:
             return

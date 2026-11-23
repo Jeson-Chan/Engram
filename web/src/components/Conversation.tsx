@@ -162,7 +162,11 @@ export function Conversation() {
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  const [suggestIndex, setSuggestIndex] = useState(0);
+  const [suggestClosed, setSuggestClosed] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef = useRef<HTMLDivElement>(null);
 
   // 自动滚到最新
   useEffect(() => {
@@ -213,22 +217,74 @@ export function Conversation() {
     actions.send(mode, text);
   };
 
-  // /skill 补全：子命令优先（list/off），无命中补激活 skill 名（数据同面板）
+  // ---- 斜杠补全（command-completion）：光标锚定弹层 + 键盘 ----
   const skillNames = state.skills.map((s) => s.name);
-  const argPart = draft.trimStart().startsWith("/skill")
-    ? draft.trim().replace(/^\/skill/, "").trim()
-    : null;
-  const suggestions: string[] =
-    argPart === null || argPart === undefined
-      ? []
-      : argPart === ""
-        ? ["list", "off", ...skillNames]
-        : ["list", "off"]
-            .filter((s) => s.startsWith(argPart) && s !== argPart)
-            .concat(skillNames.filter((n) => n.toLowerCase().startsWith(argPart.toLowerCase()) && n !== argPart));
+  const commands = [{ text: "/skill", meta: "skill 管理" }];
+
+  const caret = taRef.current?.selectionStart ?? draft.length;
+  const beforeCaret = draft.slice(0, caret);
+  const trimmed = beforeCaret.trimStart();
+  const items: { text: string; meta: string }[] = (() => {
+    if (!trimmed.startsWith("/")) return [];
+    // 命令位：/xxx（无空白）
+    if (!/\s/.test(trimmed)) {
+      return commands.filter((c) => c.text.startsWith(trimmed.toLowerCase()));
+    }
+    // /skill 参数位：子命令优先，无命中补激活 skill 名（数据同 Configs 面板）
+    const m = trimmed.match(/^\/skill\s+(\S*)$/);
+    if (!m) return [];
+    const arg = m[1].toLowerCase();
+    const subs = ["list", "off"].filter((s) => s.startsWith(arg) && s !== arg);
+    const names = skillNames.filter(
+      (n) => n.toLowerCase().startsWith(arg) && n.toLowerCase() !== arg,
+    );
+    return [
+      ...subs.map((s) => ({ text: s, meta: "subcommand" })),
+      ...names.map((n) => ({ text: n, meta: "skill" })),
+    ];
+  })();
+  const popupOpen = items.length > 0 && !suggestClosed;
+
+  // 草稿变化 → 重置选中与关闭态
+  useEffect(() => {
+    setSuggestIndex(0);
+    setSuggestClosed(false);
+  }, [draft]);
+
+  /** 镜像测量光标 x（弹层锚定在斜杠处）。失败回退 0。 */
+  const measureCaretLeft = (): number => {
+    try {
+      const el = taRef.current;
+      const mirror = mirrorRef.current;
+      if (!el || !mirror) return 0;
+      const cs = window.getComputedStyle(el);
+      mirror.style.font = cs.font;
+      mirror.style.padding = cs.padding;
+      mirror.style.boxSizing = "border-box";
+      mirror.style.width = `${el.clientWidth}px`;
+      mirror.textContent = draft.slice(0, el.selectionStart ?? draft.length);
+      const marker = document.createElement("span");
+      marker.textContent = "​";
+      mirror.appendChild(marker);
+      return Math.max(0, marker.offsetLeft - el.scrollLeft);
+    } catch {
+      return 0;
+    }
+  };
 
   const acceptSuggestion = (value: string) => {
-    setDraft(`/skill ${value}${value === "list" || value === "off" ? "" : " "}`);
+    const el = taRef.current;
+    const pos = el?.selectionStart ?? draft.length;
+    const b = draft.slice(0, pos);
+    const wordStart = Math.max(b.lastIndexOf(" "), b.lastIndexOf("\t")) + 1;
+    const insert = value.endsWith(" ") ? value : value + " ";
+    const next = draft.slice(0, wordStart) + insert + draft.slice(pos);
+    setDraft(next);
+    requestAnimationFrame(() => {
+      const p2 = wordStart + insert.length;
+      el?.focus();
+      el?.setSelectionRange(p2, p2);
+    });
   };
 
   return (
@@ -269,20 +325,6 @@ export function Conversation() {
               ))}
         </div>
       )}
-      {suggestions.length > 0 && (
-        <div className="skill-suggest" data-testid="skill-suggest">
-          {suggestions.map((s) => (
-            <button
-              key={s}
-              className="px-btn-secondary"
-              data-testid={`skill-suggest-${s}`}
-              onClick={() => acceptSuggestion(s)}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
       <div className="composer">
         <div className="modes">
           <button
@@ -300,19 +342,68 @@ export function Conversation() {
             研究
           </button>
         </div>
-        <textarea
-          placeholder={state.currentSessionId ? "输入问题，Enter 发送（Shift+Enter 换行）" : "先选择会话"}
-          value={draft}
-          disabled={!state.currentSessionId || state.streaming}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          data-testid="composer"
-        />
+        <div className="composer-field">
+          {popupOpen && (
+            <div
+              className="slash-popup"
+              data-testid="slash-popup"
+              style={{ left: measureCaretLeft() }}
+            >
+              {items.map((s, i) => (
+                <div
+                  key={`${s.meta}-${s.text}`}
+                  className={`slash-item${i === suggestIndex ? " on" : ""}`}
+                  data-testid={`slash-item-${s.text}`}
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // 保持输入框焦点
+                    acceptSuggestion(s.text);
+                  }}
+                >
+                  <span>{s.text}</span>
+                  {s.meta && <small>{s.meta}</small>}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="slash-mirror" ref={mirrorRef} aria-hidden="true" />
+          <textarea
+            ref={taRef}
+            placeholder={state.currentSessionId ? "输入问题，Enter 发送（Shift+Enter 换行）" : "先选择会话"}
+            value={draft}
+            disabled={!state.currentSessionId || state.streaming}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              // command-completion：弹层打开时 ↑↓/Tab/Esc 优先
+              if (popupOpen) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setSuggestIndex((i) => Math.min(items.length - 1, i + 1));
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSuggestIndex((i) => Math.max(0, i - 1));
+                  return;
+                }
+                if (e.key === "Tab") {
+                  e.preventDefault();
+                  acceptSuggestion(items[Math.min(suggestIndex, items.length - 1)].text);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setSuggestClosed(true);
+                  return;
+                }
+              }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            data-testid="composer"
+          />
+        </div>
         <button className="px-btn send" onClick={send} disabled={state.streaming || !draft.trim()} data-testid="send">
           {state.streaming ? "流式…" : "发送"}
         </button>

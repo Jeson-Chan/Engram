@@ -172,8 +172,19 @@ async def _run_chat_async(runtime: AppRuntime, provider: str | None, model: str 
             return []
         return [s["name"] for s in mgr.list_skills()]
 
+    # provider_provider：/model <provider> 参数补全（可用 provider 名单）。
+    def _provider_names_provider():
+        from engram.backend.agents.config.provider_config import (
+            discover_available_providers,
+        )
+        return [p.provider for p in discover_available_providers()]
+
     session: PromptSession = PromptSession(
-        completer=SlashCommandCompleter(get_registry(), skill_provider=_skill_names_provider),
+        completer=SlashCommandCompleter(
+            get_registry(),
+            skill_provider=_skill_names_provider,
+            provider_provider=_provider_names_provider,
+        ),
         complete_while_typing=True,
         complete_style=CompleteStyle.COLUMN,
         bottom_toolbar=lambda: build_bottom_toolbar(cli_state),

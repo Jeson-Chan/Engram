@@ -237,19 +237,38 @@ describe("/skill 斜杠命令", () => {
     expect(captured.filter((c) => c.path.includes("/chat"))).toHaveLength(0);
   });
 
-  it("/skill 前缀补全：空参补子命令，部分输入补 skill 名，点击回填", async () => {
+  it("斜杠弹层：输入 /skill 空参补子命令与 skill 名，点击回填", async () => {
     stubApi();
     await renderWithSession();
     await openConfigs(); // 打开 Configs 让 /skills 进 store（补全数据同面板）
     const composer = screen.getByTestId("composer") as HTMLTextAreaElement;
     fireEvent.change(composer, { target: { value: "/skill " } });
-    const suggest = await waitFor(() => screen.getByTestId("skill-suggest"));
-    expect(suggest.textContent).toContain("list");
-    expect(suggest.textContent).toContain("off");
-    expect(suggest.textContent).toContain("find-skills");
+    const popup = await waitFor(() => screen.getByTestId("slash-popup"));
+    expect(popup.textContent).toContain("list");
+    expect(popup.textContent).toContain("off");
+    expect(popup.textContent).toContain("find-skills");
     fireEvent.change(composer, { target: { value: "/skill fin" } });
-    await waitFor(() => expect(screen.getByTestId("skill-suggest-find-skills")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("skill-suggest-find-skills"));
+    await waitFor(() => expect(screen.getByTestId("slash-item-find-skills")).toBeTruthy());
+    fireEvent.mouseDown(screen.getByTestId("slash-item-find-skills"));
     expect((composer as HTMLTextAreaElement).value).toBe("/skill find-skills ");
+  });
+
+  it("斜杠弹层键盘：↑↓ 移动 + Tab 补全 + Esc 关闭", async () => {
+    stubApi();
+    await renderWithSession();
+    await openConfigs();
+    const composer = screen.getByTestId("composer") as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "/skill " } });
+    await waitFor(() => screen.getByTestId("slash-popup"));
+    // 首项 list 选中；↓ → off
+    fireEvent.keyDown(composer, { key: "ArrowDown" });
+    await waitFor(() => expect(screen.getByTestId("slash-item-off").className).toContain("on"));
+    fireEvent.keyDown(composer, { key: "Tab" });
+    expect((composer as HTMLTextAreaElement).value).toBe("/skill off ");
+    // Esc 关闭
+    fireEvent.change(composer, { target: { value: "/skill " } });
+    await waitFor(() => screen.getByTestId("slash-popup"));
+    fireEvent.keyDown(composer, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("slash-popup")).toBeNull());
   });
 });

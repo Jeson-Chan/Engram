@@ -65,11 +65,24 @@ def test_command_name_completion_unchanged():
     assert "/help" in result
 
 
-def test_non_skill_command_no_skill_completion():
-    """非 /skill 命令的参数不触发 skill 名补全。"""
+def test_prompt_subcommand_completion():
+    """command-completion：/prompt 参数补子命令（list/show/reload），不带 skill 名。"""
     c = SlashCommandCompleter(get_registry(), skill_provider=lambda: ["source-verification"])
-    # /prompt list —— word="list" 非 /，但 stripped 不以 /skill 开头 → 无补全
-    assert _completions(c, "/prompt list") == []
+    assert "show" in _completions(c, "/prompt s")
+    assert "source-verification" not in _completions(c, "/prompt s")
+
+
+def test_model_provider_completion():
+    """/model 参数补 provider 名单。"""
+    c = SlashCommandCompleter(
+        get_registry(), provider_provider=lambda: ["qwen", "deepseek"],
+    )
+    assert "qwen" in _completions(c, "/model qw")
+
+
+def test_effort_level_completion():
+    c = SlashCommandCompleter(get_registry())
+    assert set(_completions(c, "/effort ")) == {"off", "low", "medium", "high"}
 
 
 def test_skill_full_name_completes():
