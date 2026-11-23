@@ -464,6 +464,16 @@ class InspectorPanel(CockpitPanel):
             pct = (self._cli_state.get("current_fraction") or 0) * 100
             lines.append(Text(f"Context：{tokens} / {window} tok（{pct:.0f}%）"))
 
+        # runtime-knobs：三旋钮当前值与来源（manual=本会话设置 / auto=缺省）
+        rounds = self._cli_state.get("max_loop_steps")
+        effort = self._cli_state.get("reasoning_effort")
+        window_override = self._cli_state.get("context_window")
+        lines.append(Text(
+            f"轮数预算：{rounds if rounds else 'auto（配置）'}  "
+            f"思考强度：{effort if effort else 'auto（provider 默认）'}  "
+            f"窗口覆写：{window_override if window_override else 'auto（查表）'}"
+        ))
+
         if report is not None:
             lines.append(Text(""))
             lines.extend(capability_lines(report))

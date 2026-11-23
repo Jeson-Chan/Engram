@@ -154,6 +154,10 @@ async def _run_chat_async(runtime: AppRuntime, provider: str | None, model: str 
         "pending_expert_mode": None,
         "pending_mcp_reload": None,
         "skill_override": [],
+        # runtime-knobs：会话级运行参数（None = 配置默认；/rounds /effort /window 设置）
+        "max_loop_steps": None,
+        "reasoning_effort": None,
+        "context_window": None,
         "mode": "expert" if runtime.config.runtime.expert_mode else "default",
         "model": _resolve_actual_model_name(runtime.capability_registry),
         "current_tokens": 0,
@@ -324,6 +328,16 @@ async def _run_chat_async(runtime: AppRuntime, provider: str | None, model: str 
             config = _build_stream_config(runtime, ctx)
             # /skill override：cli_state → configurable，SkillInjectionMiddleware 读取
             config["configurable"]["skill_override"] = cli_state.get("skill_override") or []
+            # runtime-knobs：/rounds /effort /window → config（缺省不写键 = 默认行为）
+            _loop = cli_state.get("max_loop_steps")
+            if _loop:
+                config["recursion_limit"] = _loop * runtime.config.runtime.graph_node_multiplier
+            _effort = cli_state.get("reasoning_effort")
+            if _effort and _effort != "off":
+                config["configurable"]["reasoning_effort"] = _effort
+            _window = cli_state.get("context_window")
+            if _window:
+                config["configurable"]["context_window"] = _window
             client = EngramStreamClient(graph=runtime.leader_agent.graph, config=config)
 
             # 注入 round 起始时间 + 模型名，供 _render_done 输出耗时尾行

@@ -1115,3 +1115,20 @@ button, .session-item, .tree-node, .tabbar button, .nav-tabs button, .drawer-tog
 .skill-cmd-item { display: flex; gap: 6px; align-items: baseline; }
 .skill-cmd-item .off { color: var(--muted); text-decoration: line-through; }
 .skill-suggest .px-btn-secondary { font-size: 11px; padding: 2px 8px; }
+
+/* ---------- 运行参数区（runtime-knobs） ---------- */
+.runtime-knobs { display: flex; flex-direction: column; gap: 8px; border-bottom: 2px solid var(--border-soft); padding-bottom: 10px; }
+.knobs-title { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; }
+.knob-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.knob-row label { min-width: 110px; }
+.knob-row input, .knob-row select {
+  font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 0;
+  border: 2px solid var(--border); background: var(--panel); color: var(--text);
+  width: 90px;
+}
+.knob-row select { width: auto; }
+.knob-row input:focus-visible, .knob-row select:focus-visible {
+  outline: 2px dashed var(--c-agent); outline-offset: 2px;
+}
+.knob-row .px-btn-secondary { font-size: 11px; padding: 2px 8px; }
+.knob-row small { color: var(--muted); font-size: 11px; }

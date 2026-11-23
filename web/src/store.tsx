@@ -105,6 +105,14 @@ export interface AppState {
   skillsError: string | null;
   /** 当前会话 skill override（请求级携带，刷新即清——design D1） */
   skillOverride: string[];
+  /** 会话级运行参数（runtime-knobs；null/0 = auto，请求级携带） */
+  knobs: RuntimeKnobs;
+}
+
+export interface RuntimeKnobs {
+  maxLoopSteps: number | null;
+  reasoningEffort: "low" | "medium" | "high" | null;
+  contextWindow: number | null;
 }
 
 type Action =
@@ -127,6 +135,7 @@ type Action =
   | { type: "memoryUnavailable"; on: boolean }
   | { type: "skills"; skills: SkillInfo[]; error?: string | null }
   | { type: "skillOverride"; names: string[] }
+  | { type: "knobs"; patch: Partial<RuntimeKnobs> }
   | { type: "status"; status: RuntimeStatus | null; error?: string | null }
   | { type: "capabilities"; report: CapabilityReport | null; error?: string | null }
   | { type: "inspectorTab"; tab: "run" | "capabilities" | "skills" }
@@ -165,6 +174,7 @@ const initialState: AppState = {
   skills: [],
   skillsError: null,
   skillOverride: [],
+  knobs: { maxLoopSteps: null, reasoningEffort: null, contextWindow: null },
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -248,6 +258,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, skills: action.skills, skillsError: action.error ?? null };
     case "skillOverride":
       return { ...state, skillOverride: action.names };
+    case "knobs":
+      return { ...state, knobs: { ...state.knobs, ...action.patch } };
     case "mainView":
       return { ...state, mainView: action.view };
     case "memFilters":
@@ -367,6 +379,7 @@ export interface AppActions {
   refreshSkills(): Promise<void>;
   setSkillOverride(names: string[]): void;
   setSkillEnabled(skillId: string, enabled: boolean): Promise<boolean>;
+  setKnobs(patch: Partial<RuntimeKnobs>): void;
 }
 
 const AppContext = createContext<{ state: AppState; actions: AppActions } | null>(null);
@@ -539,10 +552,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const controller = new AbortController();
     streamAbort.current = controller;
 
+    // runtime-knobs：仅设置了的旋钮才进请求体（缺省键 = 服务端默认行为）
+    const body: Record<string, unknown> = {
+      message,
+      skill_override: stateRef.current.skillOverride,
+    };
+    const knobs = stateRef.current.knobs;
+    if (knobs.maxLoopSteps) body.max_loop_steps = knobs.maxLoopSteps;
+    if (knobs.reasoningEffort) body.reasoning_effort = knobs.reasoningEffort;
+    if (knobs.contextWindow) body.context_window = knobs.contextWindow;
+
     try {
       await streamSSE(
         `/sessions/${sid}/${mode}`,
-        { message, skill_override: stateRef.current.skillOverride },
+        body,
         (frame) => {
           if (frame.id != null) {
             dispatch({ type: "lastEventId", id: frame.id });
@@ -704,6 +727,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "skillOverride", names });
   }, []);
 
+  /** 会话级运行参数（runtime-knobs）：null = auto；随每次 chat 请求携带。 */
+  const setKnobs = useCallback((patch: Partial<RuntimeKnobs>) => {
+    dispatch({ type: "knobs", patch });
+  }, []);
+
   /** 启停 + 刷新列表；返回成功与否（失败由面板提示，调用方回滚 UI）。 */
   const setSkillEnabled = useCallback(async (skillId: string, enabled: boolean) => {
     try {
@@ -723,14 +751,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMainView, setMemFilters, setMemPartition, toggleMemSelected,
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
-      refreshSkills, setSkillOverride, setSkillEnabled,
+      refreshSkills, setSkillOverride, setSkillEnabled, setKnobs,
     }),
     [refreshSessions, createSession, selectSession, deleteSession, renameSession, send,
       refreshRuns, openRun, refreshMemory, refreshStatus, refreshCapabilities, setInspectorTab,
       setMainView, setMemFilters, setMemPartition, toggleMemSelected,
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
-      refreshSkills, setSkillOverride, setSkillEnabled],
+      refreshSkills, setSkillOverride, setSkillEnabled, setKnobs],
   );
 
   return <AppContext.Provider value={{ state, actions }}>{children}</AppContext.Provider>;

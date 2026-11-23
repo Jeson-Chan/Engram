@@ -82,7 +82,7 @@ def mount_chat_routes(app: FastAPI) -> None:
                 await asyncio.to_thread(runtime.run_manager.mark_running, ctx.run_id)
                 # E2E 缺陷 G：chat 与 research 同款运行历史投影（start 转移点）
                 await track_run(app, ctx)
-                config = _build_stream_config(runtime, ctx, request.skill_override)
+                config = _build_stream_config(runtime, ctx, request)
 
                 from engram.backend.app.services.stream_service import EngramStreamClient
 
@@ -159,28 +159,41 @@ def _create_run_context(runtime, record):
     )
 
 
-def _build_stream_config(runtime, ctx, skill_override: list[str] | None = None) -> dict:
+def _build_stream_config(runtime, ctx, request: ChatRequest | None = None) -> dict:
     """graph config（与 CLI _build_stream_config 同构）。
 
     skill_override（web-skill-override）：web 请求级携带，与 CLI cli_state
     同构地写进 configurable——SkillInjectionMiddleware 经
     _get_runtime_value(runtime, "skill_override") 读取，未知名/禁用静默跳过。
+    runtime-knobs：max_loop_steps 覆写本轮 recursion_limit；reasoning_effort /
+    context_window 写进 configurable（分别由 RuntimeKnobsMiddleware 与默认
+    上下文策略经 _get_runtime_value 读取）。缺省不写键 → 与现状一致。
     user_id（E2E 缺陷 C）：session 用户透传到 configurable → 记忆召回/
     巩固中间件按用户隔离。
     """
     rc = ctx.config.runtime
+    configurable: dict = {
+        "expert_mode": rc.expert_mode,
+        "run_id": ctx.run_id,
+        "thread_id": ctx.thread_id,
+        "user_id": ctx.user_id,
+        "journal": ctx.journal,
+        "output_dir": str(ctx.output_dir),
+        "plan_enabled": rc.plan_enabled,
+        "timezone": rc.timezone,
+        "model": runtime.researcher_model_name,
+        "skill_override": list(request.skill_override) if request is not None else [],
+    }
+    if request is not None and request.reasoning_effort and request.reasoning_effort != "off":
+        configurable["reasoning_effort"] = request.reasoning_effort
+    if request is not None and request.context_window is not None:
+        configurable["context_window"] = request.context_window
+    loop_steps = (
+        request.max_loop_steps
+        if request is not None and request.max_loop_steps is not None
+        else rc.max_loop_steps
+    )
     return {
-        "configurable": {
-            "expert_mode": rc.expert_mode,
-            "run_id": ctx.run_id,
-            "thread_id": ctx.thread_id,
-            "user_id": ctx.user_id,
-            "journal": ctx.journal,
-            "output_dir": str(ctx.output_dir),
-            "plan_enabled": rc.plan_enabled,
-            "timezone": rc.timezone,
-            "model": runtime.researcher_model_name,
-            "skill_override": list(skill_override or []),
-        },
-        "recursion_limit": rc.max_loop_steps * rc.graph_node_multiplier,
+        "configurable": configurable,
+        "recursion_limit": loop_steps * rc.graph_node_multiplier,
     }

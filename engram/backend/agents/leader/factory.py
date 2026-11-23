@@ -110,6 +110,11 @@ def _build_middlewares(
         )
 
         middlewares.extend(build_governance_middlewares(context_governance, model=model, summarize_model=summarize_model))
+    # runtime-knobs：思考强度按会话请求改写（wrap_model_call 替换 request.model）
+    from engram.backend.agents.middlewares.runtime_knobs_middleware import (
+        RuntimeKnobsMiddleware,
+    )
+    middlewares.append(RuntimeKnobsMiddleware())
     middlewares.extend([
         SystemContextMiddleware(),
     ])

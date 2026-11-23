@@ -75,3 +75,46 @@ def test_guide_sets_pending() -> None:
 def test_unknown_command_returns_false() -> None:
     state = _make_state()
     assert handle_command("/unknown", _make_console(), None, state, runtime=None) is False
+
+
+# ---- runtime-knobs：/rounds /effort /window ----
+
+def _knob_state() -> dict:
+    return {"max_loop_steps": None, "reasoning_effort": None, "context_window": None}
+
+
+def test_rounds_sets_and_validates() -> None:
+    state = _knob_state()
+    handle_command("/rounds 10", _make_console(), None, state, runtime=None)
+    assert state["max_loop_steps"] == 10
+    handle_command("/rounds 0", _make_console(), None, state, runtime=None)
+    assert state["max_loop_steps"] == 10  # 非法值不改
+    handle_command("/rounds abc", _make_console(), None, state, runtime=None)
+    assert state["max_loop_steps"] == 10
+
+
+def test_rounds_off_clears() -> None:
+    state = _knob_state()
+    state["max_loop_steps"] = 7
+    handle_command("/rounds off", _make_console(), None, state, runtime=None)
+    assert state["max_loop_steps"] is None
+
+
+def test_effort_sets_and_clears() -> None:
+    state = _knob_state()
+    handle_command("/effort medium", _make_console(), None, state, runtime=None)
+    assert state["reasoning_effort"] == "medium"
+    handle_command("/effort extreme", _make_console(), None, state, runtime=None)
+    assert state["reasoning_effort"] == "medium"  # 非法档位不改
+    handle_command("/effort off", _make_console(), None, state, runtime=None)
+    assert state["reasoning_effort"] is None
+
+
+def test_window_sets_and_clears() -> None:
+    state = _knob_state()
+    handle_command("/window 32000", _make_console(), None, state, runtime=None)
+    assert state["context_window"] == 32_000
+    handle_command("/window 999", _make_console(), None, state, runtime=None)
+    assert state["context_window"] == 32_000  # 低于下限不改
+    handle_command("/window off", _make_console(), None, state, runtime=None)
+    assert state["context_window"] is None

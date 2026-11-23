@@ -64,7 +64,10 @@ def _fake_ctx() -> SimpleNamespace:
 
 
 def test_stream_config_carries_override() -> None:
-    config = _build_stream_config(SimpleNamespace(researcher_model_name="m"), _fake_ctx(), ["find-skills"])
+    config = _build_stream_config(
+        SimpleNamespace(researcher_model_name="m"), _fake_ctx(),
+        ChatRequest(message="q", skill_override=["find-skills"]),
+    )
     assert config["configurable"]["skill_override"] == ["find-skills"]
 
 

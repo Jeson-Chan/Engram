@@ -250,7 +250,13 @@ class DefaultStrategy:
         config = ctx.config or {}
         # window 优先 config 显式配置，无则 resolve_window_size(model) 查表（model 属性 → model_name 映射 → 128000）
         config_window = config.get("window") if isinstance(config, dict) else None
-        window = config_window or resolve_window_size(self._model)
+        # runtime-knobs：会话级 context_window 覆写优先（configurable 经
+        # _get_runtime_value 读取，缺省回落策略静态配置 → 模型查表）
+        from engram.backend.agents.middlewares.run_journal_middleware import (
+            _get_runtime_value,
+        )
+        runtime_window = _get_runtime_value(ctx.runtime, "context_window")
+        window = runtime_window or config_window or resolve_window_size(self._model)
         governance = self._budget.track(ctx.governance, messages, ctx.token_counter, window)
         messages_patch = self._mark_thinking(messages)
 

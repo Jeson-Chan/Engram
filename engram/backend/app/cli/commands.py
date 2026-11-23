@@ -539,6 +539,84 @@ def _cmd_mcp(ctx: CommandContext) -> None:
     ctx.console.print("[yellow]Usage: /mcp list | /mcp reload[/yellow]")
 
 
+def _cmd_rounds(ctx: CommandContext) -> None:
+    """循环预算（搜索/工具轮数上界）：<n> | off。runtime-knobs。"""
+    arg = ctx.arg.strip()
+    default = ctx.runtime.config.runtime.max_loop_steps if ctx.runtime is not None else 4
+    if not arg:
+        cur = ctx.state.get("max_loop_steps")
+        ctx.console.print(
+            f"[yellow]Usage: /rounds <n> | /rounds off  "
+            f"(current: {cur if cur else f'default {default}'})[/yellow]"
+        )
+        return
+    if arg == "off":
+        ctx.state["max_loop_steps"] = None
+        ctx.console.print(f"[green]Loop budget restored to config default ({default})[/green]")
+        return
+    try:
+        n = int(arg)
+    except ValueError:
+        n = 0
+    if n < 1:
+        ctx.console.print("[yellow]Usage: /rounds <n>（n 为 ≥1 的整数）[/yellow]")
+        return
+    ctx.state["max_loop_steps"] = n
+    ctx.console.print(f"[green]Loop budget set: {n} rounds (applies next round)[/green]")
+
+
+def _cmd_effort(ctx: CommandContext) -> None:
+    """思考强度（归一化档位）：off|low|medium|high。runtime-knobs。"""
+    levels = ("off", "low", "medium", "high")
+    arg = ctx.arg.strip().lower()
+    cur = ctx.state.get("reasoning_effort")
+    if not arg:
+        ctx.console.print(
+            f"[yellow]Usage: /effort off|low|medium|high  "
+            f"(current: {cur if cur else 'provider default'})[/yellow]"
+        )
+        return
+    if arg not in levels:
+        ctx.console.print("[yellow]Usage: /effort off|low|medium|high[/yellow]")
+        return
+    if arg == "off":
+        ctx.state["reasoning_effort"] = None
+        ctx.console.print("[green]Reasoning effort restored to provider default[/green]")
+        return
+    ctx.state["reasoning_effort"] = arg
+    ctx.console.print(
+        f"[green]Reasoning effort set: {arg} (applies next round; "
+        f"unsupported providers ignore it)[/green]"
+    )
+
+
+def _cmd_window(ctx: CommandContext) -> None:
+    """上下文窗口覆写（token；仅影响压缩触发时机）：<n> | off。runtime-knobs。"""
+    arg = ctx.arg.strip()
+    if not arg:
+        cur = ctx.state.get("context_window")
+        ctx.console.print(
+            f"[yellow]Usage: /window <n> | /window off  "
+            f"(current: {cur if cur else 'auto (model table)'})[/yellow]"
+        )
+        return
+    if arg == "off":
+        ctx.state["context_window"] = None
+        ctx.console.print("[green]Context window restored to auto resolution[/green]")
+        return
+    try:
+        n = int(arg)
+    except ValueError:
+        n = 0
+    if n < 1000:
+        ctx.console.print("[yellow]Usage: /window <n>（n 为 ≥1000 的 token 数）[/yellow]")
+        return
+    ctx.state["context_window"] = n
+    ctx.console.print(
+        f"[green]Context window set: {n} tok (只影响压缩时机，不改变模型真实上限)[/green]"
+    )
+
+
 # ---- 模块级 registry：注册全部 builtin 命令 ----
 
 _registry = CommandRegistry()
@@ -553,6 +631,9 @@ _registry.register(CommandSpec("/tools", "List available tools", _cmd_tools))
 _registry.register(CommandSpec("/model", "Show or switch model (<provider> [model]); applies next round", _cmd_model))
 _registry.register(CommandSpec("/thread", "Show thread info", _cmd_thread))
 _registry.register(CommandSpec("/prompt", "Prompt management (list|show <cat/name>|reload)", _cmd_prompt))
+_registry.register(CommandSpec("/rounds", "Loop/search budget: <n>|off; applies next round", _cmd_rounds))
+_registry.register(CommandSpec("/effort", "Reasoning effort: off|low|medium|high; applies next round", _cmd_effort))
+_registry.register(CommandSpec("/window", "Context window override (tokens): <n>|off; affects compaction timing", _cmd_window))
 _registry.register(CommandSpec("/skill", "Skill control (list|search|<name>|off|enable|disable|install|evolve|capture|history)", _cmd_skill))
 _registry.register(CommandSpec("/mcp", "MCP control (list|reload)", _cmd_mcp))
 

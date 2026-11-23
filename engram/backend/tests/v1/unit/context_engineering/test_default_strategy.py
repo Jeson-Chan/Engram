@@ -240,6 +240,27 @@ def test_after_model_uses_resolve_window_size() -> None:
     assert gov["default"]["budget"]["fraction"] == 0.5  # 32000/64000
 
 
+def test_after_model_runtime_window_overrides_all() -> None:
+    """runtime-knobs：会话 context_window（configurable）优先于 config 与查表。"""
+    strategy = DefaultStrategy()
+    messages = [AIMessage(content="hi")]
+    governance = {"default": {"budget": {"total": 0, "window": 0, "fraction": 0.0}, "seen_msgs": {}}}
+    ctx = GovernanceContext(
+        state={},
+        governance=governance,
+        config={"window": 1000},
+        token_counter=lambda m: 500,
+        runtime=SimpleNamespace(context={"context_window": 32_000}),
+        hook="test",
+        messages=messages,
+    )
+    result = strategy.after_model(ctx)
+    gov = result.state_patch["governance"]
+    assert gov["default"]["budget"]["window"] == 32_000
+    # fraction 按覆写窗口计算（500/32000）
+    assert gov["default"]["budget"]["fraction"] == 500 / 32_000
+
+
 def test_after_model_config_window_overrides() -> None:
     """config.window 显式配置优先于 resolve_window_size。"""
     model = SimpleNamespace(model_name="deepseek-chat")  # 若查表 = 64000，被 config 1000 覆盖
