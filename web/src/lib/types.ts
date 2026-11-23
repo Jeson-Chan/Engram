@@ -56,6 +56,17 @@ export interface RuntimeStatus {
   sandbox: Record<string, unknown>;
 }
 
+/** skill 管理条目（GET /skills，web-skill-override）。 */
+export interface SkillInfo {
+  skill_id: string;
+  name: string;
+  description: string;
+  effective_rate: number;
+  total_selections: number;
+  allowed_tools: string[];
+  enabled: boolean;
+}
+
 /** 能力三态矩阵行（engram doctor 同源，GET /capabilities；无密钥）。 */
 export interface CapabilityRow {
   key: string;

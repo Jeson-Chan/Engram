@@ -96,6 +96,18 @@ def test_overrides_passed_to_selector(tmp_path):
     assert sel.last_overrides == ["skill-a"]
 
 
+def test_overrides_from_runtime_configurable(tmp_path):
+    # web-skill-override：网关/CLI 把 override 写进 graph config configurable，
+    # 经 _get_runtime_value(runtime, "skill_override") 读取（runtime.context 路径）
+    path = _write_skill(tmp_path, "skill-a", "body")
+    sel = FakeSelector([_rec("a", "skill-a", path)])
+    mw = SkillInjectionMiddleware(FakeStore(), sel)
+    rt = _runtime()
+    rt.context = {"run_id": "r1", "skill_override": ["skill-a"]}
+    mw.before_model({"user_input": "t", "metadata": {}}, rt)
+    assert sel.last_overrides == ["skill-a"]
+
+
 def test_no_journal_silent(tmp_path):
     path = _write_skill(tmp_path, "skill-a", "body")
     mw = SkillInjectionMiddleware(FakeStore(), FakeSelector([_rec("a", "skill-a", path)]))

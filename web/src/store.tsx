@@ -17,6 +17,7 @@ import type {
   RunEventView,
   RunRecord,
   RuntimeStatus,
+  SkillInfo,
   StreamEvent,
 } from "./lib/types";
 
@@ -87,7 +88,7 @@ export interface AppState {
   /** 能力矩阵（doctor 同源；切到"能力" tab 时按需拉取） */
   capabilities: CapabilityReport | null;
   capabilitiesError: string | null;
-  inspectorTab: "run" | "capabilities";
+  inspectorTab: "run" | "capabilities" | "skills";
   user_id: string;
   /** 主区模式（memory-management-ui）：对话工作台 / 全宽记忆管理页 */
   mainView: "chat" | "memory";
@@ -99,6 +100,11 @@ export interface AppState {
   memSelected: string[];
   /** 记忆未配置（503）→ 空态，删除操作不可用 */
   memoryUnavailable: boolean;
+  /** skill 管理列表（GET /skills，web-skill-override；空数组 = 未启用或未加载） */
+  skills: SkillInfo[];
+  skillsError: string | null;
+  /** 当前会话 skill override（请求级携带，刷新即清——design D1） */
+  skillOverride: string[];
 }
 
 type Action =
@@ -119,9 +125,11 @@ type Action =
   | { type: "runEvents"; events: RunEventView[] }
   | { type: "memory"; traces: MemoryTraceView[]; stats: Record<string, number> | null }
   | { type: "memoryUnavailable"; on: boolean }
+  | { type: "skills"; skills: SkillInfo[]; error?: string | null }
+  | { type: "skillOverride"; names: string[] }
   | { type: "status"; status: RuntimeStatus | null; error?: string | null }
   | { type: "capabilities"; report: CapabilityReport | null; error?: string | null }
-  | { type: "inspectorTab"; tab: "run" | "capabilities" }
+  | { type: "inspectorTab"; tab: "run" | "capabilities" | "skills" }
   | { type: "mainView"; view: "chat" | "memory" }
   | { type: "memFilters"; patch: Partial<MemFilters> }
   | { type: "memPartition"; partition: MemPartition | null }
@@ -154,6 +162,9 @@ const initialState: AppState = {
   memPartition: null,
   memSelected: [],
   memoryUnavailable: false,
+  skills: [],
+  skillsError: null,
+  skillOverride: [],
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -233,6 +244,10 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, memoryTraces: action.traces, memoryStats: action.stats };
     case "memoryUnavailable":
       return { ...state, memoryUnavailable: action.on };
+    case "skills":
+      return { ...state, skills: action.skills, skillsError: action.error ?? null };
+    case "skillOverride":
+      return { ...state, skillOverride: action.names };
     case "mainView":
       return { ...state, mainView: action.view };
     case "memFilters":
@@ -338,7 +353,7 @@ export interface AppActions {
   }): Promise<void>;
   refreshStatus(): Promise<void>;
   refreshCapabilities(): Promise<void>;
-  setInspectorTab(tab: "run" | "capabilities"): void;
+  setInspectorTab(tab: "run" | "capabilities" | "skills"): void;
   setMainView(view: "chat" | "memory"): void;
   setMemFilters(patch: Partial<MemFilters>): void;
   setMemPartition(partition: MemPartition | null): void;
@@ -349,6 +364,9 @@ export interface AppActions {
   previewMemoryPartition(userId: string, threadId?: string): Promise<number>;
   openMemoryForThread(threadId: string): void;
   openSessionFromMemory(threadId: string | null): Promise<void>;
+  refreshSkills(): Promise<void>;
+  setSkillOverride(names: string[]): void;
+  setSkillEnabled(skillId: string, enabled: boolean): Promise<boolean>;
 }
 
 const AppContext = createContext<{ state: AppState; actions: AppActions } | null>(null);
@@ -524,7 +542,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await streamSSE(
         `/sessions/${sid}/${mode}`,
-        { message },
+        { message, skill_override: stateRef.current.skillOverride },
         (frame) => {
           if (frame.id != null) {
             dispatch({ type: "lastEventId", id: frame.id });
@@ -571,7 +589,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshRuns]);
 
-  const setInspectorTab = useCallback((tab: "run" | "capabilities") => {
+  const setInspectorTab = useCallback((tab: "run" | "capabilities" | "skills") => {
     dispatch({ type: "inspectorTab", tab });
   }, []);
 
@@ -670,6 +688,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [selectSession],
   );
 
+  // ---- skill 管理（web-skill-override）----
+
+  const refreshSkills = useCallback(async () => {
+    try {
+      const skills = await api.current.listSkills();
+      dispatch({ type: "skills", skills });
+    } catch (err) {
+      dispatch({ type: "skills", skills: [], error: String((err as Error).message) });
+    }
+  }, []);
+
+  /** 会话级 override：请求级携带、刷新即清（design D1）。空数组 = 清除。 */
+  const setSkillOverride = useCallback((names: string[]) => {
+    dispatch({ type: "skillOverride", names });
+  }, []);
+
+  /** 启停 + 刷新列表；返回成功与否（失败由面板提示，调用方回滚 UI）。 */
+  const setSkillEnabled = useCallback(async (skillId: string, enabled: boolean) => {
+    try {
+      await api.current.setSkillEnabled(skillId, enabled);
+      await refreshSkills();
+      return true;
+    } catch (err) {
+      dispatch({ type: "skills", skills: stateRef.current.skills, error: String((err as Error).message) });
+      return false;
+    }
+  }, [refreshSkills]);
+
   const actions = useMemo<AppActions>(
     () => ({
       refreshSessions, createSession, selectSession, deleteSession, renameSession,
@@ -677,12 +723,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMainView, setMemFilters, setMemPartition, toggleMemSelected,
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
+      refreshSkills, setSkillOverride, setSkillEnabled,
     }),
     [refreshSessions, createSession, selectSession, deleteSession, renameSession, send,
       refreshRuns, openRun, refreshMemory, refreshStatus, refreshCapabilities, setInspectorTab,
       setMainView, setMemFilters, setMemPartition, toggleMemSelected,
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
-      previewMemoryPartition, openMemoryForThread, openSessionFromMemory],
+      previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
+      refreshSkills, setSkillOverride, setSkillEnabled],
   );
 
   return <AppContext.Provider value={{ state, actions }}>{children}</AppContext.Provider>;

@@ -114,7 +114,11 @@ class SkillManager:
         return self._config
 
     def list_skills(self) -> list[dict]:
-        """返回 active skills 概览（供 TUI/CLI 展示）。"""
+        """返回 active skills 概览（供 TUI/CLI 展示）。
+
+        enabled（web-skill-override）：启用态随条目返回，供网关 /skills
+        端点与 web 面板使用；CLI/TUI 既有展示按字段名取值，增量键无影响。
+        """
         result: list[dict] = []
         for rec in self._store.list_active():
             result.append({
@@ -124,6 +128,7 @@ class SkillManager:
                 "effective_rate": round(rec.effective_rate, 3),
                 "total_selections": rec.total_selections,
                 "allowed_tools": list(rec.allowed_tools),
+                "enabled": bool(getattr(rec, "enabled", True)),
             })
         return result
 

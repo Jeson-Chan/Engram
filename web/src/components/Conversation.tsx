@@ -160,6 +160,8 @@ export function Conversation() {
   const { state, actions } = useApp();
   const [mode, setMode] = useState<"chat" | "research">("chat");
   const [draft, setDraft] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   // 自动滚到最新
@@ -167,11 +169,66 @@ export function Conversation() {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [state.turns, state.history]);
 
+  // /skill 命令本地处理（web-skill-override）：不发模型，与面板共享 override 状态
+  const handleSkillCommand = (text: string) => {
+    const arg = text.replace(/^\/skill/, "").trim();
+    if (arg === "") {
+      setNotice("用法：/skill list | /skill <name> | /skill off");
+      return;
+    }
+    if (arg === "list") {
+      actions.refreshSkills();
+      setListOpen(true);
+      setNotice(null);
+      return;
+    }
+    if (arg === "off") {
+      actions.setSkillOverride([]);
+      setNotice("已清除 skill override");
+      return;
+    }
+    if (arg === "search" || arg === "install" || arg === "evolve" || arg === "capture"
+      || arg === "enable" || arg === "disable" || arg === "history") {
+      setNotice(`web 暂不支持 /skill ${arg.split(" ")[0]}；可用：list / <name> / off（启停请用 Skills 面板）`);
+      return;
+    }
+    // <name>：设置会话级 override（未知名由 Selector 静默跳过，语义与 CLI 一致）
+    const name = arg.split(/\s+/)[0];
+    actions.setSkillOverride([name]);
+    setNotice(`skill override 已设置：${name}（/skill off 清除）`);
+  };
+
   const send = () => {
     const text = draft.trim();
     if (!text || state.streaming || !state.currentSessionId) return;
+    // /skill 前缀先于一切发送路径（含 running 时的排队语义）本地消化
+    if (text.startsWith("/skill")) {
+      setDraft("");
+      handleSkillCommand(text);
+      return;
+    }
     setDraft("");
+    setNotice(null);
+    setListOpen(false);
     actions.send(mode, text);
+  };
+
+  // /skill 补全：子命令优先（list/off），无命中补激活 skill 名（数据同面板）
+  const skillNames = state.skills.map((s) => s.name);
+  const argPart = draft.trimStart().startsWith("/skill")
+    ? draft.trim().replace(/^\/skill/, "").trim()
+    : null;
+  const suggestions: string[] =
+    argPart === null || argPart === undefined
+      ? []
+      : argPart === ""
+        ? ["list", "off", ...skillNames]
+        : ["list", "off"]
+            .filter((s) => s.startsWith(argPart) && s !== argPart)
+            .concat(skillNames.filter((n) => n.toLowerCase().startsWith(argPart.toLowerCase()) && n !== argPart));
+
+  const acceptSuggestion = (value: string) => {
+    setDraft(`/skill ${value}${value === "list" || value === "off" ? "" : " "}`);
   };
 
   return (
@@ -196,6 +253,37 @@ export function Conversation() {
         </div>
       )}
       <ToolPoolChips />
+      {notice && (
+        <div className="notice" data-testid="skill-cmd-notice">
+          {notice}
+        </div>
+      )}
+      {listOpen && (
+        <div className="skill-cmd-list" data-testid="skill-cmd-list">
+          {state.skills.length === 0
+            ? "（无激活 skill）"
+            : state.skills.map((s) => (
+                <div key={s.skill_id} className="skill-cmd-item">
+                  <span className={s.enabled ? "" : "off"}>{s.name}</span>
+                  <small>{s.enabled ? "已启用" : "已禁用"}</small>
+                </div>
+              ))}
+        </div>
+      )}
+      {suggestions.length > 0 && (
+        <div className="skill-suggest" data-testid="skill-suggest">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              className="px-btn-secondary"
+              data-testid={`skill-suggest-${s}`}
+              onClick={() => acceptSuggestion(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="composer">
         <div className="modes">
           <button

@@ -1,6 +1,6 @@
 /** 网关 REST 客户端 — docs/api.md 契约的前端实现。 */
 
-import type { CapabilityReport, MessageView, MemoryTraceView, RunEventView, RunRecord, RuntimeStatus } from "./types";
+import type { CapabilityReport, MessageView, MemoryTraceView, RunEventView, RunRecord, RuntimeStatus, SkillInfo } from "./types";
 
 export interface SessionRecord {
   session_id: string;
@@ -160,6 +160,26 @@ export class EngramAPI {
   status(): Promise<RuntimeStatus> {
     return fetch(`${this.base}/status`).then((r) =>
       jsonOrThrow<RuntimeStatus>(r, "load status failed"),
+    );
+  }
+
+  // ---- skills（web-skill-override）----
+
+  /** 激活 skill 列表（含 enabled）。skill 模块未启用时网关返回空数组。 */
+  listSkills(): Promise<SkillInfo[]> {
+    return fetch(`${this.base}/skills`).then((r) =>
+      jsonOrThrow<SkillInfo[]>(r, "load skills failed"),
+    );
+  }
+
+  /** 启用/禁用单个 skill（运行时持久，跨重启）。未知名 404 / 模块未启用 503。 */
+  setSkillEnabled(skillId: string, enabled: boolean): Promise<{ skill_id: string; enabled: boolean }> {
+    return fetch(`${this.base}/skills/${encodeURIComponent(skillId)}/enabled`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    }).then((r) =>
+      jsonOrThrow<{ skill_id: string; enabled: boolean }>(r, "set skill enabled failed"),
     );
   }
 

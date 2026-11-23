@@ -1080,3 +1080,38 @@ button, .session-item, .tree-node, .tabbar button, .nav-tabs button, .drawer-tog
   border-color: var(--border-soft);
   color: var(--muted);
 }
+/* statusbar 内的次级按钮落在墨条上：--text 在浅色模式是近黑墨色，
+   直接继承会撞底。启用态/hover 一律用墨条文字色（--px-bar-text，
+   深=磷光白绿 / 浅=近白），hover 仅边框走 agent 语义色。 */
+.statusbar .px-btn-secondary {
+  color: var(--px-bar-text);
+}
+.statusbar .px-btn-secondary:hover:not(:disabled) {
+  color: var(--px-bar-text);
+  border-color: var(--c-agent);
+}
+
+/* ---------- Skill 管理面板（web-skill-override） ---------- */
+.skill-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow-y: auto; }
+.skill-panel .empty { color: var(--muted); text-align: center; padding: 24px 0; font-size: 12px; }
+.skill-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  border: 2px solid var(--border); background: var(--panel);
+  box-shadow: var(--px-shadow-soft); padding: 8px 10px;
+}
+.skill-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.skill-name { font-weight: 700; font-size: 13px; }
+.skill-meta { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; }
+.skill-desc { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.skill-ops { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.skill-ops .px-btn-secondary { font-size: 11px; padding: 2px 8px; }
+.skill-ops .px-btn-secondary.on { border-color: var(--c-agent); color: var(--c-agent); background: var(--c-agent-soft); }
+.skill-override-clear { align-self: flex-start; font-size: 11px; }
+.skill-cmd-list, .skill-suggest {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px;
+  border: 2px dashed var(--border-soft); background: var(--panel);
+  font-size: 12px; align-items: center;
+}
+.skill-cmd-item { display: flex; gap: 6px; align-items: baseline; }
+.skill-cmd-item .off { color: var(--muted); text-decoration: line-through; }
+.skill-suggest .px-btn-secondary { font-size: 11px; padding: 2px 8px; }
