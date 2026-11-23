@@ -88,7 +88,7 @@ export interface AppState {
   /** 能力矩阵（doctor 同源；切到"能力" tab 时按需拉取） */
   capabilities: CapabilityReport | null;
   capabilitiesError: string | null;
-  inspectorTab: "run" | "capabilities" | "skills";
+  inspectorTab: "run" | "capabilities" | "configs";
   user_id: string;
   /** 主区模式（memory-management-ui）：对话工作台 / 全宽记忆管理页 */
   mainView: "chat" | "memory";
@@ -107,6 +107,25 @@ export interface AppState {
   skillOverride: string[];
   /** 会话级运行参数（runtime-knobs；null/0 = auto，请求级携带） */
   knobs: RuntimeKnobs;
+  /** Configs 面板草稿（web-config-surface）：仅编辑态，应用前不改变运行时 */
+  configDraft: ConfigDraft;
+  /** 对话流展示 Thought 折叠行（Configs 显示开关；默认开） */
+  thinkingVisible: boolean;
+  /** Configs 面板 toast（"已生效!" / 失败项） */
+  configToast: { kind: "ok" | "err"; text: string } | null;
+}
+
+/** Configs 草稿：undefined = 未改；显式 null = 清除为 auto。 */
+export interface ConfigDraft {
+  skills?: Record<string, boolean>;
+  override?: string[];
+  maxLoopSteps?: number | null;
+  reasoningEffort?: "low" | "medium" | "high" | null;
+  contextWindow?: number | null;
+  provider?: string | null;
+  model?: string | null;
+  mode?: "expert" | "lightweight" | null;
+  thinkingVisible?: boolean;
 }
 
 export interface RuntimeKnobs {
@@ -136,9 +155,13 @@ type Action =
   | { type: "skills"; skills: SkillInfo[]; error?: string | null }
   | { type: "skillOverride"; names: string[] }
   | { type: "knobs"; patch: Partial<RuntimeKnobs> }
+  | { type: "configDraft"; patch: Partial<ConfigDraft> }
+  | { type: "configDraftReset" }
+  | { type: "configToast"; toast: { kind: "ok" | "err"; text: string } | null }
+  | { type: "thinking"; value: boolean }
   | { type: "status"; status: RuntimeStatus | null; error?: string | null }
   | { type: "capabilities"; report: CapabilityReport | null; error?: string | null }
-  | { type: "inspectorTab"; tab: "run" | "capabilities" | "skills" }
+  | { type: "inspectorTab"; tab: "run" | "capabilities" | "configs" }
   | { type: "mainView"; view: "chat" | "memory" }
   | { type: "memFilters"; patch: Partial<MemFilters> }
   | { type: "memPartition"; partition: MemPartition | null }
@@ -175,6 +198,9 @@ const initialState: AppState = {
   skillsError: null,
   skillOverride: [],
   knobs: { maxLoopSteps: null, reasoningEffort: null, contextWindow: null },
+  configDraft: {},
+  thinkingVisible: true,
+  configToast: null,
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -260,6 +286,14 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, skillOverride: action.names };
     case "knobs":
       return { ...state, knobs: { ...state.knobs, ...action.patch } };
+    case "configDraft":
+      return { ...state, configDraft: { ...state.configDraft, ...action.patch } };
+    case "configDraftReset":
+      return { ...state, configDraft: {} };
+    case "configToast":
+      return { ...state, configToast: action.toast };
+    case "thinking":
+      return { ...state, thinkingVisible: action.value };
     case "mainView":
       return { ...state, mainView: action.view };
     case "memFilters":
@@ -365,7 +399,11 @@ export interface AppActions {
   }): Promise<void>;
   refreshStatus(): Promise<void>;
   refreshCapabilities(): Promise<void>;
-  setInspectorTab(tab: "run" | "capabilities" | "skills"): void;
+  setInspectorTab(tab: "run" | "capabilities" | "configs"): void;
+  setConfigDraft(patch: Partial<ConfigDraft>): void;
+  applyConfig(): Promise<boolean>;
+  clearConfigToast(): void;
+  reloadMcp(): Promise<boolean>;
   setMainView(view: "chat" | "memory"): void;
   setMemFilters(patch: Partial<MemFilters>): void;
   setMemPartition(partition: MemPartition | null): void;
@@ -612,7 +650,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshRuns]);
 
-  const setInspectorTab = useCallback((tab: "run" | "capabilities" | "skills") => {
+  const setInspectorTab = useCallback((tab: "run" | "capabilities" | "configs") => {
     dispatch({ type: "inspectorTab", tab });
   }, []);
 
@@ -732,6 +770,86 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "knobs", patch });
   }, []);
 
+  // ---- Configs 草稿与应用（web-config-surface）----
+
+  const setConfigDraft = useCallback((patch: Partial<ConfigDraft>) => {
+    dispatch({ type: "configDraft", patch });
+  }, []);
+
+  const clearConfigToast = useCallback(() => {
+    dispatch({ type: "configToast", toast: null });
+  }, []);
+
+  /** 一次提交全部草稿：技能启停 diff → 模型/模式 → 本地状态（override/旋钮/思考）。
+   *  成功清空草稿 + "已生效!"；失败保留草稿并提示失败项。 */
+  const applyConfig = useCallback(async (): Promise<boolean> => {
+    const s = stateRef.current;
+    const draft = s.configDraft;
+    try {
+      // 1) 技能启停：草稿与已加载的 diff
+      if (draft.skills) {
+        for (const skill of s.skills) {
+          const want = draft.skills[skill.skill_id];
+          if (typeof want === "boolean" && want !== skill.enabled) {
+            await api.current.setSkillEnabled(skill.skill_id, want);
+          }
+        }
+        await refreshSkills();
+      }
+      // 2) 模型/模式（网关全局；作用于所有会话的后续运行）
+      if (draft.provider) {
+        await api.current.applyConfig({
+          provider: draft.provider,
+          model: draft.model || undefined,
+          expert_mode: draft.mode == null ? undefined : draft.mode === "expert",
+        });
+        await refreshStatus();
+      } else if (draft.mode != null) {
+        await api.current.applyConfig({ expert_mode: draft.mode === "expert" });
+        await refreshStatus();
+      }
+      // 3) 本地状态（override / 三旋钮 / 思考显示）
+      if (draft.override) {
+        dispatch({ type: "skillOverride", names: draft.override });
+      }
+      const knobPatch: Partial<RuntimeKnobs> = {};
+      if (draft.maxLoopSteps !== undefined) knobPatch.maxLoopSteps = draft.maxLoopSteps;
+      if (draft.reasoningEffort !== undefined) knobPatch.reasoningEffort = draft.reasoningEffort;
+      if (draft.contextWindow !== undefined) knobPatch.contextWindow = draft.contextWindow;
+      if (Object.keys(knobPatch).length > 0) {
+        dispatch({ type: "knobs", patch: knobPatch });
+      }
+      if (draft.thinkingVisible !== undefined) {
+        dispatch({ type: "thinking", value: draft.thinkingVisible });
+      }
+      dispatch({ type: "configDraftReset" });
+      dispatch({ type: "configToast", toast: { kind: "ok", text: "已生效!" } });
+      return true;
+    } catch (err) {
+      dispatch({
+        type: "configToast",
+        toast: { kind: "err", text: `应用失败：${(err as Error).message}` },
+      });
+      return false;
+    }
+  }, [refreshSkills, refreshStatus]);
+
+  /** 重载 MCP（独立按钮，非 apply 链）。 */
+  const reloadMcp = useCallback(async (): Promise<boolean> => {
+    try {
+      await api.current.reloadMcp();
+      await refreshStatus();
+      dispatch({ type: "configToast", toast: { kind: "ok", text: "MCP 已重载" } });
+      return true;
+    } catch (err) {
+      dispatch({
+        type: "configToast",
+        toast: { kind: "err", text: `MCP 重载失败：${(err as Error).message}` },
+      });
+      return false;
+    }
+  }, [refreshStatus]);
+
   /** 启停 + 刷新列表；返回成功与否（失败由面板提示，调用方回滚 UI）。 */
   const setSkillEnabled = useCallback(async (skillId: string, enabled: boolean) => {
     try {
@@ -752,13 +870,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
       refreshSkills, setSkillOverride, setSkillEnabled, setKnobs,
+      setConfigDraft, applyConfig, clearConfigToast, reloadMcp,
     }),
     [refreshSessions, createSession, selectSession, deleteSession, renameSession, send,
       refreshRuns, openRun, refreshMemory, refreshStatus, refreshCapabilities, setInspectorTab,
       setMainView, setMemFilters, setMemPartition, toggleMemSelected,
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
-      refreshSkills, setSkillOverride, setSkillEnabled, setKnobs],
+      refreshSkills, setSkillOverride, setSkillEnabled, setKnobs,
+      setConfigDraft, applyConfig, clearConfigToast, reloadMcp],
   );
 
   return <AppContext.Provider value={{ state, actions }}>{children}</AppContext.Provider>;

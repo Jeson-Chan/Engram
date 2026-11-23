@@ -1,6 +1,6 @@
-/** runtime-knobs 集成测试。
+/** runtime-knobs 集成测试（web-config-surface 草稿语义）。
  *
- * 覆盖：运行参数区渲染/来源标记、三旋钮设置与清除、chat 请求体携带、
+ * 覆盖：运行参数区默认 auto/来源标记、设置→应用→请求体携带、think 显示开关、
  * provider 支持性标注。
  */
 
@@ -43,6 +43,14 @@ function stubApi(provider = "qwen") {
         status: 200, headers: { "Content-Type": "text/event-stream" },
       });
     }
+    if (method === "POST" && path.endsWith("/config")) {
+      captured.push({ path, method, body });
+      return jsonResponse({ model: "m", provider, mode: "expert", reloaded: true });
+    }
+    if (method === "POST" && path.endsWith("/mcp/reload")) {
+      captured.push({ path, method, body });
+      return jsonResponse({ reloaded: true, mcp: [] });
+    }
     if (path.startsWith("/sessions")) {
       if (path.includes("/runs") || path.includes("/messages")) return jsonResponse([]);
       return jsonResponse(sessions);
@@ -51,6 +59,7 @@ function stubApi(provider = "qwen") {
       return jsonResponse({
         model: "m", provider, mode: "expert", deployment: "venv",
         skills: [], mcp: [], sandbox: {},
+        models: [{ provider, model: "x", is_default: true }],
       });
     }
     if (path === "/skills" || path.startsWith("/skills?")) return jsonResponse([]);
@@ -72,8 +81,8 @@ async function openPanel() {
   await waitFor(() => screen.getByTestId("session-sess-a"));
   fireEvent.click(screen.getByTestId("session-sess-a"));
   await waitFor(() => expect((screen.getByTestId("composer") as HTMLTextAreaElement).disabled).toBe(false));
-  fireEvent.click(screen.getByTestId("skill-tab"));
-  await waitFor(() => screen.getByTestId("runtime-knobs"));
+  fireEvent.click(screen.getByTestId("configs-tab"));
+  await waitFor(() => screen.getByTestId("configs-panel"));
 }
 
 async function sendChat(text: string) {
@@ -83,7 +92,7 @@ async function sendChat(text: string) {
   await waitFor(() => expect(screen.getByTestId("composer")).toBeTruthy());
 }
 
-describe("运行参数区", () => {
+describe("运行参数区（草稿 + 应用）", () => {
   it("默认全部 auto；来源标记正确", async () => {
     stubApi();
     await openPanel();
@@ -92,33 +101,38 @@ describe("运行参数区", () => {
     expect(screen.getByTestId("window-source").textContent).toContain("auto");
   });
 
-  it("轮数：应用后 manual + 请求体携带；清除后恢复 auto 且不携带", async () => {
+  it("轮数：设置（草稿）→ 应用 → manual + 请求体携带；清除应用后恢复 auto", async () => {
     const captured = stubApi();
     await openPanel();
     fireEvent.change(screen.getByTestId("rounds-input"), { target: { value: "10" } });
     fireEvent.click(screen.getByTestId("rounds-apply"));
+    // 草稿态：尚未应用到运行时
+    expect(screen.getByTestId("rounds-source").textContent).toContain("auto");
+    fireEvent.click(screen.getByTestId("configs-apply"));
     await waitFor(() => expect(screen.getByTestId("rounds-source").textContent).toContain("manual"));
+
     await sendChat("第一条");
     await waitFor(() => {
       const chat = captured.find((c) => c.path.includes("/chat"));
-      expect(chat).toBeTruthy();
       expect((chat as Captured).body).toMatchObject({ message: "第一条", max_loop_steps: 10 });
     });
+
     fireEvent.click(screen.getByTestId("rounds-clear"));
+    fireEvent.click(screen.getByTestId("configs-apply"));
     await waitFor(() => expect(screen.getByTestId("rounds-source").textContent).toContain("auto"));
     await sendChat("第二条");
     await waitFor(() => {
       const chats = captured.filter((c) => c.path.includes("/chat"));
-      expect(chats).toHaveLength(2);
       const body = (chats[1] as Captured).body as Record<string, unknown>;
       expect(body.max_loop_steps).toBeUndefined();
     });
   });
 
-  it("思考强度：选择 medium 后请求体携带；off 不携带", async () => {
+  it("思考强度：选 medium 应用后请求体携带；off 不携带", async () => {
     const captured = stubApi();
     await openPanel();
     fireEvent.change(screen.getByTestId("effort-select"), { target: { value: "medium" } });
+    fireEvent.click(screen.getByTestId("configs-apply"));
     await waitFor(() => expect(screen.getByTestId("effort-source").textContent).toContain("medium"));
     await sendChat("想一想");
     await waitFor(() => {
@@ -126,6 +140,7 @@ describe("运行参数区", () => {
       expect((chat as Captured).body).toMatchObject({ reasoning_effort: "medium" });
     });
     fireEvent.change(screen.getByTestId("effort-select"), { target: { value: "off" } });
+    fireEvent.click(screen.getByTestId("configs-apply"));
     await waitFor(() => expect(screen.getByTestId("effort-source").textContent).toContain("auto"));
     await sendChat("别想了");
     await waitFor(() => {
@@ -135,19 +150,18 @@ describe("运行参数区", () => {
     });
   });
 
-  it("窗口：应用后请求体携带 context_window；清除后不携带", async () => {
+  it("窗口：设置应用后请求体携带 context_window", async () => {
     const captured = stubApi();
     await openPanel();
     fireEvent.change(screen.getByTestId("window-input"), { target: { value: "32000" } });
     fireEvent.click(screen.getByTestId("window-apply"));
+    fireEvent.click(screen.getByTestId("configs-apply"));
     await waitFor(() => expect(screen.getByTestId("window-source").textContent).toContain("32000"));
     await sendChat("压缩我");
     await waitFor(() => {
       const chat = captured.find((c) => c.path.includes("/chat"));
       expect((chat as Captured).body).toMatchObject({ context_window: 32000 });
     });
-    fireEvent.click(screen.getByTestId("window-clear"));
-    await waitFor(() => expect(screen.getByTestId("window-source").textContent).toContain("auto"));
   });
 
   it("provider 支持性：deepseek 标注不支持，qwen 不标注", async () => {

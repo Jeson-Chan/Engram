@@ -1132,3 +1132,27 @@ button, .session-item, .tree-node, .tabbar button, .nav-tabs button, .drawer-tog
 }
 .knob-row .px-btn-secondary { font-size: 11px; padding: 2px 8px; }
 .knob-row small { color: var(--muted); font-size: 11px; }
+
+/* ---------- Configs 面板（web-config-surface） ---------- */
+.configs-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow-y: auto; position: relative; }
+.configs-panel .empty { color: var(--muted); text-align: center; padding: 18px 0; font-size: 12px; }
+.configs-panel .knobs-title { margin-top: 4px; }
+.config-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  border: 2px solid var(--border); background: var(--panel);
+  box-shadow: var(--px-shadow-soft); padding: 6px 8px;
+}
+.cfg-name { font-weight: 700; font-size: 12px; }
+.cfg-meta { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; }
+.config-row .px-btn-secondary { font-size: 11px; padding: 2px 8px; }
+.config-row .px-btn-secondary.on, .knob-row .px-btn-secondary.on {
+  border-color: var(--c-agent); color: var(--c-agent); background: var(--c-agent-soft);
+}
+.configs-footer {
+  position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px;
+  padding: 8px 0 2px; background: var(--panel); border-top: 2px solid var(--border-soft);
+}
+.configs-footer .px-btn { font-size: 12px; padding: 4px 14px; }
+.configs-toast { font-size: 12px; padding: 2px 10px; border: 2px solid var(--border); }
+.configs-toast.ok { border-color: var(--ok); color: var(--ok); background: rgba(27, 127, 77, 0.08); }
+.configs-toast.err { border-color: var(--error); color: var(--error); background: var(--error-soft); }

@@ -54,6 +54,8 @@ export interface RuntimeStatus {
   skills: Array<Record<string, unknown>>;
   mcp: Array<Record<string, unknown>>;
   sandbox: Record<string, unknown>;
+  /** web-config-surface：模型选择器候选（可用 provider，不含密钥） */
+  models?: Array<{ provider: string; model: string; is_default?: boolean }>;
 }
 
 /** skill 管理条目（GET /skills，web-skill-override）。 */

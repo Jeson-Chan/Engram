@@ -1,8 +1,8 @@
-/** web-skill-override 集成测试。
+/** web-skill-override + web-config-surface 集成测试。
  *
- * 覆盖：Skills 面板（列表/启停/失败回滚/override 设置清除）、/skill 斜杠
- * 命令（list/name/off/未知子命令、不发模型）、补全、chat 请求体携带
- * skill_override。
+ * 覆盖：Configs 面板（列表/启停草稿与单应用/override 设置清除/失败提示）、
+ * /skill 斜杠命令（list/name/off/未知子命令、不发模型）、补全、chat 请求体
+ * 携带 skill_override。
  */
 
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -56,9 +56,16 @@ function stubApi() {
     if (method === "POST" && /\/skills\/[^/]+\/enabled$/.test(path)) {
       captured.push({ path, method, body });
       const sid = decodeURIComponent(path.split("/skills/")[1].split("/enabled")[0]);
-      if (sid === "unknown") return jsonResponse({ detail: "skill not found" }, 404);
       enabledState = { ...enabledState, [sid]: body.enabled };
       return jsonResponse({ skill_id: sid, enabled: body.enabled });
+    }
+    if (method === "POST" && path.endsWith("/config")) {
+      captured.push({ path, method, body });
+      return jsonResponse({ model: "m", provider: "qwen", mode: "expert", reloaded: true });
+    }
+    if (method === "POST" && path.endsWith("/mcp/reload")) {
+      captured.push({ path, method, body });
+      return jsonResponse({ reloaded: true, mcp: [] });
     }
     if (method === "POST" && path.endsWith("/sessions")) {
       return jsonResponse(sessions[0], 201);
@@ -69,13 +76,12 @@ function stubApi() {
     }
     if (path.startsWith("/status")) {
       return jsonResponse({
-        model: "m", provider: "p", mode: "expert", deployment: "venv",
+        model: "m", provider: "qwen", mode: "expert", deployment: "venv",
         skills: skillsNow(), mcp: [], sandbox: {},
+        models: [{ provider: "qwen", model: "qwen-plus", is_default: true }],
       });
     }
-    if (path === "/skills" || path.startsWith("/skills?")) {
-      return jsonResponse(skillsNow());
-    }
+    if (path === "/skills" || path.startsWith("/skills?")) return jsonResponse(skillsNow());
     if (path.startsWith("/capabilities")) return jsonResponse({ deployment: "venv", capabilities: [], connectivity: [] });
     if (path.startsWith("/memory")) return jsonResponse([]);
     return jsonResponse([]);
@@ -96,44 +102,79 @@ async function renderWithSession() {
   await waitFor(() => expect((screen.getByTestId("composer") as HTMLTextAreaElement).disabled).toBe(false));
 }
 
-describe("Skills 面板", () => {
-  it("列表渲染 name/description/生效率/enabled；数据来自 GET /skills", async () => {
+async function openConfigs() {
+  fireEvent.click(screen.getByTestId("configs-tab"));
+  await waitFor(() => screen.getByTestId("configs-panel"));
+}
+
+describe("Configs 面板", () => {
+  it("列表渲染 name/生效率/enabled；数据来自 GET /skills", async () => {
     stubApi();
     await renderWithSession();
-    fireEvent.click(screen.getByTestId("skill-tab"));
-    const panel = await waitFor(() => screen.getByTestId("skill-panel"));
+    await openConfigs();
+    const panel = screen.getByTestId("configs-panel");
     expect(panel.textContent).toContain("find-skills");
     expect(panel.textContent).toContain("找技能");
     expect(screen.getByTestId("skill-toggle-find-skills").textContent).toBe("已启用");
     expect(screen.getByTestId("skill-toggle-report-gen").textContent).toBe("已禁用");
   });
 
-  it("启停开关调 POST /skills/{id}/enabled 并刷新列表", async () => {
+  it("启停是草稿：点击只改草稿，应用后才 POST 并刷新", async () => {
     const captured = stubApi();
     await renderWithSession();
-    fireEvent.click(screen.getByTestId("skill-tab"));
-    await waitFor(() => screen.getByTestId("skill-toggle-find-skills"));
+    await openConfigs();
     fireEvent.click(screen.getByTestId("skill-toggle-find-skills"));
+    // 草稿态：按钮立即翻转但不发请求
+    expect(screen.getByTestId("skill-toggle-find-skills").textContent).toBe("已禁用");
+    expect(captured.filter((c) => c.path.includes("/enabled"))).toHaveLength(0);
+    fireEvent.click(screen.getByTestId("configs-apply"));
     await waitFor(() => {
       const call = captured.find((c) => c.path.includes("/skills/s-find/enabled"));
       expect(call).toBeTruthy();
       expect((call as Captured).body).toEqual({ enabled: false });
     });
-    // 刷新后按钮文字翻转
-    await waitFor(() => expect(screen.getByTestId("skill-toggle-find-skills").textContent).toBe("已禁用"));
   });
 
-  it("override 设置与清除；清除后无 clear 按钮", async () => {
+  it("应用成功显示 toast 已生效!", async () => {
     stubApi();
     await renderWithSession();
-    fireEvent.click(screen.getByTestId("skill-tab"));
-    await waitFor(() => screen.getByTestId("skill-override-find-skills"));
+    await openConfigs();
+    fireEvent.click(screen.getByTestId("skill-toggle-find-skills"));
+    fireEvent.click(screen.getByTestId("configs-apply"));
+    const toast = await waitFor(() => screen.getByTestId("configs-toast"));
+    expect(toast.textContent).toContain("已生效!");
+  });
+
+  it("override 设置（草稿）→ 应用 → chat 携带；再取消 → chat 携带空", async () => {
+    const captured = stubApi();
+    await renderWithSession();
+    await openConfigs();
     fireEvent.click(screen.getByTestId("skill-override-find-skills"));
-    await waitFor(() => expect(screen.getByTestId("skill-override-find-skills").textContent).toBe("override 中"));
-    expect(screen.getByTestId("skill-override-clear").textContent).toContain("find-skills");
-    fireEvent.click(screen.getByTestId("skill-override-clear"));
-    await waitFor(() => expect(screen.queryByTestId("skill-override-clear")).toBeNull());
-    expect(screen.getByTestId("skill-override-find-skills").textContent).toBe("设为 override");
+    expect(screen.getByTestId("skill-override-find-skills").textContent).toBe("override 中");
+    fireEvent.click(screen.getByTestId("configs-apply"));
+    await waitFor(() => screen.getByTestId("configs-toast"));
+
+    const composer = screen.getByTestId("composer") as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "研究一下" } });
+    fireEvent.click(screen.getByTestId("send"));
+    await waitFor(() => {
+      const chat = captured.find((c) => c.path.includes("/chat"));
+      expect((chat as Captured).body).toMatchObject({ skill_override: ["find-skills"] });
+    });
+
+    // 取消 override → 应用 → chat 空
+    fireEvent.click(screen.getByTestId("skill-override-find-skills"));
+    fireEvent.click(screen.getByTestId("configs-apply"));
+    await waitFor(() => {
+      const chats = captured.filter((c) => c.path.includes("/chat"));
+      expect(chats).toHaveLength(1);
+    });
+    fireEvent.change(screen.getByTestId("composer"), { target: { value: "再来" } });
+    fireEvent.click(screen.getByTestId("send"));
+    await waitFor(() => {
+      const chats = captured.filter((c) => c.path.includes("/chat"));
+      expect((chats[1] as Captured).body).toEqual({ message: "再来", skill_override: [] });
+    });
   });
 });
 
@@ -148,13 +189,11 @@ describe("/skill 斜杠命令", () => {
     expect(screen.getByTestId("skill-cmd-notice").textContent).toContain("find-skills");
     expect(captured.filter((c) => c.path.includes("/chat"))).toHaveLength(0);
 
-    // 正常消息：请求体携带 override
     fireEvent.change(composer, { target: { value: "研究一下" } });
     fireEvent.click(screen.getByTestId("send"));
     await waitFor(() => {
       const chat = captured.find((c) => c.path.includes("/chat"));
-      expect(chat).toBeTruthy();
-      expect((chat as Captured).body).toEqual({ message: "研究一下", skill_override: ["find-skills"] });
+      expect((chat as Captured).body).toMatchObject({ message: "研究一下", skill_override: ["find-skills"] });
     });
   });
 
@@ -172,8 +211,7 @@ describe("/skill 斜杠命令", () => {
     fireEvent.click(screen.getByTestId("send"));
     await waitFor(() => {
       const chat = captured.find((c) => c.path.includes("/chat"));
-      expect(chat).toBeTruthy();
-      expect((chat as Captured).body).toEqual({ message: "再来一条", skill_override: [] });
+      expect((chat as Captured).body).toMatchObject({ message: "再来一条", skill_override: [] });
     });
   });
 
@@ -202,9 +240,7 @@ describe("/skill 斜杠命令", () => {
   it("/skill 前缀补全：空参补子命令，部分输入补 skill 名，点击回填", async () => {
     stubApi();
     await renderWithSession();
-    // 先开一次 skills tab 让 /skills 进 store（补全数据同面板）
-    fireEvent.click(screen.getByTestId("skill-tab"));
-    await waitFor(() => screen.getByTestId("skill-panel"));
+    await openConfigs(); // 打开 Configs 让 /skills 进 store（补全数据同面板）
     const composer = screen.getByTestId("composer") as HTMLTextAreaElement;
     fireEvent.change(composer, { target: { value: "/skill " } });
     const suggest = await waitFor(() => screen.getByTestId("skill-suggest"));

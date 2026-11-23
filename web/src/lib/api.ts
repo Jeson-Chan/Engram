@@ -183,6 +183,30 @@ export class EngramAPI {
     );
   }
 
+  // ---- 运行配置（web-config-surface）----
+
+  /** 应用模型/模式变更（网关全局；作用于所有会话的后续运行）。 */
+  applyConfig(payload: { provider?: string; model?: string; expert_mode?: boolean }): Promise<{
+    model: string | null; provider: string | null; mode: string | null; reloaded: boolean;
+  }> {
+    return fetch(`${this.base}/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then((r) =>
+      jsonOrThrow<{ model: string | null; provider: string | null; mode: string | null; reloaded: boolean }>(
+        r, "apply config failed",
+      ),
+    );
+  }
+
+  /** 重载 MCP 工具（重建 graph）。模块未启用 → 503。 */
+  reloadMcp(): Promise<{ reloaded: boolean; mcp: Array<Record<string, unknown>> }> {
+    return fetch(`${this.base}/mcp/reload`, { method: "POST" }).then((r) =>
+      jsonOrThrow<{ reloaded: boolean; mcp: Array<Record<string, unknown>> }>(r, "reload mcp failed"),
+    );
+  }
+
   /** 能力三态矩阵（engram doctor 同源；探测含网络检查，秒级延迟）。 */
   capabilities(): Promise<CapabilityReport> {
     return fetch(`${this.base}/capabilities`).then((r) =>

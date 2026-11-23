@@ -5,8 +5,8 @@ import { Conversation } from "./components/Conversation";
 import { RunInspector } from "./components/RunInspector";
 import { MemoryExplorer } from "./components/MemoryExplorer";
 import { CapabilityPanel } from "./components/CapabilityPanel";
-import { SkillPanel } from "./components/SkillPanel";
-import { IconRun, IconAnalytics, IconSun, IconMoon } from "./components/pixel-icons";
+import { ConfigsPanel } from "./components/ConfigsPanel";
+import { IconRun, IconAnalytics, IconSun, IconMoon, IconCog } from "./components/pixel-icons";
 import "./styles.css";
 
 /** 深/浅主题切换:盖章 documentElement.dataset.theme + localStorage 持久化;无记录跟随系统。 */
@@ -104,17 +104,17 @@ function Shell() {
           <IconAnalytics size={11} color="var(--c-agent)" /> 能力
         </button>
         <button
-          className={state.inspectorTab === "skills" ? "on" : ""}
-          onClick={() => actions.setInspectorTab("skills")}
-          data-testid="skill-tab"
+          className={state.inspectorTab === "configs" ? "on" : ""}
+          onClick={() => actions.setInspectorTab("configs")}
+          data-testid="configs-tab"
         >
-          Skills
+          <IconCog size={11} color="var(--c-agent)" /> Configs
         </button>
       </div>
       {state.inspectorTab === "capabilities" ? (
         <CapabilityPanel />
-      ) : state.inspectorTab === "skills" ? (
-        <SkillPanel />
+      ) : state.inspectorTab === "configs" ? (
+        <ConfigsPanel />
       ) : (
         <RunInspector />
       )}

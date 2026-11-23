@@ -27,6 +27,7 @@ from pydantic import BaseModel
 
 from engram.backend.app.bootstrap import AppRuntime, bootstrap_runtime
 from engram.backend.app.gateway.chat import mount_chat_routes
+from engram.backend.app.gateway.config_api import mount_config_routes
 from engram.backend.app.gateway.history import mount_history_routes
 from engram.backend.app.gateway.memory_api import mount_memory_routes
 from engram.backend.app.gateway.registry import SessionRegistry
@@ -122,6 +123,7 @@ def create_app(
     mount_memory_routes(app)
     mount_status_routes(app)
     mount_skill_routes(app)
+    mount_config_routes(app)
     app.state.runtime = None  # lifespan 填充；会话 CRUD 不依赖它
     app.state.run_store = None  # lifespan 填充（PG 配置时）
     # SSE 断线重连缓冲（issue 10）：per-session 事件环形缓冲

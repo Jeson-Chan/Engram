@@ -126,16 +126,19 @@ def test_run_doctor_json_and_exit_code(monkeypatch, tmp_path: Path, capsys):
 
 
 def test_doctor_tier_purpose_copy(monkeypatch, tmp_path: Path):
-    """1.1：热层/冷层 off 文案含用途说明（治"不知道干什么用的"）。"""
+    """web-config-surface：热层/冷层 off 文案精简为一句（保留环境变量名 + 结论）。"""
     monkeypatch.delenv("ENGRAM_REDIS_URL", raising=False)
     monkeypatch.delenv("ENGRAM_MEMORY_PG_DSN", raising=False)
     monkeypatch.setenv("ENGRAM_MEMORY_USE", "default")
     report = doctor.build_report(tmp_path, probes=_probes(redis=False, pg=False))
     hot = next(c for c in report.capabilities if c.key == "memory_hot")
     cold = next(c for c in report.capabilities if c.key == "memory_cold")
-    assert "热层=读取加速" in hot.detail
-    assert "Markdown 单层" in hot.detail
-    assert "冷层=永久沉淀" in cold.detail
+    assert "ENGRAM_REDIS_URL" in hot.detail
+    assert "功能不受影响" in hot.detail
+    assert "ENGRAM_MEMORY_PG_DSN" in cold.detail
+    assert "功能不受影响" in cold.detail
+    # 精简：单句（无分号/句号分隔的第二句）
+    assert "；" not in hot.detail and "；" not in cold.detail
 
 
 def test_tui_capability_lines_show_deployment(monkeypatch, tmp_path: Path):

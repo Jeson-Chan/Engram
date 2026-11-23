@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
 import { IconCoinStack } from "./pixel-icons";
-import { ToolPoolChips } from "./ToolPoolDialog";
 import { Markdown } from "./Markdown";
 import type { ChatTurn, ToolCallState } from "../store";
 import type { MessageView } from "../lib/types";
@@ -117,6 +116,7 @@ function HistoryMessage({ msg }: { msg: MessageView }) {
 }
 
 function TurnView({ turn }: { turn: ChatTurn }) {
+  const { state } = useApp();
   if (turn.role === "user") {
     return (
       <div className="msg user">
@@ -137,7 +137,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
       </div>
       <div className="body">
         <RecalledHint turn={turn} />
-        <ThinkingRow text={turn.thinking} />
+        {state.thinkingVisible && <ThinkingRow text={turn.thinking} />}
         <Markdown text={turn.content} />
         {turn.streaming && <span className="cursor" />}
         {(turn.toolCalls ?? []).map((tool, i) => (
@@ -252,7 +252,6 @@ export function Conversation() {
           ⚠ {state.droppedNotice}
         </div>
       )}
-      <ToolPoolChips />
       {notice && (
         <div className="notice" data-testid="skill-cmd-notice">
           {notice}

@@ -86,43 +86,12 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
-describe("工具池 chip 与各自弹层", () => {
-  it("非空集合显示 chip；点击 skills chip 弹出 skills 列表（不含 MCP）", async () => {
+describe("输入区无工具池 chips（web-config-surface）", () => {
+  it("composer 旁无 skills/MCP chip（改由右栏 Configs 展示）", async () => {
     stubApi();
     render(<App />);
-    await waitFor(() => screen.getByTestId("pool-chip-row"));
-    expect(screen.getByTestId("pool-chip-skills").textContent).toBe("3 skills ▾");
-    expect(screen.getByTestId("pool-chip-mcp").textContent).toBe("2 MCP ▾");
-
-    fireEvent.click(screen.getByTestId("pool-chip-skills"));
-    const dialog = await waitFor(() => screen.getByTestId("tool-pool-skills"));
-    expect(dialog.textContent).toContain("find-skills");
-    expect(dialog.textContent).toContain("3）");
-    // skills 层不含 MCP server 名
-    expect(dialog.textContent).not.toContain("stdio");
-
-    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
-    expect(screen.queryByTestId("tool-pool-skills")).toBeNull();
-  });
-
-  it("点击 MCP chip：server 名/transport/工具数/健康态", async () => {
-    stubApi();
-    render(<App />);
-    await waitFor(() => screen.getByTestId("pool-chip-mcp"));
-    fireEvent.click(screen.getByTestId("pool-chip-mcp"));
-    const dialog = await waitFor(() => screen.getByTestId("tool-pool-mcp"));
-    expect(dialog.textContent).toContain("local");
-    expect(dialog.textContent).toContain("stdio");
-    expect(dialog.textContent).toContain("4 tools");
-    expect(dialog.textContent).toContain("health: degraded");
-    // MCP 层不含 skill 名
-    expect(dialog.textContent).not.toContain("find-skills");
-  });
-
-  it("空集合不显示对应 chip", async () => {
-    stubApi({ emptyPools: true });
-    render(<App />);
-    await waitFor(() => screen.getByTestId("pool-chip-row"));
+    await waitFor(() => screen.getByTestId("statusbar"));
+    expect(screen.queryByTestId("pool-chip-row")).toBeNull();
     expect(screen.queryByTestId("pool-chip-skills")).toBeNull();
     expect(screen.queryByTestId("pool-chip-mcp")).toBeNull();
   });
@@ -133,7 +102,7 @@ describe("statusbar 瘦身 + 记忆按钮禁用态", () => {
     stubApi();
     render(<App />);
     await waitFor(() => screen.getByTestId("statusbar"));
-    // 计数徽章不再出现（chip 承载）
+    // 计数徽章不再出现
     expect(screen.queryByText(/skills$/)).toBeNull();
     expect(screen.queryByText(/MCP$/)).toBeNull();
     // 无当前会话 → 按钮常驻但禁用

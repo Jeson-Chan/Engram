@@ -99,6 +99,8 @@ class RuntimeStatus(BaseModel):
     skills: list[dict[str, Any]] = Field(default_factory=list)
     mcp: list[dict[str, Any]] = Field(default_factory=list)
     sandbox: dict[str, Any] = Field(default_factory=dict)
+    # web-config-surface：模型/模式选择器的候选（可用 provider；不含密钥）
+    models: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +230,22 @@ def runtime_status_from_runtime(runtime: Any) -> RuntimeStatus:
 
     deployment_probe = probe_deployment()
 
+    # web-config-surface：可用 provider 候选（含默认 model；绝不含密钥）
+    models: list[dict[str, Any]] = []
+    try:
+        from engram.backend.agents.config.provider_config import (
+            discover_available_providers,
+        )
+
+        for p in discover_available_providers():
+            models.append({
+                "provider": p.provider,
+                "model": p.model,
+                "is_default": bool(getattr(p, "default", False)),
+            })
+    except Exception:
+        models = []
+
     return RuntimeStatus(
         model=getattr(runtime, "researcher_model_name", None),
         provider=os.environ.get("ENGRAM_PROVIDER") or None,
@@ -236,4 +254,5 @@ def runtime_status_from_runtime(runtime: Any) -> RuntimeStatus:
         skills=skills,
         mcp=mcp,
         sandbox=sandbox,
+        models=models,
     )

@@ -27,6 +27,7 @@ import rawBudget from "../assets/icons/budget.svg?raw";
 import rawTimeline from "../assets/icons/timeline.svg?raw";
 import rawAnalytics from "../assets/icons/analytics.svg?raw";
 import rawEdit from "../assets/icons/edit.svg?raw";
+import rawCog from "../assets/icons/cog.svg?raw";
 
 interface IconProps {
   size?: number;
@@ -122,6 +123,10 @@ export function IconTimeline(props: IconProps) {
 /** 上下文预算:硬币(库:coin-solid) */
 export function IconCoinStack(props: IconProps) {
   return <PixelIcon {...props} raw={rawBudget} label="budget" />;
+}
+/** 配置:齿轮(库:regular/cog;与 procedural 的 cog-solid 区分实/空心) */
+export function IconCog(props: IconProps) {
+  return <PixelIcon {...props} raw={rawCog} label="cog" />;
 }
 
 /** 执行态两帧 spinner(v5:沿用像素方块二帧,steps 切换)。 */
