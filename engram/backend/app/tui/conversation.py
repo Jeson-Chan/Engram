@@ -152,6 +152,9 @@ class ConversationLog(RichLog):
             self._render_tool_end(event)
         elif etype == "skill_active":
             self._render_skill_active(event)
+        elif etype == "steer_injected":
+            # real-steer：插话已注入下一模型步
+            self.write(Text(f"  ↳ Steer injected: {str(event.get('content', ''))[:80]}", style="dim"))
         elif etype == "done":
             self._render_done()
         elif etype == "error":

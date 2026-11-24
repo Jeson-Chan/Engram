@@ -115,6 +115,8 @@ export interface AppState {
   configToast: { kind: "ok" | "err"; text: string } | null;
   /** 报告生成结果提示（surface-parity） */
   reportNotice: { kind: "ok" | "err"; text: string } | null;
+  /** 插话反馈（real-steer）：已插话 / 已注入 / 失败 */
+  steerNotice: { kind: "ok" | "err"; text: string } | null;
 }
 
 /** Configs 草稿：undefined = 未改；显式 null = 清除为 auto。 */
@@ -161,6 +163,7 @@ type Action =
   | { type: "configDraftReset" }
   | { type: "configToast"; toast: { kind: "ok" | "err"; text: string } | null }
   | { type: "reportNotice"; notice: { kind: "ok" | "err"; text: string } | null }
+  | { type: "steerNotice"; notice: { kind: "ok" | "err"; text: string } | null }
   | { type: "thinking"; value: boolean }
   | { type: "status"; status: RuntimeStatus | null; error?: string | null }
   | { type: "capabilities"; report: CapabilityReport | null; error?: string | null }
@@ -205,6 +208,7 @@ const initialState: AppState = {
   thinkingVisible: true,
   configToast: null,
   reportNotice: null,
+  steerNotice: null,
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -298,6 +302,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, configToast: action.toast };
     case "reportNotice":
       return { ...state, reportNotice: action.notice };
+    case "steerNotice":
+      return { ...state, steerNotice: action.notice };
     case "thinking":
       return { ...state, thinkingVisible: action.value };
     case "mainView":
@@ -411,6 +417,8 @@ export interface AppActions {
   clearConfigToast(): void;
   reloadMcp(): Promise<boolean>;
   generateReport(topic?: string): Promise<boolean>;
+  steer(text: string): Promise<boolean>;
+  clearSteerNotice(): void;
   setMainView(view: "chat" | "memory"): void;
   setMemFilters(patch: Partial<MemFilters>): void;
   setMemPartition(partition: MemPartition | null): void;
@@ -617,6 +625,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
           const event = parseEventData<StreamEvent>(frame);
           if (!event) return;
+          // real-steer：插话注入反馈走独立提示（不进对话轮）
+          if (event.type === "steer_injected") {
+            dispatch({
+              type: "steerNotice",
+              notice: { kind: "ok", text: `已注入：${(event.content || "").slice(0, 60)}` },
+            });
+            return;
+          }
           // review medium：事件累积走 reducer（批内多帧曾共享过期快照互相抹 delta）
           dispatch({ type: "streamEvent", index: assistantIndex, event });
         },
@@ -862,6 +878,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /** 运行中插话（real-steer）：POST /steer 入队，下一模型步注入。 */
+  const steer = useCallback(async (text: string): Promise<boolean> => {
+    const sid = stateRef.current.currentSessionId;
+    if (!sid) return false;
+    try {
+      await api.current.steer(sid, text);
+      dispatch({ type: "steerNotice", notice: { kind: "ok", text: `已插话（待注入）：${text.slice(0, 60)}` } });
+      return true;
+    } catch (err) {
+      dispatch({
+        type: "steerNotice",
+        notice: { kind: "err", text: `插话失败：${(err as Error).message}` },
+      });
+      return false;
+    }
+  }, []);
+
+  const clearSteerNotice = useCallback(() => {
+    dispatch({ type: "steerNotice", notice: null });
+  }, []);
+
   /** 重载 MCP（独立按钮，非 apply 链）。 */
   const reloadMcp = useCallback(async (): Promise<boolean> => {
     try {
@@ -898,7 +935,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
       refreshSkills, setSkillOverride, setSkillEnabled, setKnobs,
-      setConfigDraft, applyConfig, clearConfigToast, reloadMcp, generateReport,
+      setConfigDraft, applyConfig, clearConfigToast, reloadMcp, generateReport, steer, clearSteerNotice,
     }),
     [refreshSessions, createSession, selectSession, deleteSession, renameSession, send,
       refreshRuns, openRun, refreshMemory, refreshStatus, refreshCapabilities, setInspectorTab,
@@ -906,7 +943,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
       refreshSkills, setSkillOverride, setSkillEnabled, setKnobs,
-      setConfigDraft, applyConfig, clearConfigToast, reloadMcp, generateReport],
+      setConfigDraft, applyConfig, clearConfigToast, reloadMcp, generateReport, steer, clearSteerNotice],
   );
 
   return <AppContext.Provider value={{ state, actions }}>{children}</AppContext.Provider>;

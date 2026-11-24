@@ -1080,23 +1080,19 @@ class EngramTUI(CompletionHost, App):
             self._flush_steer_queue()
 
     def _queue_steer(self, text: str) -> None:
-        """Queue user input as steer text (non-interrupting injection)."""
-        if not hasattr(self, "_steer_queue"):
-            self._steer_queue: list[str] = []
-        self._steer_queue.append(text)
+        """运行中插话：真实入队（real-steer），SteerMiddleware 在下一模型步注入。
+
+        此前实现只打印不注入（display-only）——已在 real-steer 中替换。
+        """
+        from engram.backend.agents.middlewares.steer_queue import get_steer_queues
+
+        get_steer_queues().put(self.runtime.thread_id, text)
         from rich.text import Text
         conv = self.query_one(ConversationLog)
         conv.write(Text(f"⚡ Steer queued: {text[:80]}", style="dim"))
 
     def _flush_steer_queue(self) -> None:
-        """Display queued steer messages after tool batch completes."""
-        if not hasattr(self, "_steer_queue") or not self._steer_queue:
-            return
-        from rich.text import Text
-        conv = self.query_one(ConversationLog)
-        for msg in self._steer_queue:
-            conv.write(Text(f"  ↳ Steer applied: {msg[:80]}", style="dim"))
-        self._steer_queue.clear()
+        """占位保留（real-steer 后注入反馈由 steer_injected 事件驱动）。"""
 
     def _build_stream_config(self, ctx: Any) -> dict:
         from engram.backend.app.cli.main import _build_stream_config

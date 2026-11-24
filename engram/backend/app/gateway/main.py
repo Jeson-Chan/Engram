@@ -36,6 +36,7 @@ from engram.backend.app.gateway.web_ui import mount_web_ui
 from engram.backend.app.gateway.report_api import mount_report_routes
 from engram.backend.app.gateway.research import mount_research_routes
 from engram.backend.app.gateway.skills_api import mount_skill_routes
+from engram.backend.app.gateway.steer_api import mount_steer_routes
 from engram.backend.app.schemas.sessions import SessionCreateRequest, SessionResponse
 from engram.backend.agents.runtime.checkpointer import (
     reset_checkpointer,
@@ -126,8 +127,11 @@ def create_app(
     mount_skill_routes(app)
     mount_config_routes(app)
     mount_report_routes(app)
+    mount_steer_routes(app)
     app.state.runtime = None  # lifespan 填充；会话 CRUD 不依赖它
     app.state.run_store = None  # lifespan 填充（PG 配置时）
+    # real-steer：活跃 SSE 流的 session_id 集合（chat/research 流生命周期内持有）
+    app.state.active_streams = set()
     # SSE 断线重连缓冲（issue 10）：per-session 事件环形缓冲
     from engram.backend.app.gateway.sse_buffer import SessionEventBuffers
 

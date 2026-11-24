@@ -222,6 +222,19 @@ export class EngramAPI {
     );
   }
 
+  // ---- 运行中插话（real-steer）----
+
+  /** 流式期间向活跃运行插话（下一模型步注入）。无活跃运行 → 409。 */
+  steer(sessionId: string, message: string): Promise<{ accepted: boolean; thread_id: string }> {
+    return fetch(`${this.base}/sessions/${encodeURIComponent(sessionId)}/steer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    }).then((r) =>
+      jsonOrThrow<{ accepted: boolean; thread_id: string }>(r, "steer failed"),
+    );
+  }
+
   /** 能力三态矩阵（engram doctor 同源；探测含网络检查，秒级延迟）。 */
   capabilities(): Promise<CapabilityReport> {
     return fetch(`${this.base}/capabilities`).then((r) =>

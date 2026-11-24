@@ -173,6 +173,13 @@ export function Conversation() {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [state.turns, state.history]);
 
+  // real-steer：插话提示 4s 自动消失
+  useEffect(() => {
+    if (!state.steerNotice) return;
+    const t = setTimeout(() => actions.clearSteerNotice(), 4000);
+    return () => clearTimeout(t);
+  }, [state.steerNotice, actions]);
+
   // /skill 命令本地处理（web-skill-override）：不发模型，与面板共享 override 状态
   const handleSkillCommand = (text: string) => {
     const arg = text.replace(/^\/skill/, "").trim();
@@ -204,7 +211,15 @@ export function Conversation() {
 
   const send = () => {
     const text = draft.trim();
-    if (!text || state.streaming || !state.currentSessionId) return;
+    if (!text || !state.currentSessionId) return;
+    // real-steer：流式中回车 = 插话（失败保留草稿，成功清空）
+    if (state.streaming) {
+      if (/^\/skill\b/.test(text)) return; // 运行中不接受 skill 命令
+      void actions.steer(text).then((ok) => {
+        if (ok) setDraft("");
+      });
+      return;
+    }
     // /skill 前缀先于一切发送路径本地消化（词边界：不吞 /skills、/skillful…）
     if (/^\/skill\b/.test(text)) {
       setDraft("");
@@ -315,6 +330,12 @@ export function Conversation() {
           {state.reportNotice.text}
         </div>
       )}
+      {state.steerNotice && (
+        <div className="notice" data-testid="steer-notice">
+          {state.steerNotice.kind === "err" ? "⚠ " : "⚡ "}
+          {state.steerNotice.text}
+        </div>
+      )}
       {notice && (
         <div className="notice" data-testid="skill-cmd-notice">
           {notice}
@@ -375,9 +396,9 @@ export function Conversation() {
           <div className="slash-mirror" ref={mirrorRef} aria-hidden="true" />
           <textarea
             ref={taRef}
-            placeholder={state.currentSessionId ? "输入问题，Enter 发送（Shift+Enter 换行）" : "先选择会话"}
+            placeholder={state.currentSessionId ? (state.streaming ? "运行中——Enter 插话（下一模型步注入）" : "输入问题，Enter 发送（Shift+Enter 换行）") : "先选择会话"}
             value={draft}
-            disabled={!state.currentSessionId || state.streaming}
+            disabled={!state.currentSessionId}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               // command-completion：弹层打开时 ↑↓/Tab/Esc 优先
@@ -411,8 +432,8 @@ export function Conversation() {
             data-testid="composer"
           />
         </div>
-        <button className="px-btn send" onClick={send} disabled={state.streaming || !draft.trim()} data-testid="send">
-          {state.streaming ? "流式…" : "发送"}
+        <button className="px-btn send" onClick={send} disabled={!draft.trim()} data-testid="send">
+          {state.streaming ? "插话" : "发送"}
         </button>
       </div>
     </>

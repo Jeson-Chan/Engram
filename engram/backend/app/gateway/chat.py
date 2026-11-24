@@ -61,19 +61,22 @@ def mount_chat_routes(app: FastAPI) -> None:
         # 每请求闭包持有 run 上下文；错误在流内以 error 事件 + done 收尾
         async def _event_stream():
             run_id: str | None = None
-            # 断线重连：先补发缺口（缓冲仍存的事件），再接续新流。
-            # 超出缓冲容量的缺口无法补——X-Engram-Events-Dropped 头明示。
-            if buffer is not None and resume_from is not None:
-                replayed = buffer.replay_after(resume_from)
-                if not replayed and resume_from < (buffer.first_id() or 1) - 1:
-                    # 缺口已出缓冲范围
-                    yield _sse_frame({"type": "error",
-                                      "content": "resume gap exceeded buffer capacity",
-                                      "tool_name": None, "tool_args": None,
-                                      "tool_result": None, "msg_id": None})
-                for eid, frame in replayed:
-                    yield frame_with_id(eid, frame)
+            # real-steer：流生命周期内标记活跃会话（/steer 的 409 判定依据）
+            active: set[str] = getattr(app.state, "active_streams", set())
+            active.add(session_id)
             try:
+                # 断线重连：先补发缺口（缓冲仍存的事件），再接续新流。
+                # 超出缓冲容量的缺口无法补——X-Engram-Events-Dropped 头明示。
+                if buffer is not None and resume_from is not None:
+                    replayed = buffer.replay_after(resume_from)
+                    if not replayed and resume_from < (buffer.first_id() or 1) - 1:
+                        # 缺口已出缓冲范围
+                        yield _sse_frame({"type": "error",
+                                          "content": "resume gap exceeded buffer capacity",
+                                          "tool_name": None, "tool_args": None,
+                                          "tool_result": None, "msg_id": None})
+                    for eid, frame in replayed:
+                        yield frame_with_id(eid, frame)
                 # 阻塞 IO（journal 目录创建 / JSONL 追加）→ 线程池
                 ctx = await asyncio.to_thread(
                     _create_run_context, runtime, record,
@@ -136,6 +139,17 @@ def mount_chat_routes(app: FastAPI) -> None:
                     yield frame_with_id(buffer.append(done_frame), done_frame)
                 else:
                     yield done_frame
+            finally:
+                # real-steer：退出活跃集；丢弃 run 结束后仍未注入的残留插话
+                active.discard(session_id)
+                try:
+                    from engram.backend.agents.middlewares.steer_queue import (
+                        get_steer_queues,
+                    )
+
+                    get_steer_queues().clear(record.thread_id)
+                except Exception:
+                    pass
 
         headers = {
             "Cache-Control": "no-cache",

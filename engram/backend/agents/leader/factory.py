@@ -115,6 +115,11 @@ def _build_middlewares(
         RuntimeKnobsMiddleware,
     )
     middlewares.append(RuntimeKnobsMiddleware())
+    # real-steer：运行中插话注入（before_model 排空 thread 队列）
+    from engram.backend.agents.middlewares.steer_middleware import SteerMiddleware
+    from engram.backend.agents.middlewares.steer_queue import get_steer_queues
+
+    middlewares.append(SteerMiddleware(get_steer_queues()))
     middlewares.extend([
         SystemContextMiddleware(),
     ])

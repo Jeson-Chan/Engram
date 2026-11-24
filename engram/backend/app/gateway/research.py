@@ -56,6 +56,9 @@ def mount_research_routes(app: FastAPI) -> None:
 
         async def _event_stream():
             run_id = None
+            # real-steer：流生命周期内标记活跃会话（/steer 的 409 判定依据）
+            active: set[str] = getattr(app.state, "active_streams", set())
+            active.add(session_id)
             try:
                 # 阻塞 IO（run 上下文 + journal 落盘）→ 线程池
                 ctx = await asyncio.to_thread(
@@ -124,6 +127,17 @@ def mount_research_routes(app: FastAPI) -> None:
                 yield _sse_frame({"type": "done", "content": "",
                                   "tool_name": None, "tool_args": None,
                                   "tool_result": None, "msg_id": None})
+            finally:
+                # real-steer：退出活跃集；丢弃 run 结束后仍未注入的残留插话
+                active.discard(session_id)
+                try:
+                    from engram.backend.agents.middlewares.steer_queue import (
+                        get_steer_queues,
+                    )
+
+                    get_steer_queues().clear(record.thread_id)
+                except Exception:
+                    pass
 
         return StreamingResponse(
             _event_stream(),
