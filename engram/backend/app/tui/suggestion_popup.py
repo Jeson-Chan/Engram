@@ -30,11 +30,15 @@ class SuggestionPopup(Widget):
         display: none;
         background: {theme.SURFACE};
         color: {theme.TEXT_PRIMARY};
-        border-left: solid {theme.BORDER_FOCUS};
         padding: 0 1;
     }}
     SuggestionPopup.visible {{
         display: block;
+    }}
+    # 欢迎页：与 #welcome-input 同宽居中，左缘对齐输入框（ui-polish）
+    #welcome-completion {{
+        width: 64;
+        max-width: 90%;
     }}
     """
 

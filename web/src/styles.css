@@ -12,7 +12,8 @@
 
 /* ---------- token 层：graph-paper（浅） ---------- */
 :root {
-  color-scheme: light dark;
+  /* ui-polish：原生控件（select 弹出列表等）跟随页面主题而非 OS 偏好 */
+  color-scheme: light;
 
   /* 三语义(浅：深色值保对比) */
   --c-user: #7c3aa8;              /* 紫：用户 */
@@ -50,6 +51,7 @@
 
 /* ---------- token 层：phosphor（深·显式） ---------- */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --c-user: #c77dff;
   --c-agent: #5eead4;
   --c-exec: #ffa94d;
@@ -82,6 +84,7 @@
 /* 系统跟随深色 */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --c-user: #c77dff;
     --c-agent: #5eead4;
     --c-exec: #ffa94d;
@@ -1136,7 +1139,12 @@ button, .session-item, .tree-node, .tabbar button, .nav-tabs button, .drawer-tog
 /* ---------- Configs 面板（web-config-surface） ---------- */
 .configs-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow-y: auto; position: relative; }
 .configs-panel .empty { color: var(--muted); text-align: center; padding: 18px 0; font-size: 12px; }
-.configs-panel .knobs-title { margin-top: 4px; }
+/* ui-polish：模块间横线分隔（组标题上边线，首组除外） */
+.configs-panel .knobs-title {
+  margin-top: 4px; padding-top: 10px;
+  border-top: 2px solid var(--border-soft);
+}
+.configs-panel .knobs-title:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 .config-row {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   border: 2px solid var(--border); background: var(--panel);
