@@ -1,6 +1,6 @@
 ---
 name: find-skills
-description: Discover available skills in the builtin library by keyword.
+description: 按关键词在 builtin 技能库中发现可用技能。
 allowed-tools:
   - list_dir
   - read_file

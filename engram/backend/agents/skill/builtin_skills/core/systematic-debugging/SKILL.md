@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: "4-phase root cause debugging: understand bugs before fixing."
+description: 四阶段根因调试：先理解再修复。
 allowed-tools:
   - bash
   - read_file

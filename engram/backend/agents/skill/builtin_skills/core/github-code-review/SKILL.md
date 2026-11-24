@@ -1,6 +1,6 @@
 ---
 name: github-code-review
-description: "Review PRs: diffs, inline comments via gh or REST."
+description: "审查 PR：diff 与行内评论，走 gh 或 REST。"
 allowed-tools:
   - bash
   - read_file

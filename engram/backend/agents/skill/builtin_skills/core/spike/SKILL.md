@@ -1,6 +1,6 @@
 ---
 name: spike
-description: "Throwaway experiments to validate an idea before build."
+description: "构建前的临时实验，验证想法可行性。"
 allowed-tools:
   - bash
   - write_file

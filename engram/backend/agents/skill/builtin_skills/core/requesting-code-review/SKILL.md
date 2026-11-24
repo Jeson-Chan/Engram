@@ -1,6 +1,6 @@
 ---
 name: requesting-code-review
-description: "Pre-commit review: security scan, quality gates, auto-fix."
+description: "提交前审查：安全扫描、质量门禁、自动修复。"
 allowed-tools:
   - bash
   - read_file

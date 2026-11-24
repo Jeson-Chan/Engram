@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Create, edit, and evaluate agent skills iteratively.
+description: 迭代创建、编辑与评估 agent 技能。
 allowed-tools:
   - write_file
   - str_replace

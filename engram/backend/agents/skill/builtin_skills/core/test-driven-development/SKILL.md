@@ -1,6 +1,6 @@
 ---
 name: test-driven-development
-description: "TDD: enforce RED-GREEN-REFACTOR, tests before code."
+description: TDD：强制红-绿-重构，先写测试。
 allowed-tools:
   - bash
   - write_file

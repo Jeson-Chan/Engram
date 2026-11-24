@@ -1,6 +1,6 @@
 ---
 name: simplify-code
-description: "Sequential 3-lens cleanup of recent code changes."
+description: 三镜头依次清理近期代码改动。
 allowed-tools:
   - bash
   - read_file

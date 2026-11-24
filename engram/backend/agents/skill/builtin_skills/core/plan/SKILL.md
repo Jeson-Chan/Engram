@@ -1,6 +1,6 @@
 ---
 name: plan
-description: "Plan mode: write markdown plan, no execution."
+description: "规划模式：产出 markdown 计划，不执行。"
 allowed-tools:
   - write_file
   - read_file

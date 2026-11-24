@@ -1,6 +1,6 @@
 ---
 name: skill-authoring
-description: "Author SKILL.md: frontmatter, structure, writing principles."
+description: "编写 SKILL.md：frontmatter、结构与写作原则。"
 allowed-tools:
   - write_file
   - str_replace

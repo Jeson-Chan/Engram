@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: "Onboarding conversation to generate a user profile."
+description: "开场引导对话，生成用户画像。"
 allowed-tools:
   - write_file
   - read_file
