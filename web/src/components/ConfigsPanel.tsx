@@ -32,6 +32,7 @@ export function ConfigsPanel() {
   const status = state.status;
   const [roundsDraft, setRoundsDraft] = useState("");
   const [windowDraft, setWindowDraft] = useState("");
+  const [knobError, setKnobError] = useState<string | null>(null);
 
   useEffect(() => {
     actions.refreshSkills();
@@ -45,6 +46,26 @@ export function ConfigsPanel() {
   }, [state.configToast, actions]);
 
   const setDraft = (patch: Partial<ConfigDraft>) => actions.setConfigDraft(patch);
+  const applyRounds = () => {
+    const n = Number(roundsDraft);
+    if (!Number.isInteger(n) || n < 1) {
+      setKnobError(`轮数需为 ≥1 整数（当前输入：${roundsDraft}）`);
+      return;
+    }
+    setKnobError(null);
+    setDraft({ maxLoopSteps: n });
+    setRoundsDraft("");
+  };
+  const applyWindow = () => {
+    const n = Number(windowDraft);
+    if (!Number.isInteger(n) || n < 1000) {
+      setKnobError(`窗口需为 ≥1000 的 token 数（当前输入：${windowDraft}）`);
+      return;
+    }
+    setKnobError(null);
+    setDraft({ contextWindow: n });
+    setWindowDraft("");
+  };
 
   // ---- 草稿 / 已应用值的取值 ----
   const skillEnabled = (id: string, applied: boolean) =>
@@ -160,13 +181,10 @@ export function ConfigsPanel() {
         />
         <button
           className="px-btn-secondary"
-          onClick={() => {
-            const n = Number(roundsDraft);
-            if (Number.isInteger(n) && n >= 1) { setDraft({ maxLoopSteps: n }); setRoundsDraft(""); }
-          }}
+          onClick={applyRounds}
           data-testid="rounds-apply"
         >设置</button>
-        <button className="px-btn-secondary" onClick={() => setDraft({ maxLoopSteps: null })} data-testid="rounds-clear">自动</button>
+        <button className="px-btn-secondary" onClick={() => { setKnobError(null); setDraft({ maxLoopSteps: null }); }} data-testid="rounds-clear">自动</button>
         <small data-testid="rounds-source">
           {appliedRounds ? `manual：${appliedRounds}` : "auto（配置默认）"}
           {pendingHint(draft.maxLoopSteps)}
@@ -203,19 +221,19 @@ export function ConfigsPanel() {
         />
         <button
           className="px-btn-secondary"
-          onClick={() => {
-            const n = Number(windowDraft);
-            if (Number.isInteger(n) && n >= 1000) { setDraft({ contextWindow: n }); setWindowDraft(""); }
-          }}
+          onClick={applyWindow}
           data-testid="window-apply"
         >设置</button>
-        <button className="px-btn-secondary" onClick={() => setDraft({ contextWindow: null })} data-testid="window-clear">自动</button>
+        <button className="px-btn-secondary" onClick={() => { setKnobError(null); setDraft({ contextWindow: null }); }} data-testid="window-clear">自动</button>
         <small data-testid="window-source">
           {appliedWindow ? `manual：${appliedWindow} tok` : "auto（模型查表）"}
           {pendingHint(draft.contextWindow)}
           · 仅影响压缩时机
         </small>
       </div>
+      {knobError && (
+        <div className="notice" data-testid="knob-error">⚠ {knobError}</div>
+      )}
 
       {/* ---- MCP ---- */}
       <div className="knobs-title">MCP</div>
@@ -224,7 +242,7 @@ export function ConfigsPanel() {
           ? <span className="cfg-meta">（未配置 MCP server）</span>
           : mcp.map((m) => (
               <span key={String(m.name)} className="cfg-meta">
-                {String(m.name)} · {String(m.transport ?? "")} · {String(m.health_state ?? "?")}
+                {String(m.name)} · {String(m.transport ?? "")} · {Number(m.tool_count ?? 0)} tools · {String(m.health_state ?? "?")}
               </span>
             ))}
       </div>

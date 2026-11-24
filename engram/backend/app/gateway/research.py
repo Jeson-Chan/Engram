@@ -170,7 +170,12 @@ def _create_run_context(runtime, record):
 
 
 def _build_stream_config(runtime, ctx, request: ChatRequest | None = None) -> dict:
-    """graph config（与 chat.py 同构；runtime-knobs 覆写语义一致）。"""
+    """graph config（与 chat.py 同构；旋钮合并单点在 stream_knobs.py）。"""
+    from engram.backend.app.gateway.stream_knobs import (
+        apply_stream_knobs,
+        knobs_from_request,
+    )
+
     rc = ctx.config.runtime
     configurable: dict = {
         "expert_mode": rc.expert_mode,
@@ -182,17 +187,9 @@ def _build_stream_config(runtime, ctx, request: ChatRequest | None = None) -> di
         "plan_enabled": rc.plan_enabled,
         "timezone": rc.timezone,
         "model": runtime.researcher_model_name,
-        "skill_override": list(request.skill_override) if request is not None else [],
     }
-    if request is not None and request.reasoning_effort and request.reasoning_effort != "off":
-        configurable["reasoning_effort"] = request.reasoning_effort
-    if request is not None and request.context_window is not None:
-        configurable["context_window"] = request.context_window
-    loop_steps = (
-        request.max_loop_steps
-        if request is not None and request.max_loop_steps is not None
-        else rc.max_loop_steps
-    )
+    knob_loop = apply_stream_knobs(configurable, knobs_from_request(request))
+    loop_steps = knob_loop if knob_loop else rc.max_loop_steps
     return {
         "configurable": configurable,
         "recursion_limit": loop_steps * rc.graph_node_multiplier,

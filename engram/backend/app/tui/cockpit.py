@@ -29,7 +29,7 @@ from textual.binding import Binding
 from textual import events
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Label, ListItem, ListView, Static
+from textual.widgets import Input, Label, ListItem, ListView, Static
 
 
 def capability_lines(report: Any) -> list[Text]:
@@ -116,6 +116,56 @@ class GatewayClient:
         except (urllib.error.URLError, OSError, ValueError):
             return False
 
+    def patch_session(self, session_id: str, title: str) -> dict | None:
+        """PATCH /sessions/{id}（surface-parity：TUI 会话重命名）。成功返记录。"""
+        body = json.dumps({"title": title}, ensure_ascii=False).encode("utf-8")
+        try:
+            req = urllib.request.Request(
+                self.base + f"/sessions/{session_id}",
+                data=body,
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                method="PATCH",
+            )
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except (urllib.error.URLError, OSError, ValueError):
+            return None
+
+    def memory_delete(
+        self,
+        trace_id: str | None = None,
+        user_id: str | None = None,
+        preview: bool = False,
+    ) -> dict | None:
+        """DELETE /memory/traces（surface-parity：TUI 记忆删除/清空）。
+
+        trace_id=单条；user_id=user 粒度（TUI 面板的分区即当前用户）；
+        preview=true 只返将删计数。失败 → None。
+        """
+        from urllib.parse import quote
+
+        params: list[str] = []
+        if trace_id is not None:
+            params.append(f"trace_id={quote(trace_id)}")
+        if user_id is not None:
+            params.append(f"user_id={quote(user_id)}")
+        if preview:
+            params.append("preview=true")
+        q = ("?" + "&".join(params)) if params else ""
+        try:
+            req = urllib.request.Request(
+                self.base + "/memory/traces" + q,
+                headers={"Accept": "application/json"},
+                method="DELETE",
+            )
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except (urllib.error.URLError, OSError, ValueError):
+            return None
+
 
 _OFFLINE = "网关离线（ENGRAM_GATEWAY_URL）——面板数据不可用，对话流不受影响"
 
@@ -142,6 +192,54 @@ class CockpitPanel(ModalScreen):
         yield Static("")
 
     def action_dismiss_panel(self) -> None:
+        self.dismiss(None)
+
+
+class RenamePrompt(ModalScreen):
+    """会话重命名输入弹层（surface-parity）。
+
+    打开即聚焦预填当前标题；Enter 提交（空标题拒绝并提示）、Esc 取消。
+    dismiss(title: str) 提交；dismiss(None) 取消。
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "取消", show=False, priority=True)]
+
+    DEFAULT_CSS = """
+    RenamePrompt { align: center middle; background: $background 40%; }
+    RenamePrompt > #rename-box {
+        width: 60%; height: auto; background: $surface;
+        border: solid $primary; padding: 1 2;
+    }
+    """
+
+    def __init__(self, current: str) -> None:
+        super().__init__()
+        self._current = current
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="rename-box"):
+            yield Static("重命名会话（Enter 提交 · Esc 取消）", id="rename-title")
+            yield Input(value=self._current, id="rename-input")
+
+    def on_mount(self) -> None:
+        try:
+            self.query_one("#rename-input", Input).focus()
+        except Exception:
+            pass
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        title = event.value.strip()
+        if not title:
+            try:
+                self.query_one("#rename-title", Static).update(
+                    Text("标题不能为空——请重新输入或 Esc 取消", style="red"),
+                )
+            except Exception:
+                pass
+            return
+        self.dismiss(title)
+
+    def action_cancel(self) -> None:
         self.dismiss(None)
 
 
@@ -173,7 +271,7 @@ class SessionSwitcher(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(id="panel-box"):
             yield Static(
-                "会话切换 · ↑↓ 选择 · Enter 确认 · d 删除 · Esc 取消",
+                "会话切换 · ↑↓ 选择 · Enter 确认 · d 删除 · r 重命名 · Esc 取消",
                 id="switcher-title",
             )
             yield Static("加载中…", id="switcher-offline")
@@ -189,6 +287,12 @@ class SessionSwitcher(ModalScreen):
         # call_from_thread 是 App 的方法（Screen 没有）——经 self.app 转发
         self.app.call_from_thread(self._render_data, sessions)
 
+    def _label_for(self, s: dict) -> str:
+        return (
+            f"{str((s.get('metadata') or {}).get('title') or s['session_id'][:8])}"
+            f"  ·  {s.get('user_id', '')}  ·  {s['session_id'][:12]}"
+        )
+
     def _render_data(self, sessions: list[dict] | None) -> None:
         if sessions is None:
             self.offline_text = _OFFLINE + "\n本地新建会话仍可用（最后一项）。"
@@ -200,16 +304,16 @@ class SessionSwitcher(ModalScreen):
         # 索引会落在旧列表范围内，选择"新建"会误切到未展示的会话）
         self._sessions = sessions[:30]
         items = [
-            ListItem(Label(
-                f"{str((s.get('metadata') or {}).get('title') or s['session_id'][:8])}"
-                f"  ·  {s.get('user_id', '')}  ·  {s['session_id'][:12]}",
-            ))
+            ListItem(Label(self._label_for(s)))
             for s in self._sessions
         ]
         items.append(ListItem(Label("＋ 新建会话（新 thread，从空对话开始）")))
         self.query_one("#switcher-list", ListView).extend(items)
         try:
-            self.query_one("#switcher-list", ListView).focus()
+            lv = self.query_one("#switcher-list", ListView)
+            if lv.index is None:
+                lv.index = 0  # 聚焦不自动高亮——d/r 需要 index
+            lv.focus()
         except Exception:
             pass
 
@@ -229,7 +333,7 @@ class SessionSwitcher(ModalScreen):
             self.dismiss(self._sessions[index])
 
     async def on_key(self, event: events.Key) -> None:
-        """d 发起删除；确认态 y 确认、其余任意键取消（Enter 也取消）。"""
+        """d 发起删除 / r 重命名；确认态 y 确认、其余任意键取消（Enter 也取消）。"""
         if event.key == "escape":
             return  # 走 BINDINGS 的 dismiss_panel
         if self._pending_delete is None:
@@ -240,6 +344,17 @@ class SessionSwitcher(ModalScreen):
                     self._set_item_label(index, "确认删除？y 确认 / 其他键取消")
                     self._note(Text("删除将不可恢复（含会话映射；网关侧历史独立保留）", style="yellow"))
                 event.stop()  # 不落入 ListView 的键处理
+            elif event.key == "r":
+                # surface-parity：行内重命名（弹入输入层，Enter PATCH 提交）
+                index = self._list_index()
+                if index is not None and 0 <= index < len(self._sessions):
+                    record = self._sessions[index]
+                    current = str((record.get("metadata") or {}).get("title") or "")
+                    self.app.push_screen(
+                        RenamePrompt(current),
+                        lambda title: self._apply_rename(record, title),
+                    )
+                event.stop()
             return
         # 确认态
         if event.key == "y":
@@ -306,6 +421,29 @@ class SessionSwitcher(ModalScreen):
             self._restore_item_label(self._pending_delete)
             self._pending_delete = None
             self._note(Text("已取消", style="dim"))
+
+    def _apply_rename(self, record: dict, title: str | None) -> None:
+        """surface-parity：重命名结果回调（title None = 取消）。"""
+        if title is None:
+            return
+        session_id = record["session_id"]
+
+        def _done(updated: dict | None) -> None:
+            if not updated:
+                self._note(Text("重命名失败（网关不可达或 404）", style="red"))
+                return
+            record.setdefault("metadata", {})["title"] = title
+            for i, s in enumerate(self._sessions):
+                if s.get("session_id") == session_id:
+                    self._set_item_label(i, self._label_for(s))
+                    break
+            self._note(Text(f"已重命名为「{title}」", style="green"))
+
+        def _run() -> None:
+            updated = self._gateway.patch_session(session_id, title)
+            self.app.call_from_thread(_done, updated)
+
+        self.run_worker(_run, thread=True, exclusive=True)
 
     def _remove_item(self, index: int) -> None:
         try:
@@ -376,17 +514,28 @@ class RunTimelinePanel(CockpitPanel):
 
 
 class MemoryPanel(CockpitPanel):
-    """Memory 面板（Ctrl+M）：统计 + 最近记忆（热/冷/遗忘标注）。"""
+    """Memory 面板（Ctrl+M）：统计 + 记忆列表。
+
+    surface-parity：↑↓ 选择 · d 删除选中（行内确认）· c 清空当前用户分区
+    （先 preview 取将删计数再确认）· Esc 关闭。分区即当前用户（TUI 面板口径）。
+    """
 
     def __init__(self, gateway: GatewayClient, user_id: str) -> None:
         super().__init__()
         self._gateway = gateway
         self._user_id = user_id
+        self._traces: list[dict] = []
+        self._pending: str | None = None  # "delete" | "clear"
         self.rendered_text = ""  # worker 完成前测试可读（空态）
 
     def panel_content(self) -> ComposeResult:
-        yield Static("Memory Explorer · Esc 关闭", id="memory-title")
+        yield Static(
+            "Memory Explorer · ↑↓ 选择 · d 删除 · c 清空 · Esc 关闭",
+            id="memory-title",
+        )
         yield Static("加载中…", id="memory-content")
+        yield Static("", id="memory-note")
+        yield ListView(id="memory-list")
 
     def on_mount(self) -> None:
         # review medium：阻塞 HTTP 挪 thread worker
@@ -406,17 +555,109 @@ class MemoryPanel(CockpitPanel):
                 f"全部 {stats.get('total', 0)} · 热 {stats.get('hot', 0)} · 冷 {stats.get('cold', 0)}"
                 f" · 遗忘 {stats.get('forgotten', 0)} · 巩固 {stats.get('consolidation', 0)}",
             ))
-        if traces:
-            lines.append(Text(""))
-            for t in traces[:20]:
-                layer = t.get("layer") or "?"
-                flag = " [已遗忘]" if t.get("forgotten") else ""
-                lines.append(Text(
-                    f"  [{t.get('type', '?')}/{layer}] {str(t.get('content', ''))[:60]}{flag}",
-                    style="dim",
-                ))
         self.rendered_text = "\n".join(str(t) for t in lines)
         self.query_one("#memory-content", Static).update(Text("\n").join(lines))
+
+        self._traces = list(traces or [])[:50]
+        lv = self.query_one("#memory-list", ListView)
+        lv.clear()
+        if not self._traces:
+            lv.append(ListItem(Label("（无记忆）")))
+        else:
+            for t in self._traces:
+                layer = t.get("layer") or "?"
+                flag = " [已遗忘]" if t.get("forgotten") else ""
+                lv.append(ListItem(Label(
+                    f"[{t.get('type', '?')}/{layer}] {str(t.get('content', ''))[:60]}{flag}",
+                )))
+        try:
+            if self._traces and lv.index is None:
+                lv.index = 0  # 聚焦不自动高亮——d 需要 index
+            lv.focus()
+        except Exception:
+            pass
+
+    # ---- 删除 / 清空（surface-parity）----
+
+    def _note(self, text: Text) -> None:
+        try:
+            self.query_one("#memory-note", Static).update(text)
+        except Exception:
+            pass
+
+    def _current_index(self) -> int | None:
+        try:
+            lv = self.query_one("#memory-list", ListView)
+            return lv.index
+        except Exception:
+            return None
+
+    async def on_key(self, event: events.Key) -> None:
+        if event.key == "escape":
+            return  # 走 BINDINGS 的 dismiss_panel
+        if self._pending is not None:
+            pending = self._pending
+            self._pending = None
+            if event.key == "y":
+                if pending == "delete":
+                    self._do_delete()
+                else:
+                    self._do_clear()
+            else:
+                self._note(Text("已取消", style="dim"))
+            event.stop()
+            return
+        if event.key == "d":
+            index = self._current_index()
+            if index is not None and 0 <= index < len(self._traces):
+                self._pending = "delete"
+                self._note(Text("确认删除选中的这条记忆？y 确认 / 其他键取消", style="yellow"))
+            event.stop()
+        elif event.key == "c":
+            self._pending = "clear"
+            self._note(Text(
+                f"确认清空用户 {self._user_id} 的全部记忆？y 确认 / 其他键取消",
+                style="yellow",
+            ))
+            self.run_worker(self._preview_clear, thread=True, exclusive=True)
+            event.stop()
+
+    def _preview_clear(self) -> None:
+        preview = self._gateway.memory_delete(user_id=self._user_id, preview=True)
+        count = (preview or {}).get("count", "?")
+        self.app.call_from_thread(
+            self._note,
+            Text(f"将清空 {count} 条记忆 —— y 确认 / 其他键取消", style="yellow"),
+        )
+
+    def _do_delete(self) -> None:
+        index = self._current_index()
+        if index is None or not (0 <= index < len(self._traces)):
+            return
+        trace_id = self._traces[index].get("id")
+
+        def _run() -> None:
+            result = self._gateway.memory_delete(trace_id=trace_id)
+            self.app.call_from_thread(self._after_mutation, result)
+
+        self.run_worker(_run, thread=True, exclusive=True)
+
+    def _do_clear(self) -> None:
+        def _run() -> None:
+            result = self._gateway.memory_delete(user_id=self._user_id)
+            self.app.call_from_thread(self._after_mutation, result)
+
+        self.run_worker(_run, thread=True, exclusive=True)
+
+    def _after_mutation(self, result: dict | None) -> None:
+        if result is None:
+            self._note(Text("操作失败（网关不可达 / 404 / 记忆未配置）", style="red"))
+            return
+        deleted = result.get("deleted")
+        if deleted is None:
+            deleted = result.get("count", "?")
+        self._note(Text(f"已删除 {deleted} 条记忆", style="green"))
+        self.run_worker(self._fetch_memory, thread=True, exclusive=True)
 
 
 class InspectorPanel(CockpitPanel):
@@ -426,6 +667,7 @@ class InspectorPanel(CockpitPanel):
         super().__init__()
         self._gateway = gateway
         self._cli_state = cli_state
+        self.rendered_text = ""  # 测试可读（worker 完成前空态）
 
     def panel_content(self) -> ComposeResult:
         yield Static("Inspector · Esc 关闭", id="inspector-title")
@@ -465,16 +707,32 @@ class InspectorPanel(CockpitPanel):
             lines.append(Text(f"Context：{tokens} / {window} tok（{pct:.0f}%）"))
 
         # runtime-knobs：三旋钮当前值与来源（manual=本会话设置 / auto=缺省）
+        # surface-parity：来源标注与 web Configs 面板一致（manual: X / auto）
         rounds = self._cli_state.get("max_loop_steps")
         effort = self._cli_state.get("reasoning_effort")
         window_override = self._cli_state.get("context_window")
+        # spec runtime-knobs：思考强度条目 MUST 标注当前 provider 是否支持
+        supported = ""
+        try:
+            from engram.backend.agents.config.reasoning_effort import (
+                effort_kwargs,
+                provider_kind_for_model,
+            )
+
+            registry = getattr(getattr(self.app, "runtime", None), "capability_registry", None)
+            if registry is not None and hasattr(registry, "get_model"):
+                kind = provider_kind_for_model(registry.get_model("researcher"))
+                supported = "" if effort_kwargs(kind, "low") else "（当前 provider 不支持）"
+        except Exception:
+            supported = ""
         lines.append(Text(
-            f"轮数预算：{rounds if rounds else 'auto（配置）'}  "
-            f"思考强度：{effort if effort else 'auto（provider 默认）'}  "
-            f"窗口覆写：{window_override if window_override else 'auto（查表）'}"
+            f"轮数预算：{f'manual: {rounds}' if rounds else 'auto'}  "
+            f"思考强度：{f'manual: {effort}' if effort else 'auto（provider 默认）'}{supported}  "
+            f"窗口覆写：{f'manual: {window_override}' if window_override else 'auto'}"
         ))
 
         if report is not None:
             lines.append(Text(""))
             lines.extend(capability_lines(report))
+        self.rendered_text = "\n".join(str(t) for t in lines)
         self.query_one("#inspector-content", Static).update(Text("\n").join(lines))

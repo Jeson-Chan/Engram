@@ -79,6 +79,11 @@ def completion_candidates(
         return _filter(_EFFORT_LEVELS, "level")
     if cmd == "/prompt":
         return _filter(_PROMPT_SUBCOMMANDS, "subcommand")
+    # spec command-completion：/rounds /window 参数位显示取值提示（不强制选中）
+    if cmd == "/rounds":
+        return [CompletionCandidate("<n>", "轮数（≥1 整数）/ off")]
+    if cmd == "/window":
+        return [CompletionCandidate("<n>", "token 数（≥1000）/ off")]
     return []
 
 

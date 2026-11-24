@@ -33,6 +33,7 @@ from engram.backend.app.gateway.memory_api import mount_memory_routes
 from engram.backend.app.gateway.registry import SessionRegistry
 from engram.backend.app.gateway.status_api import mount_status_routes
 from engram.backend.app.gateway.web_ui import mount_web_ui
+from engram.backend.app.gateway.report_api import mount_report_routes
 from engram.backend.app.gateway.research import mount_research_routes
 from engram.backend.app.gateway.skills_api import mount_skill_routes
 from engram.backend.app.schemas.sessions import SessionCreateRequest, SessionResponse
@@ -124,6 +125,7 @@ def create_app(
     mount_status_routes(app)
     mount_skill_routes(app)
     mount_config_routes(app)
+    mount_report_routes(app)
     app.state.runtime = None  # lifespan 填充；会话 CRUD 不依赖它
     app.state.run_store = None  # lifespan 填充（PG 配置时）
     # SSE 断线重连缓冲（issue 10）：per-session 事件环形缓冲

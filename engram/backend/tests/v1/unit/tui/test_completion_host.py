@@ -87,6 +87,28 @@ def test_skill_name_completion_from_provider() -> None:
     asyncio.run(check())
 
 
+def test_enter_completes_when_popup_open() -> None:
+    """spec：「Tab 或 Enter 补全选中项」——Enter 在浮层打开时补全而非发送。"""
+
+    async def check() -> None:
+        app = _Host()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            inp = app.query_one("#conv-input", ConversationInput)
+            popup = app.query_one("#conv-completion", SuggestionPopup)
+            inp.focus()
+            for ch in "/sk":
+                await pilot.press(ch)
+            await pilot.pause()
+            assert popup.visible
+            await pilot.press("enter")
+            await pilot.pause()
+            # Enter 补全了 /skill，而不是把半截命令发送出去
+            assert inp.text == "/skill "
+
+    asyncio.run(check())
+
+
 def test_non_slash_input_no_popup() -> None:
     async def check() -> None:
         app = _Host()

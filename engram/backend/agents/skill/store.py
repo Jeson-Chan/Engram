@@ -1,13 +1,12 @@
-"""SkillStore — SQLite + WAL + version DAG + 4 计数器打点。
+"""SkillStore — SQLite（DELETE 回滚日志）+ version DAG + 4 计数器打点。
 
 INVARIANT:
 - 内容/索引分离：只存 path + content_hash，SKILL.md 全文留文件（source of truth）
-- WAL 模式 + busy_timeout=30000 + threading.Lock 保护写连接
+- journal_mode=DELETE + busy_timeout=30000 + threading.Lock 保护写连接
+  （2026-11-23 弃 WAL：-wal/-shm 跨宿主/容器不可用，见 _init_schema 注释）
 - PRAGMA user_version 记 schema 版本，启动跑迁移链（from_v → from_v+1 → ... → to_v）
 - is_active 单指针：每 name 仅 1 active，回滚切指针不删除（B2 实现）
 - 4 计数器 programmatic 打点（B3 实现 record_selection/record_outcome）
-
-本 batch（B1b）仅含 schema + 迁移。CRUD/metrics 在 B2/B3。
 """
 from __future__ import annotations
 
@@ -250,13 +249,12 @@ class SkillStore(Protocol):
 
 
 class SQLiteSkillStore:
-    """skill 基础层存储。SQLite + WAL + version DAG + 4 计数器打点。
+    """skill 基础层存储。SQLite（DELETE 日志）+ version DAG + 4 计数器打点。
 
     INVARIANT:
     - 内容/索引分离：只存 path + content_hash（SKILL.md 全文留文件）
-    - WAL + busy_timeout=30000，threading.Lock 保护写连接
+    - journal_mode=DELETE + busy_timeout=30000，threading.Lock 保护写连接
     - PRAGMA user_version 记 schema 版本，启动跑迁移链
-    - B1b 仅 schema + 迁移；CRUD/metrics 在 B2/B3
     """
 
     def __init__(self, db_path: str | Path) -> None:

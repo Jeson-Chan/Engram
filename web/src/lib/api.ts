@@ -207,6 +207,21 @@ export class EngramAPI {
     );
   }
 
+  // ---- 报告生成（surface-parity，web 版 TUI /report）----
+
+  /** 从会话 thread 生成报告（同步执行；返回 artifact 路径与全文）。 */
+  generateReport(sessionId: string, topic?: string): Promise<{
+    artifact_path: string | null; final_report: string;
+  }> {
+    return fetch(`${this.base}/sessions/${encodeURIComponent(sessionId)}/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: topic ?? null }),
+    }).then((r) =>
+      jsonOrThrow<{ artifact_path: string | null; final_report: string }>(r, "generate report failed"),
+    );
+  }
+
   /** 能力三态矩阵（engram doctor 同源；探测含网络检查，秒级延迟）。 */
   capabilities(): Promise<CapabilityReport> {
     return fetch(`${this.base}/capabilities`).then((r) =>

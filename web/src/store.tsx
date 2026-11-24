@@ -113,6 +113,8 @@ export interface AppState {
   thinkingVisible: boolean;
   /** Configs 面板 toast（"已生效!" / 失败项） */
   configToast: { kind: "ok" | "err"; text: string } | null;
+  /** 报告生成结果提示（surface-parity） */
+  reportNotice: { kind: "ok" | "err"; text: string } | null;
 }
 
 /** Configs 草稿：undefined = 未改；显式 null = 清除为 auto。 */
@@ -158,6 +160,7 @@ type Action =
   | { type: "configDraft"; patch: Partial<ConfigDraft> }
   | { type: "configDraftReset" }
   | { type: "configToast"; toast: { kind: "ok" | "err"; text: string } | null }
+  | { type: "reportNotice"; notice: { kind: "ok" | "err"; text: string } | null }
   | { type: "thinking"; value: boolean }
   | { type: "status"; status: RuntimeStatus | null; error?: string | null }
   | { type: "capabilities"; report: CapabilityReport | null; error?: string | null }
@@ -201,6 +204,7 @@ const initialState: AppState = {
   configDraft: {},
   thinkingVisible: true,
   configToast: null,
+  reportNotice: null,
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -292,6 +296,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, configDraft: {} };
     case "configToast":
       return { ...state, configToast: action.toast };
+    case "reportNotice":
+      return { ...state, reportNotice: action.notice };
     case "thinking":
       return { ...state, thinkingVisible: action.value };
     case "mainView":
@@ -404,6 +410,7 @@ export interface AppActions {
   applyConfig(): Promise<boolean>;
   clearConfigToast(): void;
   reloadMcp(): Promise<boolean>;
+  generateReport(topic?: string): Promise<boolean>;
   setMainView(view: "chat" | "memory"): void;
   setMemFilters(patch: Partial<MemFilters>): void;
   setMemPartition(partition: MemPartition | null): void;
@@ -834,6 +841,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshSkills, refreshStatus]);
 
+  /** 从当前会话生成报告（surface-parity，web 版 TUI /report）。 */
+  const generateReport = useCallback(async (topic?: string): Promise<boolean> => {
+    const sid = stateRef.current.currentSessionId;
+    if (!sid) return false;
+    dispatch({ type: "reportNotice", notice: { kind: "ok", text: "正在生成报告…" } });
+    try {
+      const res = await api.current.generateReport(sid, topic);
+      const text = res.artifact_path
+        ? `报告已生成：${res.artifact_path}`
+        : "报告已生成";
+      dispatch({ type: "reportNotice", notice: { kind: "ok", text } });
+      return true;
+    } catch (err) {
+      dispatch({
+        type: "reportNotice",
+        notice: { kind: "err", text: `报告生成失败：${(err as Error).message}` },
+      });
+      return false;
+    }
+  }, []);
+
   /** 重载 MCP（独立按钮，非 apply 链）。 */
   const reloadMcp = useCallback(async (): Promise<boolean> => {
     try {
@@ -870,7 +898,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
       refreshSkills, setSkillOverride, setSkillEnabled, setKnobs,
-      setConfigDraft, applyConfig, clearConfigToast, reloadMcp,
+      setConfigDraft, applyConfig, clearConfigToast, reloadMcp, generateReport,
     }),
     [refreshSessions, createSession, selectSession, deleteSession, renameSession, send,
       refreshRuns, openRun, refreshMemory, refreshStatus, refreshCapabilities, setInspectorTab,
@@ -878,7 +906,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMemSelected, deleteMemoryTrace, clearMemoryPartition,
       previewMemoryPartition, openMemoryForThread, openSessionFromMemory,
       refreshSkills, setSkillOverride, setSkillEnabled, setKnobs,
-      setConfigDraft, applyConfig, clearConfigToast, reloadMcp],
+      setConfigDraft, applyConfig, clearConfigToast, reloadMcp, generateReport],
   );
 
   return <AppContext.Provider value={{ state, actions }}>{children}</AppContext.Provider>;

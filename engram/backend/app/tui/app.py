@@ -974,8 +974,14 @@ class EngramTUI(CompletionHost, App):
         from rich.text import Text
         conv.write(Text(f"Generating report{' on: ' + topic if topic else ''}...", style="cyan"))
         try:
-            self.runtime.generate_report(topic=topic or None)
-            conv.write(Text("Report generated.", style="green"))
+            # surface-parity 修复：AppRuntime 无 generate_report——真实入口是
+            # 渠道无关的 generate_report_from_thread（此前 AttributeError 被吞，
+            # /report 实际从未生成过报告）。
+            from engram.backend.agents.reporting import generate_report_from_thread
+
+            result = generate_report_from_thread(runtime=self.runtime, topic=topic or None)
+            where = f" → {result.artifact_path}" if result.artifact_path else ""
+            conv.write(Text(f"Report generated{where}", style="green"))
         except Exception as exc:
             conv.write(Text(f"Report failed: {exc}", style="red"))
 
@@ -1094,4 +1100,6 @@ class EngramTUI(CompletionHost, App):
 
     def _build_stream_config(self, ctx: Any) -> dict:
         from engram.backend.app.cli.main import _build_stream_config
-        return _build_stream_config(self.runtime, ctx)
+        # cli_state 携带 /skill override 与三旋钮（/rounds /effort /window）——
+        # 与 CLI 主循环同一合并语义（此前委托丢弃 cli_state，TUI 设置纯摆设）。
+        return _build_stream_config(self.runtime, ctx, self.cli_state)

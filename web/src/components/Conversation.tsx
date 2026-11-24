@@ -205,8 +205,8 @@ export function Conversation() {
   const send = () => {
     const text = draft.trim();
     if (!text || state.streaming || !state.currentSessionId) return;
-    // /skill 前缀先于一切发送路径（含 running 时的排队语义）本地消化
-    if (text.startsWith("/skill")) {
+    // /skill 前缀先于一切发送路径本地消化（词边界：不吞 /skills、/skillful…）
+    if (/^\/skill\b/.test(text)) {
       setDraft("");
       handleSkillCommand(text);
       return;
@@ -230,6 +230,7 @@ export function Conversation() {
     if (!/\s/.test(trimmed)) {
       return commands.filter((c) => c.text.startsWith(trimmed.toLowerCase()));
     }
+    // 参数位：仅 /skill（词边界——/skills、/skillful 不触发）
     // /skill 参数位：子命令优先，无命中补激活 skill 名（数据同 Configs 面板）
     const m = trimmed.match(/^\/skill\s+(\S*)$/);
     if (!m) return [];
@@ -306,6 +307,12 @@ export function Conversation() {
       {state.droppedNotice && (
         <div className="notice" data-testid="dropped-notice">
           ⚠ {state.droppedNotice}
+        </div>
+      )}
+      {state.reportNotice && (
+        <div className="notice" data-testid="report-notice">
+          {state.reportNotice.kind === "err" ? "⚠ " : "✓ "}
+          {state.reportNotice.text}
         </div>
       )}
       {notice && (

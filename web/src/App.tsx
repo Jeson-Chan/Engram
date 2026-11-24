@@ -214,6 +214,15 @@ function Shell() {
           >
             本会话记忆
           </button>
+          <button
+            className="px-btn-secondary"
+            disabled={!state.currentSessionId || state.streaming}
+            title="从当前会话的 thread 生成报告"
+            onClick={() => actions.generateReport()}
+            data-testid="generate-report"
+          >
+            {state.reportNotice?.text === "正在生成报告…" ? "生成中…" : "生成报告"}
+          </button>
         </div>
         <Conversation />
       </div>

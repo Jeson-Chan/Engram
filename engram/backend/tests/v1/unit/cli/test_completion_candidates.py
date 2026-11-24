@@ -56,7 +56,18 @@ def test_effort_levels():
 
 
 def test_unsupported_arg_no_candidates():
-    assert completion_candidates("/rounds 1", get_registry()) == []
+    # /report 参数位无补全
+    assert completion_candidates("/report t", get_registry()) == []
+
+
+def test_rounds_and_window_show_value_hint():
+    """spec：/rounds /window 参数位显示取值提示（不强制选中）。"""
+    items = completion_candidates("/rounds ", get_registry())
+    assert _texts(items) == ["<n>"]
+    assert "≥1" in items[0].meta
+    items = completion_candidates("/window ", get_registry())
+    assert _texts(items) == ["<n>"]
+    assert "1000" in items[0].meta
 
 
 def test_limit_respected():

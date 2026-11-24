@@ -143,7 +143,7 @@ def test_session_switcher_offline_shows_offline_and_new():
 
 
 def test_memory_panel_renders_gateway_data(monkeypatch):
-    """在线数据：统计 + 记忆列表渲染（monkeypatch 网关返回）。"""
+    """在线数据：统计行 + 记忆列表（surface-parity：列表可选中删除）。"""
 
     async def check() -> None:
         gw = _offline_gateway()
@@ -164,8 +164,15 @@ def test_memory_panel_renders_gateway_data(monkeypatch):
             await _wait_for(app.screen, "rendered_text")
             content = app.screen.rendered_text
             assert "全部 6" in content and "热 2" in content and "冷 4" in content
-            assert "alice 的记忆" in content
-            assert "[已遗忘]" in content
+            # 记忆条目改由 ListView 渲染（保持渲染内容可读）
+            for _ in range(200):
+                lv_items = app.screen.query_one("#memory-list").children
+                if len(lv_items) >= 2:
+                    break
+                await asyncio.sleep(0.02)
+            texts = "\n".join(str(i.children[0].render()) for i in lv_items)
+            assert "alice 的记忆" in texts
+            assert "[已遗忘]" in texts
 
     asyncio.run(check())
 

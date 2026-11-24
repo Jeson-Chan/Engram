@@ -75,7 +75,11 @@ class CompletionHost:
             popup.hide()
 
     def completion_key(self, text_area: Any, key: str) -> bool:
-        """浮层可见时消费 ↑↓/Tab/Esc；返回是否已处理（False = 交还 TextArea）。"""
+        """浮层可见时消费 ↑↓/Tab/Enter/Esc；返回是否已处理（False = 交还）。
+
+        spec command-completion：「Tab 或 Enter 补全选中项」——Enter 在浮层
+        打开时补全而非发送（发送是浮层关闭后的行为）。
+        """
         popup = self._completion_popup(text_area)
         if popup is None or not popup.visible:
             return False
@@ -85,7 +89,7 @@ class CompletionHost:
         if key == "down":
             popup.move(1)
             return True
-        if key == "tab":
+        if key in ("tab", "enter"):
             self._accept_completion(text_area, popup)
             return True
         if key == "escape":

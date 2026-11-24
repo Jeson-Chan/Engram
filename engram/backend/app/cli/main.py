@@ -128,21 +128,34 @@ def run_chat(provider: str | None = None, model: str | None = None, legacy: bool
     return asyncio.run(_run_chat_async(runtime, provider, model))
 
 
-def _build_stream_config(runtime: AppRuntime, run_context: Any) -> dict:
-    """构建 graph config（stream 用，与 LeaderAgent.run 一致）。"""
+def _build_stream_config(runtime: AppRuntime, run_context: Any, cli_state: dict[str, Any] | None = None) -> dict:
+    """构建 graph config（stream 用，与 LeaderAgent.run 一致）。
+
+    cli_state 非空时合并会话级运行参数（CLI/TUI 同一语义，主循环与 TUI 都传）：
+    skill_override / max_loop_steps / reasoning_effort / context_window——
+    合并规则单点在 gateway/stream_knobs.py（四处消费共享）。None = 纯基线。
+    """
+    from engram.backend.app.gateway.stream_knobs import (
+        apply_stream_knobs,
+        knobs_from_cli_state,
+    )
+
     rc = run_context.config.runtime
+    configurable: dict[str, Any] = {
+        "expert_mode": rc.expert_mode,
+        "run_id": run_context.run_id,
+        "thread_id": run_context.thread_id,
+        "journal": run_context.journal,
+        "output_dir": str(run_context.output_dir),
+        "plan_enabled": rc.plan_enabled,
+        "timezone": rc.timezone,
+        "model": _resolve_actual_model_name(runtime.capability_registry),
+    }
+    knob_loop = apply_stream_knobs(configurable, knobs_from_cli_state(cli_state))
+    loop_steps = knob_loop if knob_loop else rc.max_loop_steps
     return {
-        "configurable": {
-            "expert_mode": rc.expert_mode,
-            "run_id": run_context.run_id,
-            "thread_id": run_context.thread_id,
-            "journal": run_context.journal,
-            "output_dir": str(run_context.output_dir),
-            "plan_enabled": rc.plan_enabled,
-            "timezone": rc.timezone,
-            "model": _resolve_actual_model_name(runtime.capability_registry),
-        },
-        "recursion_limit": rc.max_loop_steps * rc.graph_node_multiplier,
+        "configurable": configurable,
+        "recursion_limit": loop_steps * rc.graph_node_multiplier,
     }
 
 
@@ -336,19 +349,7 @@ async def _run_chat_async(runtime: AppRuntime, provider: str | None, model: str 
                 thread_dir=runtime.thread_dir,
             )
             runtime.run_manager.mark_running(ctx.run_id)
-            config = _build_stream_config(runtime, ctx)
-            # /skill override：cli_state → configurable，SkillInjectionMiddleware 读取
-            config["configurable"]["skill_override"] = cli_state.get("skill_override") or []
-            # runtime-knobs：/rounds /effort /window → config（缺省不写键 = 默认行为）
-            _loop = cli_state.get("max_loop_steps")
-            if _loop:
-                config["recursion_limit"] = _loop * runtime.config.runtime.graph_node_multiplier
-            _effort = cli_state.get("reasoning_effort")
-            if _effort and _effort != "off":
-                config["configurable"]["reasoning_effort"] = _effort
-            _window = cli_state.get("context_window")
-            if _window:
-                config["configurable"]["context_window"] = _window
+            config = _build_stream_config(runtime, ctx, cli_state)
             client = EngramStreamClient(graph=runtime.leader_agent.graph, config=config)
 
             # 注入 round 起始时间 + 模型名，供 _render_done 输出耗时尾行
