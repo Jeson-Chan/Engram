@@ -66,11 +66,15 @@ class TestAssertLoopCompatible:
         # loop=None → 取当前运行循环。Selector 策略下（真实入口行为）通过。
         async def _check():
             assert_loop_compatible_for_pg(platform="win32")
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        # Windows*Policy 仅存在于 win32；Linux 默认策略即 selector 循环，
+        # 测试意图（loop=None 取运行循环 + 非 Proactor 通过）两平台一致。
+        original = asyncio.get_event_loop_policy()
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         try:
             asyncio.run(_check())
         finally:
-            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            asyncio.set_event_loop_policy(original)
 
     def test_error_is_runtime_error_subclass(self):
         assert issubclass(IncompatibleLoopError, RuntimeError)

@@ -64,7 +64,9 @@ class TestLockFileExclusive:
         # Simulate Windows: fcntl is None
         with patch("engram.backend.agents.sandbox.docker.cross_process_lock.fcntl", None):
             with patch.dict(sys.modules, {"msvcrt": mock_msvcrt}):
-                with patch("engram.backend.agents.sandbox.docker.cross_process_lock.msvcrt", mock_msvcrt):
+                # create=True：msvcrt 仅在 Windows 被导入（cross_process_lock.py
+                # 的 ImportError 分支），Linux 上模块无此属性，需让 patch 创建它
+                with patch("engram.backend.agents.sandbox.docker.cross_process_lock.msvcrt", mock_msvcrt, create=True):
                     lock_file_exclusive(mock_file)
         mock_file.seek.assert_called_once_with(0)
         mock_msvcrt.locking.assert_called_once_with(42, mock_msvcrt.LK_LOCK, 1)
@@ -84,7 +86,9 @@ class TestUnlockFile:
         mock_file.fileno.return_value = 42
         with patch("engram.backend.agents.sandbox.docker.cross_process_lock.fcntl", None):
             with patch.dict(sys.modules, {"msvcrt": mock_msvcrt}):
-                with patch("engram.backend.agents.sandbox.docker.cross_process_lock.msvcrt", mock_msvcrt):
+                # create=True：msvcrt 仅在 Windows 被导入（cross_process_lock.py
+                # 的 ImportError 分支），Linux 上模块无此属性，需让 patch 创建它
+                with patch("engram.backend.agents.sandbox.docker.cross_process_lock.msvcrt", mock_msvcrt, create=True):
                     unlock_file(mock_file)
         mock_file.seek.assert_called_once_with(0)
         mock_msvcrt.locking.assert_called_once_with(42, mock_msvcrt.LK_UNLCK, 1)
