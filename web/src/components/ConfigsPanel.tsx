@@ -30,8 +30,12 @@ export function ConfigsPanel() {
   const { state, actions } = useApp();
   const draft = state.configDraft;
   const status = state.status;
-  const [roundsDraft, setRoundsDraft] = useState("");
-  const [windowDraft, setWindowDraft] = useState("");
+  const [roundsLocal, setRoundsLocal] = useState(
+    state.knobs.maxLoopSteps != null ? String(state.knobs.maxLoopSteps) : "",
+  );
+  const [windowLocal, setWindowLocal] = useState(
+    state.knobs.contextWindow != null ? String(state.knobs.contextWindow) : "",
+  );
   const [knobError, setKnobError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,25 +50,47 @@ export function ConfigsPanel() {
   }, [state.configToast, actions]);
 
   const setDraft = (patch: Partial<ConfigDraft>) => actions.setConfigDraft(patch);
-  const applyRounds = () => {
-    const n = Number(roundsDraft);
-    if (!Number.isInteger(n) || n < 1) {
-      setKnobError(`轮数需为 ≥1 整数（当前输入：${roundsDraft}）`);
+
+  // ---- 旋钮输入（ui-polish-3）：框即当前值，直接改，应用时校验生效 ----
+  // 外部变化（应用成功重置草稿 / 自动按钮）→ 同步框内文本
+  useEffect(() => {
+    const v = draft.maxLoopSteps !== undefined ? draft.maxLoopSteps : state.knobs.maxLoopSteps;
+    setRoundsLocal(v != null ? String(v) : "");
+  }, [draft.maxLoopSteps, state.knobs.maxLoopSteps]);
+  useEffect(() => {
+    const v = draft.contextWindow !== undefined ? draft.contextWindow : state.knobs.contextWindow;
+    setWindowLocal(v != null ? String(v) : "");
+  }, [draft.contextWindow, state.knobs.contextWindow]);
+
+  const editRounds = (v: string) => {
+    setRoundsLocal(v);
+    if (v.trim() === "") {
+      setKnobError(null);
+      setDraft({ maxLoopSteps: null }); // 清空 = auto
       return;
     }
-    setKnobError(null);
-    setDraft({ maxLoopSteps: n });
-    setRoundsDraft("");
+    const n = Number(v);
+    if (Number.isInteger(n) && n >= 1) {
+      setKnobError(null);
+      setDraft({ maxLoopSteps: n });
+    } else {
+      setKnobError(`轮数需为 ≥1 整数（当前输入：${v}）`);
+    }
   };
-  const applyWindow = () => {
-    const n = Number(windowDraft);
-    if (!Number.isInteger(n) || n < 1000) {
-      setKnobError(`窗口需为 ≥1000 的 token 数（当前输入：${windowDraft}）`);
+  const editWindow = (v: string) => {
+    setWindowLocal(v);
+    if (v.trim() === "") {
+      setKnobError(null);
+      setDraft({ contextWindow: null });
       return;
     }
-    setKnobError(null);
-    setDraft({ contextWindow: n });
-    setWindowDraft("");
+    const n = Number(v);
+    if (Number.isInteger(n) && n >= 1000) {
+      setKnobError(null);
+      setDraft({ contextWindow: n });
+    } else {
+      setKnobError(`窗口需为 ≥1000 的 token 数（当前输入：${v}）`);
+    }
   };
 
   // ---- 草稿 / 已应用值的取值 ----
@@ -175,15 +201,10 @@ export function ConfigsPanel() {
         <label>轮数上限</label>
         <input
           type="number" min={1} placeholder="auto"
-          value={roundsDraft}
-          onChange={(e) => setRoundsDraft(e.target.value)}
+          value={roundsLocal}
+          onChange={(e) => editRounds(e.target.value)}
           data-testid="rounds-input"
         />
-        <button
-          className="px-btn-secondary"
-          onClick={applyRounds}
-          data-testid="rounds-apply"
-        >设置</button>
         <button className="px-btn-secondary" onClick={() => { setKnobError(null); setDraft({ maxLoopSteps: null }); }} data-testid="rounds-clear">自动</button>
         <small data-testid="rounds-source">
           {appliedRounds ? `manual：${appliedRounds}` : "auto（配置默认）"}
@@ -215,15 +236,10 @@ export function ConfigsPanel() {
         <label>窗口（token）</label>
         <input
           type="number" min={1000} placeholder="auto"
-          value={windowDraft}
-          onChange={(e) => setWindowDraft(e.target.value)}
+          value={windowLocal}
+          onChange={(e) => editWindow(e.target.value)}
           data-testid="window-input"
         />
-        <button
-          className="px-btn-secondary"
-          onClick={applyWindow}
-          data-testid="window-apply"
-        >设置</button>
         <button className="px-btn-secondary" onClick={() => { setKnobError(null); setDraft({ contextWindow: null }); }} data-testid="window-clear">自动</button>
         <small data-testid="window-source">
           {appliedWindow ? `manual：${appliedWindow} tok` : "auto（模型查表）"}

@@ -101,11 +101,10 @@ describe("运行参数区（草稿 + 应用）", () => {
     expect(screen.getByTestId("window-source").textContent).toContain("auto");
   });
 
-  it("轮数：设置（草稿）→ 应用 → manual + 请求体携带；清除应用后恢复 auto", async () => {
+  it("轮数：框内直接改（草稿）→ 应用 → manual + 请求体携带；清除应用后恢复 auto", async () => {
     const captured = stubApi();
     await openPanel();
     fireEvent.change(screen.getByTestId("rounds-input"), { target: { value: "10" } });
-    fireEvent.click(screen.getByTestId("rounds-apply"));
     // 草稿态：尚未应用到运行时
     expect(screen.getByTestId("rounds-source").textContent).toContain("auto");
     fireEvent.click(screen.getByTestId("configs-apply"));
@@ -150,11 +149,10 @@ describe("运行参数区（草稿 + 应用）", () => {
     });
   });
 
-  it("窗口：设置应用后请求体携带 context_window", async () => {
+  it("窗口：框内直接改应用后请求体携带 context_window", async () => {
     const captured = stubApi();
     await openPanel();
     fireEvent.change(screen.getByTestId("window-input"), { target: { value: "32000" } });
-    fireEvent.click(screen.getByTestId("window-apply"));
     fireEvent.click(screen.getByTestId("configs-apply"));
     await waitFor(() => expect(screen.getByTestId("window-source").textContent).toContain("32000"));
     await sendChat("压缩我");

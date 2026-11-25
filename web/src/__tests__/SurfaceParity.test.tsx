@@ -99,7 +99,6 @@ describe("代码审查修复（web）", () => {
     fireEvent.click(screen.getByTestId("configs-tab"));
     await waitFor(() => screen.getByTestId("configs-panel"));
     fireEvent.change(screen.getByTestId("rounds-input"), { target: { value: "0" } });
-    fireEvent.click(screen.getByTestId("rounds-apply"));
     const err = await waitFor(() => screen.getByTestId("knob-error"));
     expect(err.textContent).toContain("≥1");
   });
